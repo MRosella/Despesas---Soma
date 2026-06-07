@@ -1,0 +1,10 @@
+# Arquivos de apoio / desenvolvimento — não vão para o GitHub Pages
+server.ps1
+received.xlsx
+.claude/
+Relatorio de Despesas para Reembolso - Modelo.xlsx
+
+# Sistema
+Thumbs.db
+desktop.ini
+.DS_Store
