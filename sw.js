@@ -1,5 +1,5 @@
 /* Service Worker — cache do app para funcionar offline */
-const CACHE = 'despesas-soma-v1';
+const CACHE = 'despesas-soma-v2';
 const ASSETS = [
   './',
   './index.html',

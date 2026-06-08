@@ -192,9 +192,9 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 /* ===================== PDF / PRINT ===================== */
 @media print {
   @page { size: A4 portrait; margin: 12mm; }
-  body { background: #fff; padding: 0; }
+  body { background: #f8f4f2; padding: 0; }
   .app-header, main, .action-bar, .toast, .modal-backdrop { display: none !important; }
-  #print-root { display: block; }
+  #print-root { display: block; background: #f8f4f2; }
 }
 
 #print-root {
@@ -215,8 +215,9 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 #print-root .p-info .lab { background: #fff; font-weight: 700; color: #4e3f39; width: 23%; white-space: nowrap; }
 #print-root .p-info .val { color: #4e3f39; }
 #print-root .p-section {
-  background: linear-gradient(135deg, #b3262d, #8f1e24); color: #f8f4f2;
-  font-weight: 700; text-align: center; padding: 7px; border-radius: 8px;
+  background: #fff; color: #4e3f39;
+  border: 1px solid #4e3f39;
+  font-weight: 700; text-align: center; padding: 7px;
   margin: 14px 0 0; font-size: 13px;
 }
 #print-root table.p-tbl { width: 100%; border-collapse: collapse; }
@@ -225,22 +226,24 @@ details.card[open] summary .chev { transform: rotate(180deg); }
   font-size: 11px; font-weight: 700;
 }
 #print-root table.p-tbl td { border: 1px solid #4e3f39; padding: 5px 8px; height: 20px; }
-#print-root table.p-tbl .c-data { text-align: center; white-space: nowrap; width: 16%; }
-#print-root table.p-tbl .c-cat { text-align: center; width: 22%; }
-#print-root table.p-tbl .c-val { text-align: right; white-space: nowrap; width: 18%; }
-#print-root tr.p-subtotal td { font-weight: 700; color: #4e3f39; }
+#print-root table.p-tbl .c-data { text-align: center; white-space: nowrap; width: 14%; }
+#print-root table.p-tbl .c-cat { text-align: center; width: 26%; }
+#print-root table.p-tbl .c-val { text-align: right; white-space: nowrap; width: 19%; }
+#print-root tr.p-subtotal td { font-weight: 700; color: #4e3f39; background: #ffff00; }
 #print-root tr.p-subtotal td.sub-lbl { text-align: right; }
-#print-root tr.p-subtotal td.sub-val { background: #ffff00; text-align: right; }
+#print-root tr.p-subtotal td.sub-val { text-align: right; }
 #print-root .p-total {
   display: flex; justify-content: space-between; align-items: center;
-  background: #4e3f39; color: #fff; padding: 9px 14px; border-radius: 8px;
-  font-weight: 700; font-size: 14px; margin-top: 14px;
+  background: #fff; color: #4e3f39; border: 1px solid #4e3f39;
+  padding: 7px 8px;
+  font-weight: 700; font-size: 12px; margin-top: 6px;
 }
 #print-root .p-obs {
-  margin-top: 16px; border: 1px solid #4e3f39; border-radius: 8px; padding: 10px 12px;
-  font-size: 10px; color: #4e3f39; background: #faf7f5;
+  margin-top: 10px; border-radius: 8px; padding: 10px 12px;
+  font-size: 10px; color: #f8f4f2; font-weight: 700;
+  background: linear-gradient(160deg, #4a0e11, #7a1a21, #b3262d);
 }
-#print-root .p-obs b { color: #b3262d; }
+#print-root .p-obs b { color: #f8f4f2; }
 #print-root .p-bank-title {
   background: linear-gradient(135deg, #b3262d, #8f1e24); color: #f8f4f2;
   font-weight: 700; text-align: center; padding: 6px; border-radius: 8px; margin: 16px 0 0; font-size: 12px;
