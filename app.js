@@ -55,7 +55,7 @@ function loadState() {
 
 function saveState() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
-  if (!applyingRemote) scheduleSync();
+  if (!applyingRemote) { setDirty(true); scheduleSync(); }
 }
 
 function touchDoc() { state.meta.updatedAt = Date.now(); }
@@ -545,6 +545,11 @@ function loadSyncCfg() {
 function saveSyncCfg(cfg) { try { localStorage.setItem(SYNC_KEY, JSON.stringify(cfg)); } catch (e) {} }
 function isSyncConfigured() { const c = loadSyncCfg(); return !!(c.repo && c.token); }
 
+// "sujo" = há alterações locais ainda não enviadas ao servidor (ex.: feitas offline)
+const DIRTY_KEY = 'despesas-soma-dirty-v1';
+function setDirty(v) { try { v ? localStorage.setItem(DIRTY_KEY, '1') : localStorage.removeItem(DIRTY_KEY); } catch (e) {} }
+function isDirty() { try { return localStorage.getItem(DIRTY_KEY) === '1'; } catch (e) { return false; } }
+
 function setSyncStatus(msg, kind) {
   const el = $('sy-status'); if (!el) return;
   el.textContent = msg;
@@ -701,7 +706,12 @@ function scheduleSync() {
 async function syncNow(silent) {
   const cfg = loadSyncCfg();
   if (!cfg.repo || !cfg.token) { if (!silent) setSyncStatus('Configure o repositório e o token.', 'warn'); return; }
-  if (!navigator.onLine) { setSyncStatus('Offline — vai sincronizar quando a conexão voltar.', 'warn'); return; }
+  if (!navigator.onLine) {
+    setSyncStatus(isDirty()
+      ? 'Offline — alterações pendentes serão enviadas assim que a conexão voltar.'
+      : 'Offline — sincroniza quando a conexão voltar.', 'warn');
+    return;
+  }
   if (syncing) return;
   syncing = true;
   setSyncStatus('Sincronizando…');
@@ -726,10 +736,12 @@ async function syncNow(silent) {
         } else { throw e; }
       }
     }
+    setDirty(false);   // local e servidor consistentes
     setSyncStatus('Sincronizado • ' + new Date().toLocaleString('pt-BR'), 'ok');
   } catch (e) {
     console.error(e);
-    setSyncStatus('Erro: ' + e.message, 'err');
+    // mantém o estado "sujo": tenta de novo ao reconectar / reabrir
+    setSyncStatus('Erro: ' + e.message + (isDirty() ? ' (alterações pendentes mantidas)' : ''), 'err');
   } finally {
     syncing = false;
   }
@@ -739,8 +751,11 @@ function setupSyncUI() {
   const cfg = loadSyncCfg();
   if ($('sy-repo')) $('sy-repo').value = cfg.repo || '';
   if ($('sy-token')) $('sy-token').value = cfg.token || '';
-  if (isSyncConfigured()) setSyncStatus('Configurado. Toque em “Sincronizar agora”.', '');
-  else setSyncStatus('Não configurado.', '');
+  if (!isSyncConfigured()) setSyncStatus('Não configurado.', '');
+  else if (!navigator.onLine) setSyncStatus(isDirty()
+    ? 'Offline — alterações pendentes serão enviadas ao reconectar.'
+    : 'Offline.', 'warn');
+  else setSyncStatus('Configurado. Toque em “Sincronizar agora”.', '');
 
   function persist() {
     saveSyncCfg({ repo: ($('sy-repo').value || '').trim(), token: ($('sy-token').value || '').trim() });
@@ -822,8 +837,20 @@ function init() {
 
   // sincronização inicial ao abrir (puxa o que houver de outro dispositivo)
   if (isSyncConfigured() && navigator.onLine) syncNow(true);
-  // ao voltar a ficar online, sincroniza
-  window.addEventListener('online', () => { if (isSyncConfigured()) syncNow(true); });
+
+  // ao voltar a ficar online, envia o que ficou pendente offline (o merge decide
+  // se o mais recente é do servidor ou deste aparelho)
+  window.addEventListener('online', () => {
+    if (!isSyncConfigured()) return;
+    if (isDirty()) toast('Conexão restaurada — enviando lançamentos…');
+    syncNow(true);
+  });
+
+  // ao voltar para o app (reabrir/trazer ao foco), sincroniza para pegar a
+  // versão mais recente e enviar pendências
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && isSyncConfigured() && navigator.onLine) syncNow(true);
+  });
 }
 
 /* ---------------- Auto-atualização (Service Worker) ---------------- */
