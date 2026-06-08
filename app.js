@@ -549,9 +549,68 @@ function init() {
   $('btn-pdf').addEventListener('click', exportPDF);
   $('btn-new-month').addEventListener('click', newMonth);
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  }
+  setupServiceWorker();
+  setupConnectivity();
+}
+
+/* ---------------- Auto-atualização (Service Worker) ---------------- */
+function setupServiceWorker() {
+  if (!('serviceWorker' in navigator) || !location.protocol.startsWith('http')) return;
+
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    // procura nova versão ao abrir e periodicamente
+    reg.update();
+    setInterval(() => reg.update(), 60000);
+
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing;
+      if (!nw) return;
+      nw.addEventListener('statechange', () => {
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+          toast('Atualizando para a versão mais recente…');
+        }
+      });
+    });
+  }).catch(() => {});
+
+  // quando o novo Service Worker assume o controle, recarrega 1x p/ aplicar
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloaded) return;
+    reloaded = true;
+    window.location.reload();
+  });
+
+  // ao voltar para o app, checa se há atualização
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      navigator.serviceWorker.getRegistration().then((r) => { if (r) r.update(); });
+    }
+  });
+}
+
+/* ---------------- Aviso de offline ---------------- */
+function setupConnectivity() {
+  if (!navigator.onLine) showOfflineNotice();
+  window.addEventListener('offline', showOfflineNotice);
+  window.addEventListener('online', () => { const n = $('offline-notice'); if (n) n.remove(); });
+}
+
+function showOfflineNotice() {
+  if ($('offline-notice')) return;
+  const div = document.createElement('div');
+  div.id = 'offline-notice';
+  div.className = 'offline-notice';
+  div.innerHTML = `
+    <div class="offline-card">
+      <div class="offline-icon">📡</div>
+      <h3>Você está offline</h3>
+      <p>O app pode não estar na versão mais recente. Conecte-se à internet para
+         garantir a atualização automática e a sincronização dos lançamentos.</p>
+      <button class="btn btn-pdf" id="offline-ok">Entendi</button>
+    </div>`;
+  document.body.appendChild(div);
+  $('offline-ok').addEventListener('click', () => div.remove());
 }
 
 document.addEventListener('DOMContentLoaded', init);

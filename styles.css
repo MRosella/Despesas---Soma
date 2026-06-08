@@ -186,6 +186,23 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 
 .hint { font-size: .74rem; color: var(--muted); margin-top: 4px; }
 
+/* ---------- Aviso de offline ---------- */
+.offline-notice {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(46, 38, 34, .55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.offline-notice .offline-card {
+  background: var(--card); border-radius: 16px; max-width: 360px; width: 100%;
+  padding: 24px 22px; text-align: center; box-shadow: var(--shadow);
+  animation: slideUp .2s ease-out;
+}
+.offline-notice .offline-icon { font-size: 2.4rem; margin-bottom: 6px; }
+.offline-notice h3 { margin: 0 0 8px; color: var(--red); font-size: 1.15rem; }
+.offline-notice p { margin: 0 0 18px; font-size: .9rem; color: var(--brown); line-height: 1.5; }
+.offline-notice .btn { width: 100%; }
+
 /* ---------- Print (PDF) area — hidden on screen ---------- */
 #print-root { display: none; }
 
