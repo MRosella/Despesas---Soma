@@ -77,6 +77,8 @@ A partir daí funciona **sem internet**.
   - O **valor** e o **CPF** são formatados automaticamente enquanto você digita.
 - **Dados Bancários (Se Aplicável):** preencha uma vez; ficam salvos para os próximos meses.
 - No fim do mês, toque em **Excel** ou **PDF** para gerar o relatório.
+  - Abre uma caixa para escolher o que incluir: **Despesas para Reembolso**, **Cartão Alelo**
+    ou ambos — o arquivo é gerado só com o que você marcar.
   - No Android, abre direto a tela de **compartilhar** (WhatsApp, e-mail, etc.) com o
     arquivo anexado. Onde o compartilhamento não estiver disponível, o arquivo é baixado.
 - O **Resumo por categoria** (no app, acima do total) ajuda a conferir os gastos antes de

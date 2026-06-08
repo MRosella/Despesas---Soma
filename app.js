@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v12';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v13';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -207,8 +207,8 @@ function renderReports() {
   tree.querySelectorAll('.hist-item').forEach((li) => {
     const id = li.dataset.id;
     const get = () => state.history.find((x) => x.id === id);
-    li.querySelector('[data-act=xls]').addEventListener('click', () => exportExcel(get()));
-    li.querySelector('[data-act=pdf]').addEventListener('click', () => exportPDF(get()));
+    li.querySelector('[data-act=xls]').addEventListener('click', () => openExportChooser('excel', get()));
+    li.querySelector('[data-act=pdf]').addEventListener('click', () => openExportChooser('pdf', get()));
     li.querySelector('[data-act=open]').addEventListener('click', () => reopenHistory(id));
     li.querySelector('[data-act=del]').addEventListener('click', () => deleteHistory(id));
   });
@@ -618,11 +618,23 @@ function reportFileBase(src) {
   return `Relatorio_Despesas_${nome}_${ref}`;
 }
 
-async function exportExcel(src) {
+/* Filtra um documento para conter só as seções escolhidas (não-selecionada = vazia) */
+function filteredDoc(src, sections) {
   const D = src || state;
-  if (!D.reembolso.length && !D.alelo.length) { toast('Adicione ao menos um lançamento.'); return; }
+  return Object.assign({}, D, {
+    reembolso: sections.reembolso ? D.reembolso : [],
+    alelo: sections.alelo ? D.alelo : []
+  });
+}
+
+async function exportExcel(src, sections) {
+  const inc = sections || { reembolso: true, alelo: true };
+  const base = src || state;
+  const has = (inc.reembolso && base.reembolso.length) || (inc.alelo && base.alelo.length);
+  if (!has) { toast('Nada para exportar com a seleção.'); return; }
   try {
     toast('Gerando Excel…');
+    const D = filteredDoc(base, inc);
     const bytes = await buildXlsx(D);
     const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     await shareOrDownload(blob, reportFileBase(D) + '.xlsx', 'Relatório de Despesas (Excel)');
@@ -658,6 +670,29 @@ function downloadBlob(blob, filename) {
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
 }
 
+/* ---- caixa de seleção do que exportar (Reembolso / Alelo / ambos) ---- */
+let exportCtx = { kind: 'excel', src: null };
+function openExportChooser(kind, src) {
+  const D = src || state;
+  const nR = (D.reembolso || []).length, nA = (D.alelo || []).length;
+  if (nR === 0 && nA === 0) { toast('Adicione ao menos um lançamento.'); return; }
+  exportCtx = { kind, src: D };
+  $('export-title').textContent = 'Exportar ' + (kind === 'excel' ? 'Excel' : 'PDF');
+  $('exp-c-reembolso').textContent = nR + ' lançamento(s) · ' + formatMoney(sumOf(D.reembolso || []));
+  $('exp-c-alelo').textContent = nA + ' lançamento(s) · ' + formatMoney(sumOf(D.alelo || []));
+  $('exp-reembolso').checked = nR > 0;
+  $('exp-alelo').checked = nA > 0;
+  $('export-modal').classList.add('open');
+}
+function closeExportModal() { $('export-modal').classList.remove('open'); }
+function confirmExport() {
+  const sections = { reembolso: $('exp-reembolso').checked, alelo: $('exp-alelo').checked };
+  if (!sections.reembolso && !sections.alelo) { toast('Selecione ao menos uma seção.'); return; }
+  closeExportModal();
+  if (exportCtx.kind === 'excel') exportExcel(exportCtx.src, sections);
+  else exportPDF(exportCtx.src, sections);
+}
+
 /* ---------------- Geração do PDF (impressão) ---------------- */
 function buildPrintTable(title, list, minRows) {
   let rows = '';
@@ -688,9 +723,11 @@ function buildPrintTable(title, list, minRows) {
     </table>`;
 }
 
-function buildPrint(src) {
+function buildPrint(src, sections) {
   const D = src || state;
-  const s1 = sumOf(D.reembolso), s2 = sumOf(D.alelo);
+  const inc = sections || { reembolso: true, alelo: true };
+  const s1 = inc.reembolso ? sumOf(D.reembolso) : 0;
+  const s2 = inc.alelo ? sumOf(D.alelo) : 0;
   const b = D.bank;
   const root = $('print-root');
   root.innerHTML = `
@@ -704,8 +741,8 @@ function buildPrint(src) {
       <tr><td class="lab">Funcionário:</td><td class="val">${escapeHtml(D.funcionario)}</td>
           <td class="lab">Reembolso Referente à:</td><td class="val">${escapeHtml(D.referente)}</td></tr>
     </table>
-    ${buildPrintTable('DESPESAS PARA REEMBOLSO', D.reembolso, 5)}
-    ${buildPrintTable('DESPESAS CARTÃO ALELO', D.alelo, 5)}
+    ${inc.reembolso ? buildPrintTable('DESPESAS PARA REEMBOLSO', D.reembolso, 5) : ''}
+    ${inc.alelo ? buildPrintTable('DESPESAS CARTÃO ALELO', D.alelo, 5) : ''}
     <div class="p-total"><span>TOTAL DOS GASTOS</span><span>${formatMoney(s1 + s2)}</span></div>
     <div class="p-bank-title">Dados Bancários (Se Aplicável)</div>
     <table class="p-bank">
@@ -721,12 +758,14 @@ function buildPrint(src) {
     </div>`;
 }
 
-async function exportPDF(src) {
+async function exportPDF(src, sections) {
+  const inc = sections || { reembolso: true, alelo: true };
   const D = src || state;
-  if (!D.reembolso.length && !D.alelo.length) { toast('Adicione ao menos um lançamento.'); return; }
+  const has = (inc.reembolso && D.reembolso.length) || (inc.alelo && D.alelo.length);
+  if (!has) { toast('Nada para exportar com a seleção.'); return; }
   try {
     toast('Gerando PDF…');
-    const blob = await generatePdfBlob(D);
+    const blob = await generatePdfBlob(D, inc);
     await shareOrDownload(blob, reportFileBase(D) + '.pdf', 'Relatório de Despesas (PDF)');
   } catch (e) {
     console.error(e);
@@ -736,8 +775,8 @@ async function exportPDF(src) {
 
 /* Gera um PDF de verdade (arquivo) a partir do mesmo layout do relatório,
    capturado com html2canvas e montado com jsPDF (A4 retrato, multipágina). */
-async function generatePdfBlob(src) {
-  buildPrint(src || state);
+async function generatePdfBlob(src, sections) {
+  buildPrint(src || state, sections);
   const root = $('print-root');
   const prevStyle = root.getAttribute('style') || '';
   // torna o layout capturável fora da tela
@@ -1360,9 +1399,13 @@ function init() {
   $('m-categoria').addEventListener('change', updateCatHint);
   $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeModal(); });
 
-  $('btn-excel').addEventListener('click', () => exportExcel());
-  $('btn-pdf').addEventListener('click', () => exportPDF());
+  $('btn-excel').addEventListener('click', () => openExportChooser('excel', state));
+  $('btn-pdf').addEventListener('click', () => openExportChooser('pdf', state));
   $('btn-new-month').addEventListener('click', newMonth);
+
+  $('exp-cancel').addEventListener('click', closeExportModal);
+  $('exp-confirm').addEventListener('click', confirmExport);
+  $('export-modal').addEventListener('click', (e) => { if (e.target === $('export-modal')) closeExportModal(); });
 
   setupNav();
   setupTheme();

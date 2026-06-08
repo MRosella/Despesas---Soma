@@ -289,6 +289,26 @@
     </div>
   </div>
 
+  <!-- Modal: escolher o que exportar -->
+  <div class="modal-backdrop" id="export-modal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <h3 id="export-title">Exportar</h3>
+      <p class="hint" style="margin-top:0">Selecione o que incluir no arquivo:</p>
+      <label class="exp-opt">
+        <input type="checkbox" id="exp-reembolso" checked />
+        <span>Despesas para Reembolso<span class="exp-count" id="exp-c-reembolso"></span></span>
+      </label>
+      <label class="exp-opt">
+        <input type="checkbox" id="exp-alelo" checked />
+        <span>Despesas Cartão Alelo<span class="exp-count" id="exp-c-alelo"></span></span>
+      </label>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="exp-cancel">Cancelar</button>
+        <button class="btn btn-excel" id="exp-confirm">Exportar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="print-root"></div>
   <div class="toast" id="toast"></div>
 

@@ -294,6 +294,17 @@ body.locked { overflow: hidden; }
   .modal { border-radius: 18px; }
 }
 
+/* ---------- Opções de exportação ---------- */
+.exp-opt {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px; border: 1px solid var(--line); border-radius: 12px;
+  margin-bottom: 10px; cursor: pointer; font-weight: 600; color: var(--text);
+}
+.exp-opt input[type="checkbox"] {
+  width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--red); margin: 0;
+}
+.exp-opt .exp-count { display: block; font-weight: 400; font-size: .76rem; color: var(--muted); margin-top: 2px; }
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%);
