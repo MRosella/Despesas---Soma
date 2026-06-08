@@ -186,6 +186,14 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 
 .hint { font-size: .74rem; color: var(--muted); margin-top: 4px; }
 
+/* ---------- Sincronização ---------- */
+.sync-actions { display: flex; gap: 10px; margin-top: 4px; }
+.sync-actions .btn { padding: 11px; font-size: .9rem; }
+.sync-status { font-size: .8rem; margin: 12px 0 6px; color: var(--muted); word-break: break-word; }
+.sync-status.ok { color: var(--ok); }
+.sync-status.err { color: var(--red); }
+.sync-status.warn { color: #a35a10; }
+
 /* ---------- Aviso de offline ---------- */
 .offline-notice {
   position: fixed; inset: 0; z-index: 80;

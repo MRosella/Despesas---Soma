@@ -4,7 +4,9 @@ Aplicativo (PWA) para registrar despesas ao longo do mês no celular e gerar o
 relatório de reembolso em **Excel** (idêntico ao modelo da empresa) e **PDF**.
 
 - Funciona offline, instala como app na tela inicial do Android.
-- Os lançamentos ficam salvos no próprio celular (não vão para nenhum servidor).
+- Os lançamentos ficam salvos no próprio celular. Opcionalmente, podem ser
+  **sincronizados entre dispositivos** usando um repositório **privado** no GitHub
+  (veja a seção 6) — útil para abrir os mesmos dados no celular e no computador.
 - O Excel é gerado a partir da sua própria planilha-modelo (`template.xlsx`),
   preenchendo apenas os dados — logo, cores, fórmulas e layout ficam iguais ao original.
 
@@ -96,6 +98,51 @@ Depois abra <http://127.0.0.1:8765/> no navegador.
 Se algum arquivo for alterado, troque a versão do cache em `sw.js`
 (linha `const CACHE = 'despesas-soma-v1';` → `...-v2`) e reenvie os arquivos.
 Isso faz o celular baixar a versão nova.
+
+---
+
+## 6. Sincronizar entre celular e computador (opcional)
+
+Permite que os lançamentos feitos no celular apareçam ao abrir o app no
+computador (e vice-versa). Os dados ficam num repositório **privado** seu no
+GitHub — **nunca** no repositório público do app.
+
+### 6.1 Criar o repositório privado de dados
+
+1. Em <https://github.com> → **New repository**.
+2. **Repository name:** `Despesas-Soma-Dados` (ou outro nome).
+3. Marque **Private** (importante — seus dados são pessoais).
+4. Marque **Add a README file** (para o repositório não ficar vazio) → **Create repository**.
+
+### 6.2 Gerar um token de acesso (fine-grained)
+
+1. Acesse <https://github.com/settings/personal-access-tokens/new>.
+2. **Token name:** `app-despesas`.
+3. **Expiration:** escolha um prazo (ex.: 1 ano).
+4. **Resource owner:** sua conta.
+5. Em **Repository access**, escolha **Only select repositories** e selecione
+   **apenas** o `Despesas-Soma-Dados`.
+6. Em **Permissions → Repository permissions → Contents**, selecione
+   **Read and write**.
+7. Clique em **Generate token** e **copie** o token (começa com `github_pat_...`).
+   Guarde-o — ele não será mostrado de novo.
+
+### 6.3 Configurar no app
+
+1. Abra o app, expanda **Sincronização entre dispositivos**.
+2. Em **Repositório**, digite `SEU-USUARIO/Despesas-Soma-Dados`.
+3. Cole o **token**.
+4. Toque em **Conectar** (verifica o acesso) e depois em **Sincronizar agora**.
+5. Repita os passos 1–4 no outro dispositivo (computador), com o **mesmo**
+   repositório e um token (pode ser o mesmo token ou um por aparelho).
+
+A partir daí o app sincroniza sozinho: ao abrir, ao voltar a ficar online e
+poucos segundos depois de cada alteração. O token fica salvo **apenas naquele
+aparelho**; use **Desconectar** para removê-lo de um dispositivo.
+
+> **Segurança:** o token dá acesso de escrita só a esse repositório privado.
+> Se o aparelho for perdido, gere um novo token e **revogue** o antigo em
+> <https://github.com/settings/tokens?type=beta>.
 
 ---
 

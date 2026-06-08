@@ -114,6 +114,33 @@
         <p class="hint">Preencha caso haja despesas reembolsáveis (recebimento via conta/Pix).</p>
       </div>
     </details>
+
+    <!-- Sincronização (GitHub) -->
+    <details class="card" id="sync-card">
+      <summary>Sincronização entre dispositivos <span class="chev">▾</span></summary>
+      <div class="card-body">
+        <p class="hint" style="margin-top:0">
+          Sincroniza seus lançamentos com um repositório <b>privado</b> no GitHub,
+          para abrir os mesmos dados no celular e no computador.
+        </p>
+        <div class="field">
+          <label for="sy-repo">Repositório privado (usuário/repo)</label>
+          <input type="text" id="sy-repo" placeholder="Ex.: MRosella/Despesas-Soma-Dados" autocapitalize="off" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="field">
+          <label for="sy-token">Token de acesso (fine-grained)</label>
+          <input type="password" id="sy-token" placeholder="github_pat_..." autocomplete="off" />
+          <p class="hint">O token fica salvo apenas neste aparelho. Use um token
+            fine-grained com permissão de <b>Contents: Read and write</b> só nesse repositório.</p>
+        </div>
+        <div class="sync-actions">
+          <button class="btn btn-ghost" id="sy-test" type="button">Conectar</button>
+          <button class="btn btn-excel" id="sy-now" type="button">Sincronizar agora</button>
+        </div>
+        <p class="sync-status" id="sy-status">Não configurado.</p>
+        <button class="btn btn-danger-text" id="sy-clear" type="button" style="padding:8px 0">Desconectar / apagar token deste aparelho</button>
+      </div>
+    </details>
   </main>
 
   <!-- Barra de ações -->

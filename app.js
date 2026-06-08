@@ -7,6 +7,7 @@
    ============================================================ */
 
 const STORE_KEY = 'despesas-soma-v1';
+const SYNC_KEY = 'despesas-soma-sync-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
 
 const CATEGORIAS = ['Café da Manha', 'Almoço', 'Café da Tarde', 'Jantar', 'Combustível', 'Pedágio', 'Outras Despesas'];
@@ -19,18 +20,34 @@ function emptyState() {
     referente: '',
     bank: { nome: '', cpf: '', banco: '', agencia: '', conta: '', pix: '' },
     reembolso: [],
-    alelo: []
+    alelo: [],
+    tomb: { reembolso: {}, alelo: {} },   // lápides: id -> updatedAt (deleções)
+    meta: { updatedAt: 0, profileUpdatedAt: 0 }
   };
 }
 
 let state = loadState();
+let applyingRemote = false;   // true enquanto aplicamos dados vindos da nuvem
 
 function loadState() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return emptyState();
     const s = JSON.parse(raw);
-    return Object.assign(emptyState(), s, { bank: Object.assign(emptyState().bank, s.bank || {}) });
+    const base = emptyState();
+    const st = Object.assign(base, s, {
+      bank: Object.assign(base.bank, s.bank || {}),
+      tomb: Object.assign(base.tomb, s.tomb || {}),
+      meta: Object.assign(base.meta, s.meta || {})
+    });
+    st.tomb.reembolso = st.tomb.reembolso || {};
+    st.tomb.alelo = st.tomb.alelo || {};
+    // migração: garante updatedAt nas entradas e relógio do doc se for estado antigo
+    for (const t of ['reembolso', 'alelo']) {
+      st[t] = (st[t] || []).map((e) => e.updatedAt ? e : Object.assign({}, e, { updatedAt: Date.now() }));
+    }
+    if (!s.meta) st.meta = { updatedAt: Date.now(), profileUpdatedAt: Date.now() };
+    return st;
   } catch (e) {
     return emptyState();
   }
@@ -38,7 +55,11 @@ function loadState() {
 
 function saveState() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+  if (!applyingRemote) scheduleSync();
 }
+
+function touchDoc() { state.meta.updatedAt = Date.now(); }
+function touchProfile() { const t = Date.now(); state.meta.updatedAt = t; state.meta.profileUpdatedAt = t; }
 
 /* ---------------- Utilidades ---------------- */
 const $ = (id) => document.getElementById(id);
@@ -182,12 +203,14 @@ function saveEntry() {
   if (!categoria) { toast('Selecione a categoria.'); return; }
   if (!valor) { toast('Informe um valor válido.'); return; }
 
+  const now = Date.now();
   if (id) {
     const e = state[tabela].find((x) => x.id === id);
-    if (e) Object.assign(e, { data, descricao, categoria, valor });
+    if (e) Object.assign(e, { data, descricao, categoria, valor, updatedAt: now });
   } else {
-    state[tabela].push({ id: uid(), data, descricao, categoria, valor });
+    state[tabela].push({ id: uid(), data, descricao, categoria, valor, updatedAt: now });
   }
+  touchDoc();
   state[tabela].sort((a, b) => (a.data || '').localeCompare(b.data || ''));
   saveState();
   render();
@@ -200,6 +223,8 @@ function deleteEntry() {
   if (!id) return;
   if (!confirm('Excluir este lançamento?')) return;
   state[tabela] = state[tabela].filter((e) => e.id !== id);
+  state.tomb[tabela][id] = Date.now();   // lápide p/ propagar a deleção na sincronização
+  touchDoc();
   saveState();
   render();
   closeModal();
@@ -505,18 +530,260 @@ function exportPDF() {
   setTimeout(() => window.print(), 100);
 }
 
+/* ============================================================
+   Sincronização entre dispositivos (repositório PRIVADO no GitHub)
+   Lê/grava um único arquivo dados.json via API do GitHub.
+   O token fica salvo só neste aparelho (localStorage).
+   ============================================================ */
+const GH_API = 'https://api.github.com';
+const DATA_PATH = 'dados.json';
+
+function loadSyncCfg() {
+  try { return Object.assign({ repo: '', token: '' }, JSON.parse(localStorage.getItem(SYNC_KEY) || '{}')); }
+  catch (e) { return { repo: '', token: '' }; }
+}
+function saveSyncCfg(cfg) { try { localStorage.setItem(SYNC_KEY, JSON.stringify(cfg)); } catch (e) {} }
+function isSyncConfigured() { const c = loadSyncCfg(); return !!(c.repo && c.token); }
+
+function setSyncStatus(msg, kind) {
+  const el = $('sy-status'); if (!el) return;
+  el.textContent = msg;
+  el.className = 'sync-status' + (kind ? ' ' + kind : '');
+}
+
+function ghHeaders(token) {
+  return {
+    'Authorization': 'Bearer ' + token,
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28'
+  };
+}
+
+// base64 <-> UTF-8 (btoa/atob não lidam com acentos sozinhos)
+function b64EncodeUtf8(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function b64DecodeUtf8(b64) {
+  const bin = atob((b64 || '').replace(/\s/g, ''));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+async function ghGetFile(cfg) {
+  const url = `${GH_API}/repos/${cfg.repo}/contents/${DATA_PATH}`;
+  const res = await fetch(url, { headers: ghHeaders(cfg.token), cache: 'no-store' });
+  if (res.status === 404) return { exists: false, sha: null, data: null };
+  if (!res.ok) throw new Error('GitHub ' + res.status + ' — ' + (await res.text()).slice(0, 140));
+  const j = await res.json();
+  return { exists: true, sha: j.sha, data: JSON.parse(b64DecodeUtf8(j.content)) };
+}
+
+async function ghPutFile(cfg, dataObj, sha) {
+  const url = `${GH_API}/repos/${cfg.repo}/contents/${DATA_PATH}`;
+  const body = {
+    message: 'Atualiza lançamentos — ' + new Date().toISOString(),
+    content: b64EncodeUtf8(JSON.stringify(dataObj, null, 2))
+  };
+  if (sha) body.sha = sha;
+  const res = await fetch(url, { method: 'PUT', headers: ghHeaders(cfg.token), body: JSON.stringify(body) });
+  if (res.status === 409) { const e = new Error('conflito'); e.conflict = true; throw e; }
+  if (!res.ok) throw new Error('GitHub ' + res.status + ' — ' + (await res.text()).slice(0, 140));
+  return (await res.json()).content.sha;
+}
+
+async function ghCheckRepo(cfg) {
+  const res = await fetch(`${GH_API}/repos/${cfg.repo}`, { headers: ghHeaders(cfg.token), cache: 'no-store' });
+  if (res.status === 404) throw new Error('Repositório não encontrado (confira usuário/repo e se o token tem acesso).');
+  if (res.status === 401) throw new Error('Token inválido ou expirado.');
+  if (!res.ok) throw new Error('GitHub ' + res.status);
+  const j = await res.json();
+  if (!j.private) throw new Error('ATENÇÃO: esse repositório é PÚBLICO. Use um repositório privado para seus dados.');
+  if (!(j.permissions && (j.permissions.push || j.permissions.admin))) {
+    throw new Error('O token não tem permissão de escrita (Contents: Read and write) nesse repositório.');
+  }
+  return j;
+}
+
+/* ---- documento sincronizado (snapshot + merge) ---- */
+function currentDoc() {
+  return {
+    funcionario: state.funcionario,
+    dataSolicitacao: state.dataSolicitacao,
+    referente: state.referente,
+    bank: Object.assign({}, state.bank),
+    reembolso: state.reembolso.map((e) => Object.assign({}, e)),
+    alelo: state.alelo.map((e) => Object.assign({}, e)),
+    tomb: {
+      reembolso: Object.assign({}, state.tomb.reembolso),
+      alelo: Object.assign({}, state.tomb.alelo)
+    },
+    meta: Object.assign({ updatedAt: 0, profileUpdatedAt: 0 }, state.meta)
+  };
+}
+
+function applyDoc(doc) {
+  applyingRemote = true;
+  const base = emptyState();
+  state.funcionario = doc.funcionario || '';
+  state.dataSolicitacao = doc.dataSolicitacao || '';
+  state.referente = doc.referente || '';
+  state.bank = Object.assign(base.bank, doc.bank || {});
+  state.reembolso = doc.reembolso || [];
+  state.alelo = doc.alelo || [];
+  state.tomb = {
+    reembolso: (doc.tomb && doc.tomb.reembolso) || {},
+    alelo: (doc.tomb && doc.tomb.alelo) || {}
+  };
+  state.meta = Object.assign({ updatedAt: 0, profileUpdatedAt: 0 }, doc.meta || {});
+  saveState();
+  render();
+  applyingRemote = false;
+}
+
+function mergeTable(t, a, b, outTomb) {
+  const PURGE = Date.now() - 180 * 24 * 3600 * 1000;   // descarta lápides > 180 dias
+  const tomb = {};
+  for (const src of [a, b]) {
+    const tm = (src.tomb && src.tomb[t]) || {};
+    for (const id in tm) if (tm[id] >= PURGE) tomb[id] = Math.max(tomb[id] || 0, tm[id]);
+  }
+  const map = {};
+  for (const src of [a, b]) {
+    for (const e of (src[t] || [])) {
+      const cur = map[e.id];
+      if (!cur || (e.updatedAt || 0) > (cur.updatedAt || 0)) map[e.id] = e;
+    }
+  }
+  const list = [];
+  for (const id in map) {
+    const e = map[id];
+    if (tomb[id] && tomb[id] >= (e.updatedAt || 0)) continue;   // deletado
+    list.push(e);
+  }
+  outTomb[t] = tomb;
+  list.sort((x, y) => (x.data || '').localeCompare(y.data || ''));
+  return list;
+}
+
+function mergeDocs(a, b) {
+  const pa = (a.meta && a.meta.profileUpdatedAt) || 0;
+  const pb = (b.meta && b.meta.profileUpdatedAt) || 0;
+  const p = pb > pa ? b : a;   // perfil/banco: o mais recente vence
+  const out = {
+    funcionario: p.funcionario || '',
+    dataSolicitacao: p.dataSolicitacao || '',
+    referente: p.referente || '',
+    bank: Object.assign({}, p.bank || {}),
+    tomb: { reembolso: {}, alelo: {} }
+  };
+  out.reembolso = mergeTable('reembolso', a, b, out.tomb);
+  out.alelo = mergeTable('alelo', a, b, out.tomb);
+  out.meta = {
+    updatedAt: Math.max((a.meta && a.meta.updatedAt) || 0, (b.meta && b.meta.updatedAt) || 0),
+    profileUpdatedAt: Math.max(pa, pb)
+  };
+  return out;
+}
+
+/* ---- orquestração: puxar -> mesclar -> empurrar ---- */
+let syncing = false;
+
+function scheduleSync() {
+  if (!isSyncConfigured()) return;
+  clearTimeout(scheduleSync._t);
+  scheduleSync._t = setTimeout(() => { syncNow(true); }, 2500);
+}
+
+async function syncNow(silent) {
+  const cfg = loadSyncCfg();
+  if (!cfg.repo || !cfg.token) { if (!silent) setSyncStatus('Configure o repositório e o token.', 'warn'); return; }
+  if (!navigator.onLine) { setSyncStatus('Offline — vai sincronizar quando a conexão voltar.', 'warn'); return; }
+  if (syncing) return;
+  syncing = true;
+  setSyncStatus('Sincronizando…');
+  try {
+    const remote = await ghGetFile(cfg);
+    let merged, sha;
+    if (!remote.exists) { merged = currentDoc(); sha = null; }
+    else { merged = mergeDocs(currentDoc(), remote.data); sha = remote.sha; }
+
+    applyDoc(merged);
+
+    const changed = !remote.exists || JSON.stringify(merged) !== JSON.stringify(remote.data);
+    if (changed) {
+      try {
+        await ghPutFile(cfg, merged, sha);
+      } catch (e) {
+        if (e.conflict) {   // outro dispositivo gravou no meio: refaz a mescla
+          const r2 = await ghGetFile(cfg);
+          const m2 = mergeDocs(currentDoc(), r2.data);
+          applyDoc(m2);
+          await ghPutFile(cfg, m2, r2.sha);
+        } else { throw e; }
+      }
+    }
+    setSyncStatus('Sincronizado • ' + new Date().toLocaleString('pt-BR'), 'ok');
+  } catch (e) {
+    console.error(e);
+    setSyncStatus('Erro: ' + e.message, 'err');
+  } finally {
+    syncing = false;
+  }
+}
+
+function setupSyncUI() {
+  const cfg = loadSyncCfg();
+  if ($('sy-repo')) $('sy-repo').value = cfg.repo || '';
+  if ($('sy-token')) $('sy-token').value = cfg.token || '';
+  if (isSyncConfigured()) setSyncStatus('Configurado. Toque em “Sincronizar agora”.', '');
+  else setSyncStatus('Não configurado.', '');
+
+  function persist() {
+    saveSyncCfg({ repo: ($('sy-repo').value || '').trim(), token: ($('sy-token').value || '').trim() });
+  }
+  $('sy-repo').addEventListener('change', persist);
+  $('sy-token').addEventListener('change', persist);
+
+  $('sy-test').addEventListener('click', async () => {
+    persist();
+    const c = loadSyncCfg();
+    if (!c.repo || !c.token) { setSyncStatus('Preencha o repositório e o token.', 'warn'); return; }
+    setSyncStatus('Verificando conexão…');
+    try { await ghCheckRepo(c); setSyncStatus('Conectado ✓ Repositório privado acessível.', 'ok'); }
+    catch (e) { setSyncStatus('Erro: ' + e.message, 'err'); }
+  });
+
+  $('sy-now').addEventListener('click', () => { persist(); syncNow(false); });
+
+  $('sy-clear').addEventListener('click', () => {
+    if (!confirm('Apagar o token e o repositório salvos neste aparelho?\n(Os lançamentos locais permanecem.)')) return;
+    try { localStorage.removeItem(SYNC_KEY); } catch (e) {}
+    $('sy-repo').value = ''; $('sy-token').value = '';
+    setSyncStatus('Desconectado deste aparelho.', '');
+    toast('Sincronização desativada neste aparelho.');
+  });
+}
+
 /* ---------------- Persistência de campos ---------------- */
 function bindField(id, getter, setter) {
   const el = $(id);
-  el.addEventListener('input', () => { setter(el.value); saveState(); });
-  el.addEventListener('change', () => { setter(el.value); saveState(); render(); });
+  el.addEventListener('input', () => { setter(el.value); touchProfile(); saveState(); });
+  el.addEventListener('change', () => { setter(el.value); touchProfile(); saveState(); render(); });
 }
 
 function newMonth() {
   if (!confirm('Iniciar um novo mês? Os lançamentos atuais serão apagados.\n(Seus dados pessoais e bancários são mantidos.)')) return;
-  state.reembolso = [];
-  state.alelo = [];
+  const now = Date.now();
+  for (const t of ['reembolso', 'alelo']) {
+    for (const e of state[t]) state.tomb[t][e.id] = now;   // lápides p/ a sincronização
+    state[t] = [];
+  }
   state.dataSolicitacao = '';
+  touchProfile();
   saveState();
   render();
   toast('Pronto para um novo mês.');
@@ -551,6 +818,12 @@ function init() {
 
   setupServiceWorker();
   setupConnectivity();
+  setupSyncUI();
+
+  // sincronização inicial ao abrir (puxa o que houver de outro dispositivo)
+  if (isSyncConfigured() && navigator.onLine) syncNow(true);
+  // ao voltar a ficar online, sincroniza
+  window.addEventListener('online', () => { if (isSyncConfigured()) syncNow(true); });
 }
 
 /* ---------------- Auto-atualização (Service Worker) ---------------- */
