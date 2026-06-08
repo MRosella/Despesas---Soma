@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v14';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v15';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -114,6 +114,55 @@ function toast(msg) {
   t.classList.add('show');
   clearTimeout(toast._t);
   toast._t = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+/* ---------------- Ícones (SVG inline, estilo Lucide) ---------------- */
+const ICONS = {
+  menu: '<line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  'trash-2': '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+  copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>',
+  receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>',
+  calendar: '<rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>',
+  'refresh-cw': '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>',
+  'alert-triangle': '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>'
+};
+function icon(name, size) {
+  const p = ICONS[name]; if (!p) return '';
+  const s = size || 20;
+  return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+}
+function setupIcons(root) {
+  (root || document).querySelectorAll('[data-icon]').forEach((el) => {
+    const name = el.getAttribute('data-icon');
+    if (el._icon === name) return;
+    const sz = parseInt(el.getAttribute('data-size') || '', 10) || 20;
+    el.innerHTML = icon(name, sz);
+    el._icon = name;
+  });
+}
+
+/* ---------------- Filtros (somente visualização) ---------------- */
+let filters = { text: '', categoria: '', from: '', to: '' };
+let lastAddedId = null;   // destaca o item recém-criado
+function filterActive() { return !!(filters.text || filters.categoria || filters.from || filters.to); }
+function entryMatchesFilter(e) {
+  if (filters.text) {
+    const t = filters.text.toLowerCase();
+    if (!((e.descricao || '').toLowerCase().includes(t) || (e.categoria || '').toLowerCase().includes(t))) return false;
+  }
+  if (filters.categoria && e.categoria !== filters.categoria) return false;
+  if (filters.from && (e.data || '') < filters.from) return false;
+  if (filters.to && (e.data || '') > filters.to) return false;
+  return true;
 }
 
 /* ---------------- Renderização ---------------- */
@@ -258,19 +307,33 @@ function renderCatSummary() {
   card.style.display = '';
 }
 
+function emptyStateEl() {
+  const li = document.createElement('li');
+  li.className = 'empty-state';
+  li.innerHTML = `<span class="empty-ic" data-icon="receipt" data-size="40"></span>
+    <div class="empty-title">Nenhum lançamento ainda</div>
+    <div class="empty-sub">Toque em “Adicionar” para registrar o primeiro.</div>`;
+  return li;
+}
+
 function renderList(tabela, ul) {
-  const list = state[tabela];
+  const all = state[tabela];
   ul.innerHTML = '';
+  if (!all.length) { ul.appendChild(emptyStateEl()); setupIcons(ul); return; }
+
+  const list = filterActive() ? all.filter(entryMatchesFilter) : all;
   if (!list.length) {
     const li = document.createElement('li');
     li.className = 'empty-list';
-    li.textContent = 'Nenhum lançamento ainda.';
+    li.textContent = 'Nenhum lançamento corresponde ao filtro.';
     ul.appendChild(li);
     return;
   }
+
   for (const e of list) {
+    const over = limitExcedido(e);
     const li = document.createElement('li');
-    li.className = 'entry';
+    li.className = 'entry' + (e.id === lastAddedId ? ' added' : '') + (over ? ' over-limit' : '');
     li.dataset.id = e.id;
     li.dataset.tabela = tabela;
     li.innerHTML = `
@@ -278,10 +341,43 @@ function renderList(tabela, ul) {
         <div class="e-desc">${escapeHtml(e.descricao || '(sem descrição)')}</div>
         <div class="e-meta"><span class="cat-tag">${escapeHtml(e.categoria || '—')}</span>${fmtDateBR(e.data)}</div>
       </div>
-      <div class="e-val">${formatMoney(e.valor)}</div>`;
-    li.addEventListener('click', () => openModal(tabela, e.id));
+      <div class="e-val">${formatMoney(e.valor)}</div>
+      <div class="e-quick">
+        <button class="qbtn" data-q="dup" title="Duplicar" aria-label="Duplicar lançamento" data-icon="copy" data-size="18"></button>
+        <button class="qbtn danger" data-q="del" title="Excluir" aria-label="Excluir lançamento" data-icon="trash-2" data-size="18"></button>
+      </div>`;
+    li.addEventListener('click', (ev) => { if (!ev.target.closest('.e-quick')) openModal(tabela, e.id); });
+    li.querySelector('[data-q=dup]').addEventListener('click', () => quickDuplicate(tabela, e.id));
+    li.querySelector('[data-q=del]').addEventListener('click', () => quickDelete(tabela, e.id));
     ul.appendChild(li);
   }
+  setupIcons(ul);
+}
+
+/* limite de reembolso por refeição (apenas aviso visual) */
+function limitExcedido(e) {
+  const lim = { 'Almoço': 70, 'Jantar': 70, 'Café da Manha': 30, 'Café da Tarde': 30 }[e.categoria];
+  return lim ? (e.valor || 0) > lim : false;
+}
+
+function quickDuplicate(tabela, id) {
+  const e = state[tabela].find((x) => x.id === id); if (!e) return;
+  const now = Date.now();
+  const copy = { id: uid(), data: todayISO(), descricao: e.descricao, categoria: e.categoria, valor: e.valor, updatedAt: now };
+  state[tabela].push(copy);
+  state[tabela].sort((a, b) => (a.data || '').localeCompare(b.data || ''));
+  lastAddedId = copy.id;
+  touchDoc(); saveState(); render();
+  setTimeout(() => { lastAddedId = null; }, 900);
+  toast('Lançamento duplicado.');
+}
+
+function quickDelete(tabela, id) {
+  if (!confirm('Excluir este lançamento?')) return;
+  state[tabela] = state[tabela].filter((x) => x.id !== id);
+  state.tomb[tabela][id] = Date.now();
+  touchDoc(); saveState(); render();
+  toast('Lançamento excluído.');
 }
 
 function escapeHtml(s) {
@@ -384,13 +480,16 @@ function saveEntry() {
     const e = state[tabela].find((x) => x.id === id);
     if (e) Object.assign(e, { data, descricao, categoria, valor, updatedAt: now });
   } else {
-    state[tabela].push({ id: uid(), data, descricao, categoria, valor, updatedAt: now });
+    const nid = uid();
+    state[tabela].push({ id: nid, data, descricao, categoria, valor, updatedAt: now });
+    lastAddedId = nid;
   }
   touchDoc();
   state[tabela].sort((a, b) => (a.data || '').localeCompare(b.data || ''));
   saveState();
   render();
   closeModal();
+  setTimeout(() => { lastAddedId = null; }, 900);
 }
 
 function deleteEntry() {
@@ -861,16 +960,16 @@ function updateSyncIndicator() {
   el.style.display = '';
   el.classList.remove('ok', 'pending', 'offline', 'spin');
   if (!navigator.onLine) {
-    el.textContent = '⚠'; el.classList.add('offline');
+    el.innerHTML = icon('alert-triangle', 20); el.classList.add('offline');
     el.title = 'Offline — sincroniza ao reconectar';
   } else if (syncing) {
-    el.textContent = '⟳'; el.classList.add('pending', 'spin');
+    el.innerHTML = icon('refresh-cw', 20); el.classList.add('pending', 'spin');
     el.title = 'Sincronizando…';
   } else if (isDirty()) {
-    el.textContent = '⟳'; el.classList.add('pending');
+    el.innerHTML = icon('refresh-cw', 20); el.classList.add('pending');
     el.title = 'Alterações pendentes — toque para sincronizar';
   } else {
-    el.textContent = '✓'; el.classList.add('ok');
+    el.innerHTML = icon('check', 20); el.classList.add('ok');
     el.title = 'Sincronizado — toque para sincronizar agora';
   }
 }
@@ -1300,6 +1399,31 @@ function setupNav() {
   showView('lancamentos');
 }
 
+/* ---------------- Filtros / busca ---------------- */
+function setupFilters() {
+  const cat = $('flt-cat');
+  if (cat && cat.options.length <= 1) {
+    CATEGORIAS.forEach((c) => { const o = document.createElement('option'); o.value = c; o.textContent = c; cat.appendChild(o); });
+  }
+  const apply = () => {
+    filters.text = ($('flt-text').value || '').trim();
+    filters.categoria = $('flt-cat').value || '';
+    filters.from = $('flt-from').value || '';
+    filters.to = $('flt-to').value || '';
+    const fc = $('flt-clear'); if (fc) fc.style.display = filterActive() ? '' : 'none';
+    render();
+  };
+  ['flt-text', 'flt-cat', 'flt-from', 'flt-to'].forEach((id) => {
+    const el = $(id); if (!el) return;
+    el.addEventListener('input', apply); el.addEventListener('change', apply);
+  });
+  const fc = $('flt-clear');
+  if (fc) fc.addEventListener('click', () => {
+    $('flt-text').value = ''; $('flt-cat').value = ''; $('flt-from').value = ''; $('flt-to').value = '';
+    apply();
+  });
+}
+
 /* ---------------- Modo escuro ---------------- */
 function currentTheme() {
   const p = localStorage.getItem(THEME_KEY);
@@ -1310,7 +1434,7 @@ function applyTheme() {
   const t = currentTheme();
   document.documentElement.setAttribute('data-theme', t);
   const btn = $('theme-toggle');
-  if (btn) { btn.textContent = t === 'dark' ? '☀️' : '🌙'; btn.title = t === 'dark' ? 'Tema claro' : 'Tema escuro'; }
+  if (btn) { btn.innerHTML = icon(t === 'dark' ? 'sun' : 'moon', 22); btn.title = t === 'dark' ? 'Tema claro' : 'Tema escuro'; }
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', t === 'dark' ? '#201a17' : '#b3262d');
 }
@@ -1408,6 +1532,8 @@ function init() {
   $('exp-confirm').addEventListener('click', confirmExport);
   $('export-modal').addEventListener('click', (e) => { if (e.target === $('export-modal')) closeExportModal(); });
 
+  setupIcons();
+  setupFilters();
   setupNav();
   setupTheme();
   setupServiceWorker();

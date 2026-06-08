@@ -71,10 +71,14 @@ A partir daí funciona **sem internet**.
 - **Dados do Reembolso:** preencha seu nome (Funcionário), a data da solicitação e
   o motivo (Reembolso Referente à). Ficam salvos automaticamente.
 - **Despesas para Reembolso** e **Despesas Cartão Alelo:** toque em
-  **＋ Adicionar** em cada seção, informe data, descrição, categoria e valor.
+  **Adicionar** em cada seção, informe data, descrição, categoria e valor.
   Toque em um lançamento existente para editar, excluir ou **Duplicar**.
-  - **⟲ Repetir último** cria rapidamente um lançamento igual ao último (ex.: almoço diário).
+  - Cada lançamento tem botões rápidos de **duplicar** e **excluir** (sem abrir o modal).
+  - **Repetir último** cria rapidamente um lançamento igual ao último (ex.: almoço diário).
+  - Valores acima do limite de reembolso aparecem destacados em vermelho.
   - O **valor** e o **CPF** são formatados automaticamente enquanto você digita.
+- **Busca e filtros:** use a barra de busca (texto, categoria e período) para encontrar
+  lançamentos rapidamente quando o mês tiver muitos itens.
 - **Dados Bancários (Se Aplicável):** preencha uma vez; ficam salvos para os próximos meses.
 - No fim do mês, toque em **Excel** ou **PDF** para gerar o relatório.
   - Abre uma caixa para escolher o que incluir: **Despesas para Reembolso**, **Cartão Alelo**

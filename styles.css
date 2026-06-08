@@ -22,7 +22,7 @@
   --card: #201a17;
   --line: #3a302a;
   --text: #f1e9e3;
-  --muted: #b0a49b;
+  --muted: #c2b7ae;
   --input-bg: #2a2320;
   --ok: #5cba60;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -119,6 +119,60 @@ body { padding-bottom: 96px; }
 .rep-year-lbl { font-size: 1.05rem; }
 .rep-year-meta { font-size: .76rem; color: var(--muted); font-weight: 600; }
 .rep-year .hist-list { padding: 0 16px 12px; }
+
+/* ---------- Ícones SVG ---------- */
+svg { display: inline-block; vertical-align: middle; }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 42px; min-height: 42px; }
+.nav-ic { display: inline-flex; align-items: center; justify-content: center; }
+.bic { display: inline-flex; align-items: center; line-height: 0; }
+
+/* ---------- Ações rápidas no item ---------- */
+.entry { position: relative; }
+.e-quick { display: flex; gap: 2px; flex: 0 0 auto; }
+.qbtn {
+  border: none; background: transparent; color: var(--muted);
+  padding: 8px; border-radius: 9px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 40px; min-height: 40px;
+}
+.qbtn:active { background: var(--bg); }
+.qbtn.danger { color: var(--red); }
+.entry.over-limit { box-shadow: inset 3px 0 0 var(--red); }
+.entry.over-limit .e-val { color: var(--red); }
+
+/* ---------- Tela vazia acolhedora ---------- */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 30px 16px; text-align: center; color: var(--muted);
+}
+.empty-ic { color: var(--red); opacity: .55; }
+.empty-title { font-weight: 700; color: var(--brown); font-size: .96rem; }
+.empty-sub { font-size: .82rem; }
+
+/* ---------- Busca e filtros ---------- */
+.filter-card .card-body { padding: 12px 16px; }
+.filter-row { display: flex; align-items: center; gap: 8px; }
+.filter-ic { color: var(--muted); display: inline-flex; flex: 0 0 auto; }
+.filter-row > input { flex: 1; }
+.filter-row .icon-btn { flex: 0 0 auto; min-width: 38px; min-height: 38px; color: var(--muted); }
+.filter-extra { margin-top: 10px; }
+.filter-dates { display: flex; gap: 8px; }
+.filter-dates input { flex: 1; min-width: 0; }
+
+/* ---------- Microinterações ---------- */
+@keyframes viewIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.view:not([hidden]) { animation: viewIn .22s ease; }
+@keyframes entryIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+@keyframes entryHi { 0% { background: rgba(241,138,30,.20); } 100% { background: transparent; } }
+.entry.added { animation: entryIn .3s ease, entryHi 1.1s ease; }
+.card { transition: box-shadow .2s; }
+
+/* ---------- Acessibilidade ---------- */
+:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+.hist-btn { min-height: 38px; }
+@media (prefers-reduced-motion: reduce) {
+  *, .view:not([hidden]), .entry.added { animation: none !important; transition: none !important; }
+}
 
 /* ---------- Layout ---------- */
 main { padding: 14px; max-width: 720px; margin: 0 auto; }

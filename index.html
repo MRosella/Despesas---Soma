@@ -32,24 +32,24 @@
       <div class="drawer-greet">Olá,<br><b>Soma Urbanismo</b></div>
     </div>
     <nav class="drawer-nav">
-      <button class="nav-item active" data-view="lancamentos"><span class="nav-ic">🧾</span> Lançamentos</button>
-      <button class="nav-item" data-view="relatorios"><span class="nav-ic">📅</span> Relatórios mensais</button>
-      <button class="nav-item" data-view="config"><span class="nav-ic">⚙️</span> Configurações</button>
+      <button class="nav-item active" data-view="lancamentos"><span class="nav-ic" data-icon="receipt" data-size="22"></span> Lançamentos</button>
+      <button class="nav-item" data-view="relatorios"><span class="nav-ic" data-icon="calendar" data-size="22"></span> Relatórios mensais</button>
+      <button class="nav-item" data-view="config"><span class="nav-ic" data-icon="settings" data-size="22"></span> Configurações</button>
     </nav>
     <div class="drawer-foot">Despesas para Reembolso<br><span id="ft-version2"></span></div>
   </aside>
 
   <header class="app-header">
-    <button class="icon-btn menu-toggle" id="menu-toggle" title="Menu" aria-label="Abrir menu">☰</button>
+    <button class="icon-btn menu-toggle" id="menu-toggle" title="Menu" aria-label="Abrir menu" data-icon="menu" data-size="24"></button>
     <img src="assets/soma-logo.png" alt="Soma Urbanismo" />
     <div>
       <div class="title" id="header-title">Lançamentos</div>
       <div class="sub">Soma Urbanismo S/A</div>
     </div>
     <div class="spacer"></div>
-    <button class="icon-btn" id="theme-toggle" title="Tema claro/escuro" aria-label="Alternar tema">🌙</button>
-    <button class="icon-btn sync-ind" id="sync-ind" title="Sincronização" aria-label="Status de sincronização" style="display:none">⟳</button>
-    <button class="icon-btn" id="btn-new-month" title="Novo mês / arquivar" aria-label="Novo mês">🗑️</button>
+    <button class="icon-btn" id="theme-toggle" title="Tema claro/escuro" aria-label="Alternar tema"></button>
+    <button class="icon-btn sync-ind" id="sync-ind" title="Sincronização" aria-label="Status de sincronização" style="display:none"></button>
+    <button class="icon-btn" id="btn-new-month" title="Novo mês / arquivar" aria-label="Novo mês" data-icon="trash-2" data-size="22"></button>
   </header>
 
   <main>
@@ -81,6 +81,24 @@
         </div>
       </section>
 
+      <!-- Busca e filtros -->
+      <section class="card filter-card">
+        <div class="card-body">
+          <div class="filter-row">
+            <span class="filter-ic" data-icon="search" data-size="18"></span>
+            <input type="text" id="flt-text" placeholder="Buscar por descrição ou categoria" autocomplete="off" />
+            <button class="icon-btn" id="flt-clear" data-icon="x" data-size="20" aria-label="Limpar filtros" style="display:none"></button>
+          </div>
+          <div class="row2 filter-extra">
+            <select id="flt-cat"><option value="">Todas as categorias</option></select>
+            <div class="filter-dates">
+              <input type="date" id="flt-from" aria-label="Data inicial" />
+              <input type="date" id="flt-to" aria-label="Data final" />
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Tabela 1: Reembolso -->
       <section class="card">
         <div class="card-head">
@@ -89,8 +107,8 @@
         </div>
         <ul class="entries" id="list-reembolso"></ul>
         <div class="add-row">
-          <button class="add-btn" data-add="reembolso">＋ Adicionar</button>
-          <button class="add-btn repeat" data-repeat="reembolso">⟲ Repetir último</button>
+          <button class="add-btn" data-add="reembolso"><span class="bic" data-icon="plus" data-size="18"></span> Adicionar</button>
+          <button class="add-btn repeat" data-repeat="reembolso"><span class="bic" data-icon="repeat" data-size="18"></span> Repetir último</button>
         </div>
       </section>
 
@@ -102,8 +120,8 @@
         </div>
         <ul class="entries" id="list-alelo"></ul>
         <div class="add-row">
-          <button class="add-btn" data-add="alelo">＋ Adicionar</button>
-          <button class="add-btn repeat" data-repeat="alelo">⟲ Repetir último</button>
+          <button class="add-btn" data-add="alelo"><span class="bic" data-icon="plus" data-size="18"></span> Adicionar</button>
+          <button class="add-btn repeat" data-repeat="alelo"><span class="bic" data-icon="repeat" data-size="18"></span> Repetir último</button>
         </div>
       </section>
 
@@ -244,8 +262,8 @@
 
   <!-- Barra de ações (somente na tela de Lançamentos) -->
   <div class="action-bar" id="action-bar">
-    <button class="btn btn-excel" id="btn-excel">⬇ Excel</button>
-    <button class="btn btn-pdf" id="btn-pdf">⬇ PDF</button>
+    <button class="btn btn-excel" id="btn-excel"><span class="bic" data-icon="download" data-size="18"></span> Excel</button>
+    <button class="btn btn-pdf" id="btn-pdf"><span class="bic" data-icon="download" data-size="18"></span> PDF</button>
   </div>
 
   <!-- Modal de lançamento -->
