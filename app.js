@@ -8,6 +8,8 @@
 
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
+const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
+const APP_VERSION = 'v8';   // manter igual ao CACHE em sw.js
 const EMPRESA = 'Soma Urbanismo S/A';
 
 const CATEGORIAS = ['Café da Manha', 'Almoço', 'Café da Tarde', 'Jantar', 'Combustível', 'Pedágio', 'Outras Despesas'];
@@ -550,6 +552,18 @@ const DIRTY_KEY = 'despesas-soma-dirty-v1';
 function setDirty(v) { try { v ? localStorage.setItem(DIRTY_KEY, '1') : localStorage.removeItem(DIRTY_KEY); } catch (e) {} }
 function isDirty() { try { return localStorage.getItem(DIRTY_KEY) === '1'; } catch (e) { return false; } }
 
+// horário da última sincronização bem-sucedida (para o rodapé)
+function setLastSync(ts) { try { localStorage.setItem(LASTSYNC_KEY, String(ts)); } catch (e) {} }
+function getLastSync() { try { return localStorage.getItem(LASTSYNC_KEY); } catch (e) { return null; } }
+
+function updateFooter() {
+  const v = $('ft-version'); if (v) v.textContent = 'App ' + APP_VERSION;
+  const ls = $('ft-lastsync'); if (!ls) return;
+  const t = getLastSync();
+  const txt = t ? new Date(Number(t)).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+  ls.textContent = 'Última sincronização: ' + txt;
+}
+
 function setSyncStatus(msg, kind) {
   const el = $('sy-status'); if (!el) return;
   el.textContent = msg;
@@ -737,6 +751,8 @@ async function syncNow(silent) {
       }
     }
     setDirty(false);   // local e servidor consistentes
+    setLastSync(Date.now());
+    updateFooter();
     setSyncStatus('Sincronizado • ' + new Date().toLocaleString('pt-BR'), 'ok');
   } catch (e) {
     console.error(e);
@@ -834,6 +850,7 @@ function init() {
   setupServiceWorker();
   setupConnectivity();
   setupSyncUI();
+  updateFooter();
 
   // sincronização inicial ao abrir (puxa o que houver de outro dispositivo)
   if (isSyncConfigured() && navigator.onLine) syncNow(true);

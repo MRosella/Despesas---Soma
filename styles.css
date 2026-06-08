@@ -186,6 +186,14 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 
 .hint { font-size: .74rem; color: var(--muted); margin-top: 4px; }
 
+/* ---------- Rodapé ---------- */
+.app-footer {
+  display: flex; justify-content: center; flex-wrap: wrap; gap: 8px;
+  text-align: center; color: var(--muted); font-size: .72rem;
+  padding: 6px 16px 2px;
+}
+.app-footer .ft-sep { opacity: .5; }
+
 /* ---------- Sincronização ---------- */
 .sync-actions { display: flex; gap: 10px; margin-top: 4px; }
 .sync-actions .btn { padding: 11px; font-size: .9rem; }
