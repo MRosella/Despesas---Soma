@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v13';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v14';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -1286,6 +1286,7 @@ function showView(name) {
   document.querySelectorAll('.view').forEach((v) => { v.hidden = (v.id !== 'view-' + name); });
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
   const ab = $('action-bar'); if (ab) ab.style.display = (name === 'lancamentos') ? '' : 'none';
+  const nm = $('btn-new-month'); if (nm) nm.style.display = (name === 'lancamentos') ? '' : 'none';
   const ht = $('header-title'); if (ht) ht.textContent = VIEW_TITLES[name];
   if (name === 'relatorios') renderReports();
   window.scrollTo(0, 0);
