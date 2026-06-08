@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v8';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v9';   // manter igual ao CACHE em sw.js
 const EMPRESA = 'Soma Urbanismo S/A';
 
 const CATEGORIAS = ['Café da Manha', 'Almoço', 'Café da Tarde', 'Jantar', 'Combustível', 'Pedágio', 'Outras Despesas'];
@@ -129,6 +129,23 @@ function render() {
   $('sum-reembolso').textContent = formatMoney(s1);
   $('sum-alelo').textContent = formatMoney(s2);
   $('total-geral').textContent = formatMoney(s1 + s2);
+
+  renderCatSummary();
+}
+
+/* Resumo por categoria — SOMENTE para visualização no app (não vai p/ Excel/PDF) */
+function renderCatSummary() {
+  const card = $('cat-summary-card'); const box = $('cat-summary');
+  if (!card || !box) return;
+  const all = state.reembolso.concat(state.alelo);
+  if (!all.length) { card.style.display = 'none'; box.innerHTML = ''; return; }
+  const map = {};
+  for (const e of all) { const c = e.categoria || '—'; map[c] = (map[c] || 0) + (e.valor || 0); }
+  const arr = Object.keys(map).map((c) => [c, map[c]]).sort((a, b) => b[1] - a[1]);
+  box.innerHTML = arr.map(([cat, val]) =>
+    `<span class="cat-chip"><span class="cc-name">${escapeHtml(cat)}</span><span class="cc-val">${formatMoney(val)}</span></span>`
+  ).join('');
+  card.style.display = '';
 }
 
 function renderList(tabela, ul) {
@@ -448,12 +465,29 @@ async function exportExcel() {
     toast('Gerando Excel…');
     const bytes = await buildXlsx();
     const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    downloadBlob(blob, reportFileBase() + '.xlsx');
-    toast('Excel gerado!');
+    await shareOrDownload(blob, reportFileBase() + '.xlsx', 'Relatório de Despesas (Excel)');
   } catch (e) {
     console.error(e);
     toast('Erro ao gerar Excel: ' + e.message);
   }
+}
+
+/* Compartilha o arquivo (WhatsApp/e-mail/etc.) se o aparelho suportar;
+   senão, faz o download normal. */
+async function shareOrDownload(blob, filename, title) {
+  const file = new File([blob], filename, { type: blob.type });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title });
+      toast('Pronto para enviar.');
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;   // usuário cancelou
+      // qualquer outro erro: cai para download
+    }
+  }
+  downloadBlob(blob, filename);
+  toast('Arquivo salvo.');
 }
 
 function downloadBlob(blob, filename) {
@@ -526,10 +560,58 @@ function buildPrint() {
     </div>`;
 }
 
-function exportPDF() {
+async function exportPDF() {
   if (!state.reembolso.length && !state.alelo.length) { toast('Adicione ao menos um lançamento.'); return; }
+  try {
+    toast('Gerando PDF…');
+    const blob = await generatePdfBlob();
+    await shareOrDownload(blob, reportFileBase() + '.pdf', 'Relatório de Despesas (PDF)');
+  } catch (e) {
+    console.error(e);
+    toast('Erro ao gerar PDF: ' + e.message);
+  }
+}
+
+/* Gera um PDF de verdade (arquivo) a partir do mesmo layout do relatório,
+   capturado com html2canvas e montado com jsPDF (A4 retrato, multipágina). */
+async function generatePdfBlob() {
   buildPrint();
-  setTimeout(() => window.print(), 100);
+  const root = $('print-root');
+  const prevStyle = root.getAttribute('style') || '';
+  // torna o layout capturável fora da tela
+  root.style.cssText = 'display:block;position:fixed;left:-10000px;top:0;width:800px;background:#f8f4f2;padding:24px;';
+
+  // espera o logo carregar para não sair em branco
+  const img = root.querySelector('.p-logo img');
+  if (img && !img.complete) await new Promise((r) => { img.onload = img.onerror = r; });
+
+  try {
+    const canvas = await html2canvas(root, { scale: 2, backgroundColor: '#f8f4f2', useCORS: true });
+    const imgData = canvas.toDataURL('image/jpeg', 0.96);
+    const jsPDF = window.jspdf.jsPDF;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 8;
+    const imgW = pageW - margin * 2;
+    const imgH = canvas.height * (imgW / canvas.width);
+    const usableH = pageH - margin * 2;
+
+    let heightLeft = imgH;
+    let position = margin;
+    pdf.addImage(imgData, 'JPEG', margin, position, imgW, imgH);
+    heightLeft -= usableH;
+    while (heightLeft > 0) {
+      position = margin - (imgH - heightLeft);
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', margin, position, imgW, imgH);
+      heightLeft -= usableH;
+    }
+    return pdf.output('blob');
+  } finally {
+    root.setAttribute('style', prevStyle);
+    root.style.display = 'none';
+  }
 }
 
 /* ============================================================
@@ -549,7 +631,7 @@ function isSyncConfigured() { const c = loadSyncCfg(); return !!(c.repo && c.tok
 
 // "sujo" = há alterações locais ainda não enviadas ao servidor (ex.: feitas offline)
 const DIRTY_KEY = 'despesas-soma-dirty-v1';
-function setDirty(v) { try { v ? localStorage.setItem(DIRTY_KEY, '1') : localStorage.removeItem(DIRTY_KEY); } catch (e) {} }
+function setDirty(v) { try { v ? localStorage.setItem(DIRTY_KEY, '1') : localStorage.removeItem(DIRTY_KEY); } catch (e) {} updateSyncIndicator(); }
 function isDirty() { try { return localStorage.getItem(DIRTY_KEY) === '1'; } catch (e) { return false; } }
 
 // horário da última sincronização bem-sucedida (para o rodapé)
@@ -568,6 +650,27 @@ function setSyncStatus(msg, kind) {
   const el = $('sy-status'); if (!el) return;
   el.textContent = msg;
   el.className = 'sync-status' + (kind ? ' ' + kind : '');
+}
+
+// ícone no cabeçalho: ✓ sincronizado · ⟳ pendente/sincronizando · ⚠ offline
+function updateSyncIndicator() {
+  const el = $('sync-ind'); if (!el) return;
+  if (!isSyncConfigured()) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.classList.remove('ok', 'pending', 'offline', 'spin');
+  if (!navigator.onLine) {
+    el.textContent = '⚠'; el.classList.add('offline');
+    el.title = 'Offline — sincroniza ao reconectar';
+  } else if (syncing) {
+    el.textContent = '⟳'; el.classList.add('pending', 'spin');
+    el.title = 'Sincronizando…';
+  } else if (isDirty()) {
+    el.textContent = '⟳'; el.classList.add('pending');
+    el.title = 'Alterações pendentes — toque para sincronizar';
+  } else {
+    el.textContent = '✓'; el.classList.add('ok');
+    el.title = 'Sincronizado — toque para sincronizar agora';
+  }
 }
 
 function ghHeaders(token) {
@@ -724,10 +827,12 @@ async function syncNow(silent) {
     setSyncStatus(isDirty()
       ? 'Offline — alterações pendentes serão enviadas assim que a conexão voltar.'
       : 'Offline — sincroniza quando a conexão voltar.', 'warn');
+    updateSyncIndicator();
     return;
   }
   if (syncing) return;
   syncing = true;
+  updateSyncIndicator();
   setSyncStatus('Sincronizando…');
   try {
     const remote = await ghGetFile(cfg);
@@ -760,6 +865,7 @@ async function syncNow(silent) {
     setSyncStatus('Erro: ' + e.message + (isDirty() ? ' (alterações pendentes mantidas)' : ''), 'err');
   } finally {
     syncing = false;
+    updateSyncIndicator();
   }
 }
 
@@ -775,6 +881,7 @@ function setupSyncUI() {
 
   function persist() {
     saveSyncCfg({ repo: ($('sy-repo').value || '').trim(), token: ($('sy-token').value || '').trim() });
+    updateSyncIndicator();
   }
   $('sy-repo').addEventListener('change', persist);
   $('sy-token').addEventListener('change', persist);
@@ -795,6 +902,7 @@ function setupSyncUI() {
     try { localStorage.removeItem(SYNC_KEY); } catch (e) {}
     $('sy-repo').value = ''; $('sy-token').value = '';
     setSyncStatus('Desconectado deste aparelho.', '');
+    updateSyncIndicator();
     toast('Sincronização desativada neste aparelho.');
   });
 }
@@ -851,6 +959,8 @@ function init() {
   setupConnectivity();
   setupSyncUI();
   updateFooter();
+  updateSyncIndicator();
+  $('sync-ind').addEventListener('click', () => syncNow(false));
 
   // sincronização inicial ao abrir (puxa o que houver de outro dispositivo)
   if (isSyncConfigured() && navigator.onLine) syncNow(true);
@@ -909,8 +1019,8 @@ function setupServiceWorker() {
 /* ---------------- Aviso de offline ---------------- */
 function setupConnectivity() {
   if (!navigator.onLine) showOfflineNotice();
-  window.addEventListener('offline', showOfflineNotice);
-  window.addEventListener('online', () => { const n = $('offline-notice'); if (n) n.remove(); });
+  window.addEventListener('offline', () => { showOfflineNotice(); updateSyncIndicator(); });
+  window.addEventListener('online', () => { const n = $('offline-notice'); if (n) n.remove(); updateSyncIndicator(); });
 }
 
 function showOfflineNotice() {

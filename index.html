@@ -21,6 +21,7 @@
       <div class="sub">Soma Urbanismo S/A</div>
     </div>
     <div class="spacer"></div>
+    <button class="icon-btn sync-ind" id="sync-ind" title="Sincronização" aria-label="Status de sincronização" style="display:none">⟳</button>
     <button class="icon-btn" id="btn-new-month" title="Novo mês / limpar lançamentos" aria-label="Novo mês">🗑️</button>
   </header>
 
@@ -69,6 +70,14 @@
       </div>
       <ul class="entries" id="list-alelo"></ul>
       <button class="add-btn" data-add="alelo">＋ Adicionar lançamento</button>
+    </section>
+
+    <!-- Resumo por categoria (apenas no app; não vai para Excel/PDF) -->
+    <section class="card cat-summary-card" id="cat-summary-card" style="display:none">
+      <div class="card-body">
+        <div class="cat-summary-title">Resumo por categoria</div>
+        <div class="cat-summary" id="cat-summary"></div>
+      </div>
     </section>
 
     <!-- Total -->
@@ -199,6 +208,8 @@
   <div class="toast" id="toast"></div>
 
   <script src="lib/fflate.min.js"></script>
+  <script src="lib/html2canvas.min.js"></script>
+  <script src="lib/jspdf.umd.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

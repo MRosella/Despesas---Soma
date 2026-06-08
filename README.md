@@ -71,8 +71,11 @@ A partir daí funciona **sem internet**.
   **＋ Adicionar lançamento** em cada seção, informe data, descrição, categoria e valor.
   Toque em um lançamento existente para editar ou excluir.
 - **Dados Bancários (Se Aplicável):** preencha uma vez; ficam salvos para os próximos meses.
-- No fim do mês, toque em **Excel** ou **PDF** para gerar o relatório e enviar para a empresa.
-  - No Android, o **PDF** é gerado pela tela de impressão → escolha **Salvar como PDF**.
+- No fim do mês, toque em **Excel** ou **PDF** para gerar o relatório.
+  - No Android, abre direto a tela de **compartilhar** (WhatsApp, e-mail, etc.) com o
+    arquivo anexado. Onde o compartilhamento não estiver disponível, o arquivo é baixado.
+- O **Resumo por categoria** (no app, acima do total) ajuda a conferir os gastos antes de
+  enviar — ele **não** aparece no Excel/PDF.
 - O botão **🗑️** (topo) inicia um novo mês, apagando os lançamentos e mantendo seus
   dados pessoais e bancários.
 
