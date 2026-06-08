@@ -65,6 +65,9 @@ A partir daí funciona **sem internet**.
 
 ## 3. Como usar
 
+- **Menu (☰):** toque no botão no canto superior esquerdo para abrir o menu lateral e navegar entre
+  **Lançamentos**, **Relatórios mensais** (meses arquivados, por ano) e **Configurações**
+  (sincronização, bloqueio e backup).
 - **Dados do Reembolso:** preencha seu nome (Funcionário), a data da solicitação e
   o motivo (Reembolso Referente à). Ficam salvos automaticamente.
 - **Despesas para Reembolso** e **Despesas Cartão Alelo:** toque em

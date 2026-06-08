@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v11';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v12';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -137,7 +137,7 @@ function render() {
   $('total-geral').textContent = formatMoney(s1 + s2);
 
   renderCatSummary();
-  renderHistory();
+  renderReports();
 }
 
 /* ---------------- Histórico de meses ---------------- */
@@ -156,34 +156,62 @@ function monthLabelFor(src) {
   return new Date().toLocaleDateString('pt-BR');
 }
 
-function renderHistory() {
-  const card = $('history-card'); const ul = $('history-list');
-  if (!card || !ul) return;
-  ul.innerHTML = '';
-  if (!state.history.length) { card.style.display = 'none'; return; }
-  card.style.display = '';
-  for (const h of state.history) {
-    const qtd = (h.reembolso || []).length + (h.alelo || []).length;
-    const total = sumOf(h.reembolso || []) + sumOf(h.alelo || []);
-    const li = document.createElement('li');
-    li.className = 'hist-item';
-    li.innerHTML = `
-      <div class="hist-main">
-        <div class="hist-label">${escapeHtml(h.label || 'Mês')}</div>
-        <div class="hist-meta">${qtd} lançamento(s) · ${formatMoney(total)}</div>
-      </div>
-      <div class="hist-actions">
-        <button class="hist-btn" data-act="xls">Excel</button>
-        <button class="hist-btn" data-act="pdf">PDF</button>
-        <button class="hist-btn" data-act="open">Reabrir</button>
-        <button class="hist-btn danger" data-act="del" title="Excluir do histórico">✕</button>
-      </div>`;
-    li.querySelector('[data-act=xls]').addEventListener('click', () => exportExcel(h));
-    li.querySelector('[data-act=pdf]').addEventListener('click', () => exportPDF(h));
-    li.querySelector('[data-act=open]').addEventListener('click', () => reopenHistory(h.id));
-    li.querySelector('[data-act=del]').addEventListener('click', () => deleteHistory(h.id));
-    ul.appendChild(li);
+function yearOf(h) {
+  let iso = h.dataSolicitacao;
+  if (!iso) {
+    const all = (h.reembolso || []).concat(h.alelo || []);
+    iso = all.map((e) => e.data).filter(Boolean).sort()[0] || '';
   }
+  if (iso) return iso.slice(0, 4);
+  if (h.archivedAt) return String(new Date(h.archivedAt).getFullYear());
+  return '—';
+}
+
+/* Relatórios mensais — navegação por ano e mês */
+function renderReports() {
+  const tree = $('reports-tree'); const empty = $('reports-empty');
+  if (!tree) return;
+  if (!state.history.length) { tree.innerHTML = ''; if (empty) empty.style.display = ''; return; }
+  if (empty) empty.style.display = 'none';
+
+  const byYear = {};
+  for (const h of state.history) { const y = yearOf(h); (byYear[y] = byYear[y] || []).push(h); }
+  const years = Object.keys(byYear).sort((a, b) => b.localeCompare(a));
+
+  let html = '';
+  for (const y of years) {
+    const items = byYear[y].sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
+    const yTotal = items.reduce((s, h) => s + sumOf(h.reembolso || []) + sumOf(h.alelo || []), 0);
+    html += `<details class="card rep-year" open>
+      <summary><span class="rep-year-lbl">${escapeHtml(y)}</span><span class="rep-year-meta">${items.length} mês(es) · ${formatMoney(yTotal)}</span></summary>
+      <ul class="hist-list">`;
+    for (const h of items) {
+      const qtd = (h.reembolso || []).length + (h.alelo || []).length;
+      const total = sumOf(h.reembolso || []) + sumOf(h.alelo || []);
+      html += `<li class="hist-item" data-id="${h.id}">
+        <div class="hist-main">
+          <div class="hist-label">${escapeHtml(h.label || 'Mês')}</div>
+          <div class="hist-meta">${qtd} lançamento(s) · ${formatMoney(total)}</div>
+        </div>
+        <div class="hist-actions">
+          <button class="hist-btn" data-act="xls">Excel</button>
+          <button class="hist-btn" data-act="pdf">PDF</button>
+          <button class="hist-btn" data-act="open">Reabrir</button>
+          <button class="hist-btn danger" data-act="del" title="Excluir do histórico">✕</button>
+        </div></li>`;
+    }
+    html += '</ul></details>';
+  }
+  tree.innerHTML = html;
+
+  tree.querySelectorAll('.hist-item').forEach((li) => {
+    const id = li.dataset.id;
+    const get = () => state.history.find((x) => x.id === id);
+    li.querySelector('[data-act=xls]').addEventListener('click', () => exportExcel(get()));
+    li.querySelector('[data-act=pdf]').addEventListener('click', () => exportPDF(get()));
+    li.querySelector('[data-act=open]').addEventListener('click', () => reopenHistory(id));
+    li.querySelector('[data-act=del]').addEventListener('click', () => deleteHistory(id));
+  });
 }
 
 function reopenHistory(id) {
@@ -202,6 +230,7 @@ function reopenHistory(id) {
   state.alelo = (h.alelo || []).map((e) => Object.assign({}, e, { id: uid(), updatedAt: now }));
   touchProfile(); touchDoc();
   saveState(); render();
+  showView('lancamentos');
   toast('Mês reaberto para edição.');
 }
 
@@ -773,6 +802,7 @@ function getLastSync() { try { return localStorage.getItem(LASTSYNC_KEY); } catc
 
 function updateFooter() {
   const v = $('ft-version'); if (v) v.textContent = 'App ' + APP_VERSION;
+  const v2 = $('ft-version2'); if (v2) v2.textContent = 'Plane it • ' + APP_VERSION;
   const ls = $('ft-lastsync'); if (!ls) return;
   const t = getLastSync();
   const txt = t ? new Date(Number(t)).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
@@ -1206,6 +1236,30 @@ function setupBackupUI() {
   $('bk-import').addEventListener('change', (e) => { if (e.target.files && e.target.files[0]) importBackupFile(e.target.files[0]); e.target.value = ''; });
 }
 
+/* ---------------- Navegação (menu lateral + telas) ---------------- */
+const VIEW_TITLES = { lancamentos: 'Lançamentos', relatorios: 'Relatórios mensais', config: 'Configurações' };
+
+function openDrawer() { $('drawer').classList.add('open'); $('drawer-backdrop').classList.add('show'); }
+function closeDrawer() { $('drawer').classList.remove('open'); $('drawer-backdrop').classList.remove('show'); }
+
+function showView(name) {
+  if (!VIEW_TITLES[name]) name = 'lancamentos';
+  document.querySelectorAll('.view').forEach((v) => { v.hidden = (v.id !== 'view-' + name); });
+  document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
+  const ab = $('action-bar'); if (ab) ab.style.display = (name === 'lancamentos') ? '' : 'none';
+  const ht = $('header-title'); if (ht) ht.textContent = VIEW_TITLES[name];
+  if (name === 'relatorios') renderReports();
+  window.scrollTo(0, 0);
+}
+
+function setupNav() {
+  $('menu-toggle').addEventListener('click', openDrawer);
+  $('drawer-backdrop').addEventListener('click', closeDrawer);
+  document.querySelectorAll('.nav-item').forEach((b) =>
+    b.addEventListener('click', () => { showView(b.dataset.view); closeDrawer(); }));
+  showView('lancamentos');
+}
+
 /* ---------------- Modo escuro ---------------- */
 function currentTheme() {
   const p = localStorage.getItem(THEME_KEY);
@@ -1310,6 +1364,7 @@ function init() {
   $('btn-pdf').addEventListener('click', () => exportPDF());
   $('btn-new-month').addEventListener('click', newMonth);
 
+  setupNav();
   setupTheme();
   setupServiceWorker();
   setupConnectivity();

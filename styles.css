@@ -64,6 +64,61 @@ body { padding-bottom: 96px; }
   font-size: 1.4rem; padding: 8px; border-radius: 10px; cursor: pointer;
 }
 .icon-btn:active { background: var(--bg); }
+.menu-toggle { font-size: 1.5rem; margin-right: 2px; }
+
+/* ---------- Menu lateral (drawer) ---------- */
+.drawer {
+  position: fixed; top: 0; left: 0; bottom: 0; z-index: 50;
+  width: 286px; max-width: 84vw;
+  background: var(--card);
+  display: flex; flex-direction: column;
+  transform: translateX(-102%);
+  transition: transform .25s ease;
+  box-shadow: 2px 0 18px rgba(0, 0, 0, .22);
+  padding-top: env(safe-area-inset-top);
+  overflow-y: auto;
+}
+.drawer.open { transform: translateX(0); }
+.drawer-backdrop {
+  position: fixed; inset: 0; z-index: 45;
+  background: rgba(46, 38, 34, .5);
+  opacity: 0; pointer-events: none; transition: opacity .25s;
+}
+.drawer-backdrop.show { opacity: 1; pointer-events: auto; }
+.drawer-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 20px 18px 16px; border-bottom: 1px solid var(--line);
+}
+.drawer-logo { height: 42px; width: auto; }
+.drawer-greet { font-size: .9rem; color: var(--text); line-height: 1.25; }
+.drawer-greet b { color: var(--brown); }
+.drawer-nav { padding: 12px 10px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.nav-item {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  border: none; background: transparent; color: var(--text);
+  font-size: .98rem; font-weight: 600; font-family: inherit;
+  padding: 13px 14px; border-radius: 12px; cursor: pointer; text-align: left;
+}
+.nav-item:active { background: var(--bg); }
+.nav-item.active { background: linear-gradient(135deg, var(--red), var(--red-dark)); color: #fff; }
+.nav-ic { font-size: 1.2rem; width: 26px; text-align: center; }
+.drawer-foot { padding: 14px 18px; font-size: .72rem; color: var(--muted); border-top: 1px solid var(--line); line-height: 1.5; }
+
+/* ---------- Telas ---------- */
+.view[hidden] { display: none; }
+.view-title { color: var(--brown); font-size: 1.2rem; font-weight: 800; margin: 4px 4px 10px; }
+
+/* ---------- Relatórios por ano ---------- */
+.rep-year { margin-bottom: 12px; }
+.rep-year > summary {
+  list-style: none; cursor: pointer; padding: 14px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  font-weight: 800; color: var(--brown);
+}
+.rep-year > summary::-webkit-details-marker { display: none; }
+.rep-year-lbl { font-size: 1.05rem; }
+.rep-year-meta { font-size: .76rem; color: var(--muted); font-weight: 600; }
+.rep-year .hist-list { padding: 0 16px 12px; }
 
 /* ---------- Layout ---------- */
 main { padding: 14px; max-width: 720px; margin: 0 auto; }

@@ -24,193 +24,216 @@
   <title>Lançamentos de Despesas — Soma</title>
 </head>
 <body>
+  <!-- Menu lateral -->
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
+  <aside class="drawer" id="drawer" aria-label="Menu de navegação">
+    <div class="drawer-head">
+      <img src="assets/soma-logo.png" class="drawer-logo" alt="Soma Urbanismo" />
+      <div class="drawer-greet">Olá,<br><b>Soma Urbanismo</b></div>
+    </div>
+    <nav class="drawer-nav">
+      <button class="nav-item active" data-view="lancamentos"><span class="nav-ic">🧾</span> Lançamentos</button>
+      <button class="nav-item" data-view="relatorios"><span class="nav-ic">📅</span> Relatórios mensais</button>
+      <button class="nav-item" data-view="config"><span class="nav-ic">⚙️</span> Configurações</button>
+    </nav>
+    <div class="drawer-foot">Despesas para Reembolso<br><span id="ft-version2"></span></div>
+  </aside>
+
   <header class="app-header">
+    <button class="icon-btn menu-toggle" id="menu-toggle" title="Menu" aria-label="Abrir menu">☰</button>
     <img src="assets/soma-logo.png" alt="Soma Urbanismo" />
     <div>
-      <div class="title">Despesas para Reembolso</div>
+      <div class="title" id="header-title">Lançamentos</div>
       <div class="sub">Soma Urbanismo S/A</div>
     </div>
     <div class="spacer"></div>
     <button class="icon-btn" id="theme-toggle" title="Tema claro/escuro" aria-label="Alternar tema">🌙</button>
     <button class="icon-btn sync-ind" id="sync-ind" title="Sincronização" aria-label="Status de sincronização" style="display:none">⟳</button>
-    <button class="icon-btn" id="btn-new-month" title="Novo mês / limpar lançamentos" aria-label="Novo mês">🗑️</button>
+    <button class="icon-btn" id="btn-new-month" title="Novo mês / arquivar" aria-label="Novo mês">🗑️</button>
   </header>
 
   <main>
-    <!-- Dados do reembolso -->
-    <section class="card">
-      <div class="card-head"><h2>Dados do Reembolso</h2></div>
-      <div class="card-body">
-        <div class="field">
-          <label for="funcionario">Funcionário</label>
-          <input type="text" id="funcionario" placeholder="Seu nome completo" autocomplete="name" />
-        </div>
-        <div class="row2">
+    <!-- ===================== TELA: LANÇAMENTOS ===================== -->
+    <section class="view" id="view-lancamentos">
+      <!-- Dados do reembolso -->
+      <section class="card">
+        <div class="card-head"><h2>Dados do Reembolso</h2></div>
+        <div class="card-body">
           <div class="field">
-            <label for="dataSolicitacao">Data da Solicitação</label>
-            <input type="date" id="dataSolicitacao" />
+            <label for="funcionario">Funcionário</label>
+            <input type="text" id="funcionario" placeholder="Seu nome completo" autocomplete="name" />
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label for="dataSolicitacao">Data da Solicitação</label>
+              <input type="date" id="dataSolicitacao" />
+            </div>
+            <div class="field">
+              <label for="referente">Reembolso Referente à</label>
+              <select id="referente">
+                <option value="">—</option>
+                <option>Cursos e Treinamentos</option>
+                <option>Demandas operacionais</option>
+              </select>
+            </div>
+          </div>
+          <p class="hint">Empresa: <b>Soma Urbanismo S/A</b> (fixo). Seus dados são salvos automaticamente neste celular.</p>
+        </div>
+      </section>
+
+      <!-- Tabela 1: Reembolso -->
+      <section class="card">
+        <div class="card-head">
+          <h2>Despesas para Reembolso</h2>
+          <span class="sum" id="sum-reembolso">R$ 0,00</span>
+        </div>
+        <ul class="entries" id="list-reembolso"></ul>
+        <div class="add-row">
+          <button class="add-btn" data-add="reembolso">＋ Adicionar</button>
+          <button class="add-btn repeat" data-repeat="reembolso">⟲ Repetir último</button>
+        </div>
+      </section>
+
+      <!-- Tabela 2: Alelo -->
+      <section class="card">
+        <div class="card-head">
+          <h2>Despesas Cartão Alelo</h2>
+          <span class="sum" id="sum-alelo">R$ 0,00</span>
+        </div>
+        <ul class="entries" id="list-alelo"></ul>
+        <div class="add-row">
+          <button class="add-btn" data-add="alelo">＋ Adicionar</button>
+          <button class="add-btn repeat" data-repeat="alelo">⟲ Repetir último</button>
+        </div>
+      </section>
+
+      <!-- Resumo por categoria (apenas no app; não vai para Excel/PDF) -->
+      <section class="card cat-summary-card" id="cat-summary-card" style="display:none">
+        <div class="card-body">
+          <div class="cat-summary-title">Resumo por categoria</div>
+          <div class="cat-summary" id="cat-summary"></div>
+        </div>
+      </section>
+
+      <!-- Total -->
+      <section class="card total-card">
+        <div class="card-body">
+          <span class="lbl">TOTAL DOS GASTOS</span>
+          <span class="val" id="total-geral">R$ 0,00</span>
+        </div>
+      </section>
+
+      <!-- Dados bancários -->
+      <details class="card" id="bank-card">
+        <summary>Dados Bancários (Se Aplicável) <span class="chev">▾</span></summary>
+        <div class="card-body">
+          <div class="field">
+            <label for="bk-nome">Nome</label>
+            <input type="text" id="bk-nome" autocomplete="name" />
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label for="bk-cpf">CPF</label>
+              <input type="text" id="bk-cpf" inputmode="numeric" />
+            </div>
+            <div class="field">
+              <label for="bk-banco">Banco</label>
+              <input type="text" id="bk-banco" />
+            </div>
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label for="bk-agencia">Agência</label>
+              <input type="text" id="bk-agencia" inputmode="numeric" />
+            </div>
+            <div class="field">
+              <label for="bk-conta">Conta</label>
+              <input type="text" id="bk-conta" inputmode="numeric" />
+            </div>
           </div>
           <div class="field">
-            <label for="referente">Reembolso Referente à</label>
-            <select id="referente">
-              <option value="">—</option>
-              <option>Cursos e Treinamentos</option>
-              <option>Demandas operacionais</option>
-            </select>
+            <label for="bk-pix">Chave Pix</label>
+            <input type="text" id="bk-pix" />
           </div>
+          <p class="hint">Preencha caso haja despesas reembolsáveis (recebimento via conta/Pix).</p>
         </div>
-        <p class="hint">Empresa: <b>Soma Urbanismo S/A</b> (fixo). Seus dados são salvos automaticamente neste celular.</p>
-      </div>
+      </details>
     </section>
 
-    <!-- Tabela 1: Reembolso -->
-    <section class="card">
-      <div class="card-head">
-        <h2>Despesas para Reembolso</h2>
-        <span class="sum" id="sum-reembolso">R$ 0,00</span>
-      </div>
-      <ul class="entries" id="list-reembolso"></ul>
-      <div class="add-row">
-        <button class="add-btn" data-add="reembolso">＋ Adicionar</button>
-        <button class="add-btn repeat" data-repeat="reembolso">⟲ Repetir último</button>
-      </div>
+    <!-- ===================== TELA: RELATÓRIOS MENSAIS ===================== -->
+    <section class="view" id="view-relatorios" hidden>
+      <h2 class="view-title">Relatórios mensais</h2>
+      <p class="hint" style="margin:0 4px 14px">Meses arquivados ao iniciar um novo mês. Navegue por ano,
+        reabra para editar ou reexporte o relatório (Excel/PDF).</p>
+      <p class="empty-list" id="reports-empty">Nenhum relatório arquivado ainda.</p>
+      <div id="reports-tree"></div>
     </section>
 
-    <!-- Tabela 2: Alelo -->
-    <section class="card">
-      <div class="card-head">
-        <h2>Despesas Cartão Alelo</h2>
-        <span class="sum" id="sum-alelo">R$ 0,00</span>
-      </div>
-      <ul class="entries" id="list-alelo"></ul>
-      <div class="add-row">
-        <button class="add-btn" data-add="alelo">＋ Adicionar</button>
-        <button class="add-btn repeat" data-repeat="alelo">⟲ Repetir último</button>
-      </div>
-    </section>
+    <!-- ===================== TELA: CONFIGURAÇÕES ===================== -->
+    <section class="view" id="view-config" hidden>
+      <h2 class="view-title">Configurações</h2>
 
-    <!-- Resumo por categoria (apenas no app; não vai para Excel/PDF) -->
-    <section class="card cat-summary-card" id="cat-summary-card" style="display:none">
-      <div class="card-body">
-        <div class="cat-summary-title">Resumo por categoria</div>
-        <div class="cat-summary" id="cat-summary"></div>
-      </div>
-    </section>
-
-    <!-- Total -->
-    <section class="card total-card">
-      <div class="card-body">
-        <span class="lbl">TOTAL DOS GASTOS</span>
-        <span class="val" id="total-geral">R$ 0,00</span>
-      </div>
-    </section>
-
-    <!-- Dados bancários -->
-    <details class="card" id="bank-card">
-      <summary>Dados Bancários (Se Aplicável) <span class="chev">▾</span></summary>
-      <div class="card-body">
-        <div class="field">
-          <label for="bk-nome">Nome</label>
-          <input type="text" id="bk-nome" autocomplete="name" />
-        </div>
-        <div class="row2">
+      <!-- Sincronização -->
+      <section class="card">
+        <div class="card-head"><h2>Sincronização entre dispositivos</h2></div>
+        <div class="card-body">
+          <p class="hint" style="margin-top:0">
+            Sincroniza seus lançamentos com um repositório <b>privado</b> no GitHub,
+            para abrir os mesmos dados no celular e no computador.
+          </p>
           <div class="field">
-            <label for="bk-cpf">CPF</label>
-            <input type="text" id="bk-cpf" inputmode="numeric" />
+            <label for="sy-repo">Repositório privado (usuário/repo)</label>
+            <input type="text" id="sy-repo" placeholder="Ex.: MRosella/Despesas-Soma-Dados" autocapitalize="off" autocomplete="off" spellcheck="false" />
           </div>
           <div class="field">
-            <label for="bk-banco">Banco</label>
-            <input type="text" id="bk-banco" />
+            <label for="sy-token">Token de acesso (fine-grained)</label>
+            <input type="password" id="sy-token" placeholder="github_pat_..." autocomplete="off" />
+            <p class="hint">O token fica salvo apenas neste aparelho. Use um token
+              fine-grained com permissão de <b>Contents: Read and write</b> só nesse repositório.</p>
           </div>
-        </div>
-        <div class="row2">
-          <div class="field">
-            <label for="bk-agencia">Agência</label>
-            <input type="text" id="bk-agencia" inputmode="numeric" />
-          </div>
-          <div class="field">
-            <label for="bk-conta">Conta</label>
-            <input type="text" id="bk-conta" inputmode="numeric" />
-          </div>
-        </div>
-        <div class="field">
-          <label for="bk-pix">Chave Pix</label>
-          <input type="text" id="bk-pix" />
-        </div>
-        <p class="hint">Preencha caso haja despesas reembolsáveis (recebimento via conta/Pix).</p>
-      </div>
-    </details>
-
-    <!-- Sincronização (GitHub) -->
-    <details class="card" id="sync-card">
-      <summary>Sincronização entre dispositivos <span class="chev">▾</span></summary>
-      <div class="card-body">
-        <p class="hint" style="margin-top:0">
-          Sincroniza seus lançamentos com um repositório <b>privado</b> no GitHub,
-          para abrir os mesmos dados no celular e no computador.
-        </p>
-        <div class="field">
-          <label for="sy-repo">Repositório privado (usuário/repo)</label>
-          <input type="text" id="sy-repo" placeholder="Ex.: MRosella/Despesas-Soma-Dados" autocapitalize="off" autocomplete="off" spellcheck="false" />
-        </div>
-        <div class="field">
-          <label for="sy-token">Token de acesso (fine-grained)</label>
-          <input type="password" id="sy-token" placeholder="github_pat_..." autocomplete="off" />
-          <p class="hint">O token fica salvo apenas neste aparelho. Use um token
-            fine-grained com permissão de <b>Contents: Read and write</b> só nesse repositório.</p>
-        </div>
-        <div class="sync-actions">
-          <button class="btn btn-ghost" id="sy-test" type="button">Conectar</button>
-          <button class="btn btn-excel" id="sy-now" type="button">Sincronizar agora</button>
-        </div>
-        <p class="sync-status" id="sy-status">Não configurado.</p>
-        <button class="btn btn-danger-text" id="sy-clear" type="button" style="padding:8px 0">Desconectar / apagar token deste aparelho</button>
-      </div>
-    </details>
-
-    <!-- Histórico de meses -->
-    <details class="card" id="history-card" style="display:none">
-      <summary>Histórico de meses <span class="chev">▾</span></summary>
-      <div class="card-body">
-        <p class="hint" style="margin-top:0">Meses arquivados ao iniciar um novo mês. Reabra para
-          editar ou reexporte o relatório (Excel/PDF) a qualquer momento.</p>
-        <ul class="hist-list" id="history-list"></ul>
-      </div>
-    </details>
-
-    <!-- Segurança (bloqueio) -->
-    <details class="card" id="security-card">
-      <summary>Bloqueio do app (biometria / PIN) <span class="chev">▾</span></summary>
-      <div class="card-body">
-        <p class="hint" style="margin-top:0">Protege seus dados (CPF, conta, token) caso o aparelho
-          seja perdido. Pede autenticação ao abrir o app.</p>
-        <button class="btn btn-ghost" id="sec-bio" type="button" style="width:100%">Ativar biometria</button>
-        <div class="field" style="margin-top:12px">
-          <label for="sec-pin">PIN (4 a 12 dígitos) — opcional / alternativa</label>
           <div class="sync-actions">
-            <input type="password" id="sec-pin" inputmode="numeric" maxlength="12" placeholder="Defina um PIN" autocomplete="off" />
-            <button class="btn btn-excel" id="sec-pin-set" type="button">Salvar PIN</button>
+            <button class="btn btn-ghost" id="sy-test" type="button">Conectar</button>
+            <button class="btn btn-excel" id="sy-now" type="button">Sincronizar agora</button>
           </div>
+          <p class="sync-status" id="sy-status">Não configurado.</p>
+          <button class="btn btn-danger-text" id="sy-clear" type="button" style="padding:8px 0">Desconectar / apagar token deste aparelho</button>
         </div>
-        <p class="sync-status" id="sec-status">Bloqueio desativado.</p>
-      </div>
-    </details>
+      </section>
 
-    <!-- Backup / Restauração -->
-    <details class="card" id="backup-card">
-      <summary>Backup / Restaurar (arquivo) <span class="chev">▾</span></summary>
-      <div class="card-body">
-        <p class="hint" style="margin-top:0">Salva um arquivo <b>.json</b> com todos os dados (atuais e
-          histórico) como rede de segurança, independente da nuvem. Se a sincronização estiver
-          configurada, também grava uma cópia versionada no Git.</p>
-        <div class="sync-actions">
-          <button class="btn btn-ghost" id="bk-export" type="button">Exportar backup</button>
-          <button class="btn btn-excel" id="bk-import-btn" type="button">Importar backup</button>
+      <!-- Segurança (bloqueio) -->
+      <section class="card">
+        <div class="card-head"><h2>Bloqueio do app</h2></div>
+        <div class="card-body">
+          <p class="hint" style="margin-top:0">Protege seus dados (CPF, conta, token) caso o aparelho
+            seja perdido. Pede autenticação ao abrir o app.</p>
+          <button class="btn btn-ghost" id="sec-bio" type="button" style="width:100%">Ativar biometria</button>
+          <div class="field" style="margin-top:12px">
+            <label for="sec-pin">PIN (4 a 12 dígitos) — opcional / alternativa</label>
+            <div class="sync-actions">
+              <input type="password" id="sec-pin" inputmode="numeric" maxlength="12" placeholder="Defina um PIN" autocomplete="off" />
+              <button class="btn btn-excel" id="sec-pin-set" type="button">Salvar PIN</button>
+            </div>
+          </div>
+          <p class="sync-status" id="sec-status">Bloqueio desativado.</p>
         </div>
-        <input type="file" id="bk-import" accept="application/json,.json" style="display:none" />
-        <p class="sync-status" id="bk-status"></p>
-      </div>
-    </details>
+      </section>
+
+      <!-- Backup / Restauração -->
+      <section class="card">
+        <div class="card-head"><h2>Backup / Restaurar</h2></div>
+        <div class="card-body">
+          <p class="hint" style="margin-top:0">Salva um arquivo <b>.json</b> com todos os dados (atuais e
+            histórico) como rede de segurança, independente da nuvem. Se a sincronização estiver
+            configurada, também grava uma cópia versionada no Git.</p>
+          <div class="sync-actions">
+            <button class="btn btn-ghost" id="bk-export" type="button">Exportar backup</button>
+            <button class="btn btn-excel" id="bk-import-btn" type="button">Importar backup</button>
+          </div>
+          <input type="file" id="bk-import" accept="application/json,.json" style="display:none" />
+          <p class="sync-status" id="bk-status"></p>
+        </div>
+      </section>
+    </section>
 
     <footer class="app-footer">
       <span id="ft-version">App</span>
@@ -219,8 +242,8 @@
     </footer>
   </main>
 
-  <!-- Barra de ações -->
-  <div class="action-bar">
+  <!-- Barra de ações (somente na tela de Lançamentos) -->
+  <div class="action-bar" id="action-bar">
     <button class="btn btn-excel" id="btn-excel">⬇ Excel</button>
     <button class="btn btn-pdf" id="btn-pdf">⬇ PDF</button>
   </div>
