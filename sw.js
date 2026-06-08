@@ -1,5 +1,7 @@
-/* Service Worker — cache do app para funcionar offline */
-const CACHE = 'despesas-soma-v3';
+/* Service Worker — cache do app para funcionar offline.
+   Estratégia: network-first (online sempre pega a versão nova; cache é
+   só fallback offline). Isso evita o app ficar "preso" numa versão antiga. */
+const CACHE = 'despesas-soma-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -31,17 +33,20 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  // Só lida com requisições do mesmo domínio (deixa o resto passar direto)
+  if (new URL(req.url).origin !== self.location.origin) return;
+
   e.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((res) => {
-        // guarda em cache cópias de respostas válidas do mesmo domínio
+    // Network-first: tenta a rede; se conseguir, atualiza o cache e devolve a
+    // versão fresca. Se falhar (offline), cai para o que estiver em cache.
+    fetch(req)
+      .then((res) => {
         if (res && res.status === 200 && res.type === 'basic') {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put(req, copy));
         }
         return res;
-      }).catch(() => cached);
-    })
+      })
+      .catch(() => caches.match(req))
   );
 });

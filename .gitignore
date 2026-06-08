@@ -4,6 +4,9 @@ received.xlsx
 .claude/
 Relatorio de Despesas para Reembolso - Modelo.xlsx
 
+# Artefatos de preview/teste do PDF (gerados via headless)
+_pdf_preview.*
+
 # Sistema
 Thumbs.db
 desktop.ini
