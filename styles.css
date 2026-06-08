@@ -8,9 +8,24 @@
   --line: #e3d9d2;
   --text: #2e2622;
   --muted: #8a7c74;
+  --input-bg: #ffffff;
   --ok: #2e7d32;
   --shadow: 0 1px 3px rgba(78, 63, 57, 0.12), 0 1px 2px rgba(78, 63, 57, 0.08);
   --radius: 14px;
+}
+
+/* Modo escuro (OLED-friendly). O relatório/PDF (#print-root) tem cores próprias
+   e permanece claro de propósito. */
+:root[data-theme="dark"] {
+  --brown: #e7dcd5;        /* usado como cor de TEXTO -> claro no escuro */
+  --bg: #100d0b;
+  --card: #201a17;
+  --line: #3a302a;
+  --text: #f1e9e3;
+  --muted: #b0a49b;
+  --input-bg: #2a2320;
+  --ok: #5cba60;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -82,7 +97,7 @@ input, select, textarea {
   border: 1px solid var(--line);
   border-radius: 10px;
   font-size: 16px;
-  background: #fff;
+  background: var(--input-bg);
   color: var(--text);
   font-family: inherit;
 }
@@ -112,10 +127,51 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--orange); bo
   display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; padding: 13px;
   border: 1px dashed var(--red); color: var(--red);
-  background: #fff; border-radius: 0; font-weight: 700; font-size: .92rem;
+  background: var(--card); border-radius: 0; font-weight: 700; font-size: .92rem;
   cursor: pointer; border-left: none; border-right: none; border-bottom: none;
 }
 .add-btn:active { background: #fdf3f3; }
+.add-row { display: flex; }
+.add-row .add-btn { flex: 1; }
+.add-row .add-btn.repeat { border-left: 1px solid var(--line); color: var(--brown); }
+
+/* ---------- Histórico de meses ---------- */
+.hist-list { list-style: none; margin: 0; padding: 0; }
+.hist-item {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 0; border-top: 1px solid var(--line);
+}
+.hist-item:first-child { border-top: none; }
+.hist-main { flex: 1; min-width: 140px; }
+.hist-label { font-weight: 700; color: var(--brown); }
+.hist-meta { font-size: .76rem; color: var(--muted); margin-top: 2px; }
+.hist-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.hist-btn {
+  border: 1px solid var(--line); background: var(--card); color: var(--brown);
+  border-radius: 8px; padding: 6px 10px; font-size: .76rem; font-weight: 600; cursor: pointer;
+}
+.hist-btn:active { background: var(--bg); }
+.hist-btn.danger { color: var(--red); border-color: #e7c3c3; }
+
+/* ---------- Tela de bloqueio ---------- */
+body.locked { overflow: hidden; }
+.lock-screen {
+  position: fixed; inset: 0; z-index: 100;
+  background: linear-gradient(160deg, var(--red), var(--red-dark));
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.lock-screen .lock-card {
+  background: var(--card); border-radius: 18px; padding: 28px 22px;
+  max-width: 340px; width: 100%; text-align: center; box-shadow: var(--shadow);
+}
+.lock-screen .lock-logo { height: 54px; margin-bottom: 8px; }
+.lock-screen h3 { margin: 4px 0 6px; color: var(--brown); }
+.lock-screen p { margin: 0 0 16px; font-size: .9rem; color: var(--muted); }
+.lock-screen .btn { width: 100%; margin-bottom: 10px; }
+.lock-screen .lock-pin { display: flex; gap: 8px; }
+.lock-screen .lock-pin input { flex: 1; }
+.lock-screen .lock-pin .btn { width: auto; margin-bottom: 0; }
+.lock-screen .lock-msg { color: var(--red); font-size: .8rem; margin: 6px 0 0; min-height: 16px; }
 
 /* ---------- Resumo por categoria ---------- */
 .cat-summary-card .card-body { padding: 12px 16px; }
@@ -137,7 +193,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--orange); bo
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---------- Total card ---------- */
-.total-card { background: linear-gradient(135deg, var(--brown), #382d28); color: #fff; }
+.total-card { background: linear-gradient(135deg, #4e3f39, #382d28); color: #fff; }
 .total-card .card-body { display: flex; align-items: center; justify-content: space-between; }
 .total-card .lbl { font-size: .85rem; opacity: .9; }
 .total-card .val { font-size: 1.5rem; font-weight: 800; }

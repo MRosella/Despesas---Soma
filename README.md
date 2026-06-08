@@ -68,16 +68,23 @@ A partir daí funciona **sem internet**.
 - **Dados do Reembolso:** preencha seu nome (Funcionário), a data da solicitação e
   o motivo (Reembolso Referente à). Ficam salvos automaticamente.
 - **Despesas para Reembolso** e **Despesas Cartão Alelo:** toque em
-  **＋ Adicionar lançamento** em cada seção, informe data, descrição, categoria e valor.
-  Toque em um lançamento existente para editar ou excluir.
+  **＋ Adicionar** em cada seção, informe data, descrição, categoria e valor.
+  Toque em um lançamento existente para editar, excluir ou **Duplicar**.
+  - **⟲ Repetir último** cria rapidamente um lançamento igual ao último (ex.: almoço diário).
+  - O **valor** e o **CPF** são formatados automaticamente enquanto você digita.
 - **Dados Bancários (Se Aplicável):** preencha uma vez; ficam salvos para os próximos meses.
 - No fim do mês, toque em **Excel** ou **PDF** para gerar o relatório.
   - No Android, abre direto a tela de **compartilhar** (WhatsApp, e-mail, etc.) com o
     arquivo anexado. Onde o compartilhamento não estiver disponível, o arquivo é baixado.
 - O **Resumo por categoria** (no app, acima do total) ajuda a conferir os gastos antes de
   enviar — ele **não** aparece no Excel/PDF.
-- O botão **🗑️** (topo) inicia um novo mês, apagando os lançamentos e mantendo seus
-  dados pessoais e bancários.
+- O botão **🗑️** (topo) inicia um novo mês: o mês atual vai para o **Histórico de meses**
+  (você pode reabrir ou reexportar Excel/PDF depois), e seus dados pessoais/bancários são mantidos.
+- **🌙 / ☀️** (topo) alterna entre **tema claro e escuro** (por padrão segue o sistema).
+- **Bloqueio do app:** em "Bloqueio do app", ative **biometria** (impressão digital/rosto do
+  Android) e/ou um **PIN** para exigir autenticação ao abrir.
+- **Backup / Restaurar:** exporta/importa um arquivo `.json` com todos os dados (atuais e
+  histórico). Se a sincronização estiver ligada, também grava uma cópia versionada no Git.
 
 > O modelo comporta 7 linhas por seção. Se você lançar mais de 7 numa seção,
 > o app **expande as linhas automaticamente** no Excel, mantendo o mesmo visual.

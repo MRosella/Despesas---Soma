@@ -10,6 +10,16 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <script>
+    /* aplica o tema o quanto antes para evitar "flash" de tela clara */
+    (function () {
+      try {
+        var p = localStorage.getItem('despesas-soma-theme-v1');
+        var dark = p ? p === 'dark' : (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="styles.css" />
   <title>Lançamentos de Despesas — Soma</title>
 </head>
@@ -21,6 +31,7 @@
       <div class="sub">Soma Urbanismo S/A</div>
     </div>
     <div class="spacer"></div>
+    <button class="icon-btn" id="theme-toggle" title="Tema claro/escuro" aria-label="Alternar tema">🌙</button>
     <button class="icon-btn sync-ind" id="sync-ind" title="Sincronização" aria-label="Status de sincronização" style="display:none">⟳</button>
     <button class="icon-btn" id="btn-new-month" title="Novo mês / limpar lançamentos" aria-label="Novo mês">🗑️</button>
   </header>
@@ -59,7 +70,10 @@
         <span class="sum" id="sum-reembolso">R$ 0,00</span>
       </div>
       <ul class="entries" id="list-reembolso"></ul>
-      <button class="add-btn" data-add="reembolso">＋ Adicionar lançamento</button>
+      <div class="add-row">
+        <button class="add-btn" data-add="reembolso">＋ Adicionar</button>
+        <button class="add-btn repeat" data-repeat="reembolso">⟲ Repetir último</button>
+      </div>
     </section>
 
     <!-- Tabela 2: Alelo -->
@@ -69,7 +83,10 @@
         <span class="sum" id="sum-alelo">R$ 0,00</span>
       </div>
       <ul class="entries" id="list-alelo"></ul>
-      <button class="add-btn" data-add="alelo">＋ Adicionar lançamento</button>
+      <div class="add-row">
+        <button class="add-btn" data-add="alelo">＋ Adicionar</button>
+        <button class="add-btn repeat" data-repeat="alelo">⟲ Repetir último</button>
+      </div>
     </section>
 
     <!-- Resumo por categoria (apenas no app; não vai para Excel/PDF) -->
@@ -151,6 +168,50 @@
       </div>
     </details>
 
+    <!-- Histórico de meses -->
+    <details class="card" id="history-card" style="display:none">
+      <summary>Histórico de meses <span class="chev">▾</span></summary>
+      <div class="card-body">
+        <p class="hint" style="margin-top:0">Meses arquivados ao iniciar um novo mês. Reabra para
+          editar ou reexporte o relatório (Excel/PDF) a qualquer momento.</p>
+        <ul class="hist-list" id="history-list"></ul>
+      </div>
+    </details>
+
+    <!-- Segurança (bloqueio) -->
+    <details class="card" id="security-card">
+      <summary>Bloqueio do app (biometria / PIN) <span class="chev">▾</span></summary>
+      <div class="card-body">
+        <p class="hint" style="margin-top:0">Protege seus dados (CPF, conta, token) caso o aparelho
+          seja perdido. Pede autenticação ao abrir o app.</p>
+        <button class="btn btn-ghost" id="sec-bio" type="button" style="width:100%">Ativar biometria</button>
+        <div class="field" style="margin-top:12px">
+          <label for="sec-pin">PIN (4 a 12 dígitos) — opcional / alternativa</label>
+          <div class="sync-actions">
+            <input type="password" id="sec-pin" inputmode="numeric" maxlength="12" placeholder="Defina um PIN" autocomplete="off" />
+            <button class="btn btn-excel" id="sec-pin-set" type="button">Salvar PIN</button>
+          </div>
+        </div>
+        <p class="sync-status" id="sec-status">Bloqueio desativado.</p>
+      </div>
+    </details>
+
+    <!-- Backup / Restauração -->
+    <details class="card" id="backup-card">
+      <summary>Backup / Restaurar (arquivo) <span class="chev">▾</span></summary>
+      <div class="card-body">
+        <p class="hint" style="margin-top:0">Salva um arquivo <b>.json</b> com todos os dados (atuais e
+          histórico) como rede de segurança, independente da nuvem. Se a sincronização estiver
+          configurada, também grava uma cópia versionada no Git.</p>
+        <div class="sync-actions">
+          <button class="btn btn-ghost" id="bk-export" type="button">Exportar backup</button>
+          <button class="btn btn-excel" id="bk-import-btn" type="button">Importar backup</button>
+        </div>
+        <input type="file" id="bk-import" accept="application/json,.json" style="display:none" />
+        <p class="sync-status" id="bk-status"></p>
+      </div>
+    </details>
+
     <footer class="app-footer">
       <span id="ft-version">App</span>
       <span class="ft-sep">·</span>
@@ -198,6 +259,7 @@
       </div>
       <div class="modal-actions">
         <button class="btn btn-danger-text" id="m-delete" style="display:none">Excluir</button>
+        <button class="btn btn-ghost" id="m-duplicate" style="display:none">Duplicar</button>
         <button class="btn btn-ghost" id="m-cancel">Cancelar</button>
         <button class="btn btn-excel" id="m-save">Salvar</button>
       </div>

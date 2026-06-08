@@ -9,7 +9,9 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v9';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v11';   // manter igual ao CACHE em sw.js
+const LOCK_KEY = 'despesas-soma-lock-v1';
+const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
 
 const CATEGORIAS = ['Café da Manha', 'Almoço', 'Café da Tarde', 'Jantar', 'Combustível', 'Pedágio', 'Outras Despesas'];
@@ -23,6 +25,8 @@ function emptyState() {
     bank: { nome: '', cpf: '', banco: '', agencia: '', conta: '', pix: '' },
     reembolso: [],
     alelo: [],
+    history: [],                          // meses arquivados (snapshots)
+    histTomb: {},                         // lápides do histórico: id -> ts
     tomb: { reembolso: {}, alelo: {} },   // lápides: id -> updatedAt (deleções)
     meta: { updatedAt: 0, profileUpdatedAt: 0 }
   };
@@ -44,6 +48,8 @@ function loadState() {
     });
     st.tomb.reembolso = st.tomb.reembolso || {};
     st.tomb.alelo = st.tomb.alelo || {};
+    st.history = Array.isArray(st.history) ? st.history : [];
+    st.histTomb = st.histTomb || {};
     // migração: garante updatedAt nas entradas e relógio do doc se for estado antigo
     for (const t of ['reembolso', 'alelo']) {
       st[t] = (st[t] || []).map((e) => e.updatedAt ? e : Object.assign({}, e, { updatedAt: Date.now() }));
@@ -131,6 +137,81 @@ function render() {
   $('total-geral').textContent = formatMoney(s1 + s2);
 
   renderCatSummary();
+  renderHistory();
+}
+
+/* ---------------- Histórico de meses ---------------- */
+const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+function monthLabelFor(src) {
+  let iso = src.dataSolicitacao;
+  if (!iso) {
+    const all = (src.reembolso || []).concat(src.alelo || []);
+    const datas = all.map((e) => e.data).filter(Boolean).sort();
+    iso = datas[0] || '';
+  }
+  if (iso) {
+    const [y, m] = iso.split('-');
+    return (MESES_ABREV[parseInt(m, 10) - 1] || '') + '/' + y;
+  }
+  return new Date().toLocaleDateString('pt-BR');
+}
+
+function renderHistory() {
+  const card = $('history-card'); const ul = $('history-list');
+  if (!card || !ul) return;
+  ul.innerHTML = '';
+  if (!state.history.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  for (const h of state.history) {
+    const qtd = (h.reembolso || []).length + (h.alelo || []).length;
+    const total = sumOf(h.reembolso || []) + sumOf(h.alelo || []);
+    const li = document.createElement('li');
+    li.className = 'hist-item';
+    li.innerHTML = `
+      <div class="hist-main">
+        <div class="hist-label">${escapeHtml(h.label || 'Mês')}</div>
+        <div class="hist-meta">${qtd} lançamento(s) · ${formatMoney(total)}</div>
+      </div>
+      <div class="hist-actions">
+        <button class="hist-btn" data-act="xls">Excel</button>
+        <button class="hist-btn" data-act="pdf">PDF</button>
+        <button class="hist-btn" data-act="open">Reabrir</button>
+        <button class="hist-btn danger" data-act="del" title="Excluir do histórico">✕</button>
+      </div>`;
+    li.querySelector('[data-act=xls]').addEventListener('click', () => exportExcel(h));
+    li.querySelector('[data-act=pdf]').addEventListener('click', () => exportPDF(h));
+    li.querySelector('[data-act=open]').addEventListener('click', () => reopenHistory(h.id));
+    li.querySelector('[data-act=del]').addEventListener('click', () => deleteHistory(h.id));
+    ul.appendChild(li);
+  }
+}
+
+function reopenHistory(id) {
+  const h = state.history.find((x) => x.id === id); if (!h) return;
+  if (state.reembolso.length || state.alelo.length) {
+    if (!confirm('Reabrir este mês vai SUBSTITUIR os lançamentos atuais (que não foram arquivados). Continuar?')) return;
+  }
+  const now = Date.now();
+  for (const t of ['reembolso', 'alelo']) { for (const e of state[t]) state.tomb[t][e.id] = now; }
+  state.funcionario = h.funcionario || state.funcionario;
+  state.dataSolicitacao = h.dataSolicitacao || '';
+  state.referente = h.referente || state.referente;
+  state.bank = Object.assign(emptyState().bank, h.bank || {});
+  // novos ids p/ não colidir com o snapshot nem com lápides antigas
+  state.reembolso = (h.reembolso || []).map((e) => Object.assign({}, e, { id: uid(), updatedAt: now }));
+  state.alelo = (h.alelo || []).map((e) => Object.assign({}, e, { id: uid(), updatedAt: now }));
+  touchProfile(); touchDoc();
+  saveState(); render();
+  toast('Mês reaberto para edição.');
+}
+
+function deleteHistory(id) {
+  if (!confirm('Excluir este mês do histórico? Não dá para desfazer.')) return;
+  state.history = state.history.filter((h) => h.id !== id);
+  state.histTomb[id] = Date.now();
+  touchDoc();
+  saveState(); render();
+  toast('Mês removido do histórico.');
 }
 
 /* Resumo por categoria — SOMENTE para visualização no app (não vai p/ Excel/PDF) */
@@ -179,20 +260,22 @@ function escapeHtml(s) {
 }
 
 /* ---------------- Modal de lançamento ---------------- */
-function openModal(tabela, id) {
+function openModal(tabela, id, prefill) {
   $('m-tabela').value = tabela;
   $('m-id').value = id || '';
   const isEdit = !!id;
   $('modal-title').textContent = isEdit ? 'Editar lançamento' : 'Novo lançamento';
   $('m-delete').style.display = isEdit ? 'block' : 'none';
+  $('m-duplicate').style.display = isEdit ? 'block' : 'none';
 
   let entry = { data: todayISO(), descricao: '', categoria: '', valor: '' };
   if (isEdit) entry = state[tabela].find((e) => e.id === id) || entry;
+  else if (prefill) entry = Object.assign({ data: todayISO() }, prefill);
 
   $('m-data').value = entry.data || todayISO();
   $('m-descricao').value = entry.descricao || '';
   $('m-categoria').value = entry.categoria || '';
-  $('m-valor').value = entry.valor ? entry.valor.toString().replace('.', ',') : '';
+  $('m-valor').value = entry.valor ? formatMoneyInput(entry.valor) : '';
   updateCatHint();
 
   $('modal').classList.add('open');
@@ -200,6 +283,51 @@ function openModal(tabela, id) {
 }
 
 function closeModal() { $('modal').classList.remove('open'); }
+
+/* Repetir último lançamento da seção (despesas recorrentes) */
+function repeatLast(tabela) {
+  const list = state[tabela];
+  if (!list.length) { toast('Nenhum lançamento para repetir nesta seção.'); return; }
+  const last = list[list.length - 1];
+  openModal(tabela, null, { data: todayISO(), descricao: last.descricao, categoria: last.categoria, valor: last.valor });
+}
+
+/* Duplicar: abre um NOVO lançamento com os mesmos dados do que está no modal */
+function duplicateInModal() {
+  const tabela = $('m-tabela').value;
+  openModal(tabela, null, {
+    data: $('m-data').value || todayISO(),
+    descricao: $('m-descricao').value,
+    categoria: $('m-categoria').value,
+    valor: parseMoney($('m-valor').value)
+  });
+}
+
+/* ---------------- Máscaras de entrada ---------------- */
+function formatMoneyInput(n) {
+  return (Math.round((n || 0) * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function maskCurrencyEl(el) {
+  if (!el) return;
+  el.setAttribute('inputmode', 'numeric');
+  el.addEventListener('input', () => {
+    const digits = el.value.replace(/\D/g, '');
+    if (!digits) { el.value = ''; return; }
+    el.value = (parseInt(digits, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  });
+}
+function maskCpfEl(el) {
+  if (!el) return;
+  el.setAttribute('inputmode', 'numeric');
+  el.addEventListener('input', () => {
+    const d = el.value.replace(/\D/g, '').slice(0, 11);
+    let out = d;
+    if (d.length > 9) out = `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+    else if (d.length > 6) out = `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+    else if (d.length > 3) out = `${d.slice(0, 3)}.${d.slice(3)}`;
+    el.value = out;
+  });
+}
 
 function updateCatHint() {
   const cat = $('m-categoria').value;
@@ -257,7 +385,8 @@ const XMLNS_XML = 'http://www.w3.org/XML/1998/namespace';
 function colOf(ref) { return ref.match(/[A-Z]+/)[0]; }
 function rowOf(ref) { return parseInt(ref.match(/\d+/)[0], 10); }
 
-async function buildXlsx() {
+async function buildXlsx(src) {
+  const D = src || state;
   const buf = await fetch('template.xlsx', { cache: 'no-store' }).then((r) => r.arrayBuffer());
   const files = fflate.unzipSync(new Uint8Array(buf));
   const dec = new TextDecoder();
@@ -270,8 +399,8 @@ async function buildXlsx() {
   const draw = parser.parseFromString(dec.decode(files['xl/drawings/drawing1.xml']), 'application/xml');
   const sheetData = doc.getElementsByTagNameNS(MAIN, 'sheetData')[0];
 
-  const n1 = state.reembolso.length;
-  const n2 = state.alelo.length;
+  const n1 = D.reembolso.length;
+  const n2 = D.alelo.length;
   const extra1 = Math.max(0, n1 - 7);
   const extra2 = Math.max(0, n2 - 7);
 
@@ -396,12 +525,12 @@ async function buildXlsx() {
 
   // ---- cabeçalho ----
   setText('C4', EMPRESA);
-  if (state.dataSolicitacao) setNum('E4', dateToSerial(state.dataSolicitacao));
-  setText('C5', state.funcionario);
-  setText('E5', state.referente);
+  if (D.dataSolicitacao) setNum('E4', dateToSerial(D.dataSolicitacao));
+  setText('C5', D.funcionario);
+  setText('E5', D.referente);
 
   // ---- lançamentos tabela 1 ----
-  state.reembolso.forEach((e, i) => {
+  D.reembolso.forEach((e, i) => {
     const r = t1First + i;
     if (e.data) setNum('B' + r, dateToSerial(e.data));
     setText('C' + r, e.descricao);
@@ -409,7 +538,7 @@ async function buildXlsx() {
     setNum('E' + r, e.valor);
   });
   // ---- lançamentos tabela 2 ----
-  state.alelo.forEach((e, i) => {
+  D.alelo.forEach((e, i) => {
     const r = t2First + i;
     if (e.data) setNum('B' + r, dateToSerial(e.data));
     setText('C' + r, e.descricao);
@@ -418,19 +547,19 @@ async function buildXlsx() {
   });
 
   // ---- subtotais e total (fórmulas + valores em cache) ----
-  const s1 = Math.round(sumOf(state.reembolso) * 100) / 100;
-  const s2 = Math.round(sumOf(state.alelo) * 100) / 100;
+  const s1 = Math.round(sumOf(D.reembolso) * 100) / 100;
+  const s2 = Math.round(sumOf(D.alelo) * 100) / 100;
   setFormula('E' + t1Sub, `SUM(E${t1First}:E${t1Last})`, s1);
   setFormula('E' + t2Sub, `SUM(E${t2First}:E${t2Last})`, s2);
   setFormula('E' + totalRow, `E${t1Sub}+E${t2Sub}`, Math.round((s1 + s2) * 100) / 100);
 
   // ---- dados bancários ----
-  setText('C' + (33 + shiftAll), state.bank.nome);
-  setText('E' + (33 + shiftAll), state.bank.banco);
-  setText('C' + (34 + shiftAll), state.bank.cpf);
-  setText('E' + (34 + shiftAll), state.bank.agencia);
-  setText('C' + (35 + shiftAll), state.bank.conta);
-  setText('E' + (35 + shiftAll), state.bank.pix);
+  setText('C' + (33 + shiftAll), D.bank.nome);
+  setText('E' + (33 + shiftAll), D.bank.banco);
+  setText('C' + (34 + shiftAll), D.bank.cpf);
+  setText('E' + (34 + shiftAll), D.bank.agencia);
+  setText('C' + (35 + shiftAll), D.bank.conta);
+  setText('E' + (35 + shiftAll), D.bank.pix);
 
   // ---- dimensão ----
   const dim = doc.getElementsByTagNameNS(MAIN, 'dimension')[0];
@@ -453,19 +582,21 @@ async function buildXlsx() {
   return fflate.zipSync(files);
 }
 
-function reportFileBase() {
-  const nome = (state.funcionario || 'Funcionario').trim().replace(/\s+/g, '_');
-  const ref = state.dataSolicitacao || todayISO();
+function reportFileBase(src) {
+  const D = src || state;
+  const nome = (D.funcionario || 'Funcionario').trim().replace(/\s+/g, '_');
+  const ref = D.dataSolicitacao || (D.archivedAt ? new Date(D.archivedAt).toISOString().slice(0, 10) : todayISO());
   return `Relatorio_Despesas_${nome}_${ref}`;
 }
 
-async function exportExcel() {
-  if (!state.reembolso.length && !state.alelo.length) { toast('Adicione ao menos um lançamento.'); return; }
+async function exportExcel(src) {
+  const D = src || state;
+  if (!D.reembolso.length && !D.alelo.length) { toast('Adicione ao menos um lançamento.'); return; }
   try {
     toast('Gerando Excel…');
-    const bytes = await buildXlsx();
+    const bytes = await buildXlsx(D);
     const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    await shareOrDownload(blob, reportFileBase() + '.xlsx', 'Relatório de Despesas (Excel)');
+    await shareOrDownload(blob, reportFileBase(D) + '.xlsx', 'Relatório de Despesas (Excel)');
   } catch (e) {
     console.error(e);
     toast('Erro ao gerar Excel: ' + e.message);
@@ -528,9 +659,10 @@ function buildPrintTable(title, list, minRows) {
     </table>`;
 }
 
-function buildPrint() {
-  const s1 = sumOf(state.reembolso), s2 = sumOf(state.alelo);
-  const b = state.bank;
+function buildPrint(src) {
+  const D = src || state;
+  const s1 = sumOf(D.reembolso), s2 = sumOf(D.alelo);
+  const b = D.bank;
   const root = $('print-root');
   root.innerHTML = `
     <div class="p-top">
@@ -539,12 +671,12 @@ function buildPrint() {
     </div>
     <table class="p-info">
       <tr><td class="lab">Empresa:</td><td class="val">${EMPRESA}</td>
-          <td class="lab">Data da Solicitação:</td><td class="val">${fmtDateBR(state.dataSolicitacao)}</td></tr>
-      <tr><td class="lab">Funcionário:</td><td class="val">${escapeHtml(state.funcionario)}</td>
-          <td class="lab">Reembolso Referente à:</td><td class="val">${escapeHtml(state.referente)}</td></tr>
+          <td class="lab">Data da Solicitação:</td><td class="val">${fmtDateBR(D.dataSolicitacao)}</td></tr>
+      <tr><td class="lab">Funcionário:</td><td class="val">${escapeHtml(D.funcionario)}</td>
+          <td class="lab">Reembolso Referente à:</td><td class="val">${escapeHtml(D.referente)}</td></tr>
     </table>
-    ${buildPrintTable('DESPESAS PARA REEMBOLSO', state.reembolso, 5)}
-    ${buildPrintTable('DESPESAS CARTÃO ALELO', state.alelo, 5)}
+    ${buildPrintTable('DESPESAS PARA REEMBOLSO', D.reembolso, 5)}
+    ${buildPrintTable('DESPESAS CARTÃO ALELO', D.alelo, 5)}
     <div class="p-total"><span>TOTAL DOS GASTOS</span><span>${formatMoney(s1 + s2)}</span></div>
     <div class="p-bank-title">Dados Bancários (Se Aplicável)</div>
     <table class="p-bank">
@@ -560,12 +692,13 @@ function buildPrint() {
     </div>`;
 }
 
-async function exportPDF() {
-  if (!state.reembolso.length && !state.alelo.length) { toast('Adicione ao menos um lançamento.'); return; }
+async function exportPDF(src) {
+  const D = src || state;
+  if (!D.reembolso.length && !D.alelo.length) { toast('Adicione ao menos um lançamento.'); return; }
   try {
     toast('Gerando PDF…');
-    const blob = await generatePdfBlob();
-    await shareOrDownload(blob, reportFileBase() + '.pdf', 'Relatório de Despesas (PDF)');
+    const blob = await generatePdfBlob(D);
+    await shareOrDownload(blob, reportFileBase(D) + '.pdf', 'Relatório de Despesas (PDF)');
   } catch (e) {
     console.error(e);
     toast('Erro ao gerar PDF: ' + e.message);
@@ -574,8 +707,8 @@ async function exportPDF() {
 
 /* Gera um PDF de verdade (arquivo) a partir do mesmo layout do relatório,
    capturado com html2canvas e montado com jsPDF (A4 retrato, multipágina). */
-async function generatePdfBlob() {
-  buildPrint();
+async function generatePdfBlob(src) {
+  buildPrint(src || state);
   const root = $('print-root');
   const prevStyle = root.getAttribute('style') || '';
   // torna o layout capturável fora da tela
@@ -739,6 +872,8 @@ function currentDoc() {
     bank: Object.assign({}, state.bank),
     reembolso: state.reembolso.map((e) => Object.assign({}, e)),
     alelo: state.alelo.map((e) => Object.assign({}, e)),
+    history: state.history.map((h) => JSON.parse(JSON.stringify(h))),
+    histTomb: Object.assign({}, state.histTomb),
     tomb: {
       reembolso: Object.assign({}, state.tomb.reembolso),
       alelo: Object.assign({}, state.tomb.alelo)
@@ -756,6 +891,8 @@ function applyDoc(doc) {
   state.bank = Object.assign(base.bank, doc.bank || {});
   state.reembolso = doc.reembolso || [];
   state.alelo = doc.alelo || [];
+  state.history = Array.isArray(doc.history) ? doc.history : [];
+  state.histTomb = doc.histTomb || {};
   state.tomb = {
     reembolso: (doc.tomb && doc.tomb.reembolso) || {},
     alelo: (doc.tomb && doc.tomb.alelo) || {}
@@ -791,6 +928,21 @@ function mergeTable(t, a, b, outTomb) {
   return list;
 }
 
+function mergeHistory(a, b) {
+  const PURGE = Date.now() - 365 * 24 * 3600 * 1000;   // lápides de histórico: 1 ano
+  const tomb = {};
+  for (const src of [a, b]) {
+    const tm = src.histTomb || {};
+    for (const id in tm) if (tm[id] >= PURGE) tomb[id] = Math.max(tomb[id] || 0, tm[id]);
+  }
+  const map = {};
+  for (const src of [a, b]) for (const h of (src.history || [])) if (!map[h.id]) map[h.id] = h;
+  const list = [];
+  for (const id in map) { if (tomb[id]) continue; list.push(map[id]); }
+  list.sort((x, y) => (y.archivedAt || 0) - (x.archivedAt || 0));   // mais recente primeiro
+  return { list, tomb };
+}
+
 function mergeDocs(a, b) {
   const pa = (a.meta && a.meta.profileUpdatedAt) || 0;
   const pb = (b.meta && b.meta.profileUpdatedAt) || 0;
@@ -804,6 +956,9 @@ function mergeDocs(a, b) {
   };
   out.reembolso = mergeTable('reembolso', a, b, out.tomb);
   out.alelo = mergeTable('alelo', a, b, out.tomb);
+  const mh = mergeHistory(a, b);
+  out.history = mh.list;
+  out.histTomb = mh.tomb;
   out.meta = {
     updatedAt: Math.max((a.meta && a.meta.updatedAt) || 0, (b.meta && b.meta.updatedAt) || 0),
     profileUpdatedAt: Math.max(pa, pb)
@@ -907,6 +1062,181 @@ function setupSyncUI() {
   });
 }
 
+/* ============================================================
+   Bloqueio do app (biometria via WebAuthn / PIN) — config local
+   ============================================================ */
+function loadLock() { try { return JSON.parse(localStorage.getItem(LOCK_KEY) || '{}'); } catch (e) { return {}; } }
+function saveLock(l) { try { localStorage.setItem(LOCK_KEY, JSON.stringify(l)); } catch (e) {} }
+function lockEnabled() { const l = loadLock(); return !!(l.bio || l.pin); }
+
+function randBytes(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return a; }
+function abToB64(buf) { const b = new Uint8Array(buf); let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s); }
+function b64ToAb(b64) { const bin = atob(b64); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a.buffer; }
+async function sha256B64(str) { const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)); return abToB64(buf); }
+
+async function enableBio() {
+  if (!window.PublicKeyCredential || !navigator.credentials) {
+    toast('Este aparelho/navegador não suporta biometria aqui.'); return false;
+  }
+  try {
+    const cred = await navigator.credentials.create({ publicKey: {
+      challenge: randBytes(32),
+      rp: { name: 'Despesas Soma', id: location.hostname },
+      user: { id: randBytes(16), name: 'usuario-despesas', displayName: 'Usuário' },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+      timeout: 60000, attestation: 'none'
+    } });
+    const l = loadLock(); l.bio = { credId: abToB64(cred.rawId) }; saveLock(l);
+    return true;
+  } catch (e) { console.error(e); toast('Não foi possível ativar a biometria.'); return false; }
+}
+async function unlockBio() {
+  const l = loadLock(); if (!l.bio) throw new Error('sem biometria');
+  await navigator.credentials.get({ publicKey: {
+    challenge: randBytes(32),
+    allowCredentials: [{ type: 'public-key', id: b64ToAb(l.bio.credId) }],
+    userVerification: 'required', timeout: 60000, rpId: location.hostname
+  } });
+  return true;   // se não lançou exceção, a verificação passou
+}
+async function setPin(pin) { const l = loadLock(); l.pin = { hash: await sha256B64('despesas-soma|' + pin) }; saveLock(l); }
+async function checkPin(pin) { const l = loadLock(); if (!l.pin) return false; return (await sha256B64('despesas-soma|' + pin)) === l.pin.hash; }
+
+function maybeLock() { if (lockEnabled()) showLock(); }
+
+function showLock() {
+  if ($('lock-screen')) return;
+  const l = loadLock();
+  const div = document.createElement('div');
+  div.id = 'lock-screen'; div.className = 'lock-screen';
+  div.innerHTML = `
+    <div class="lock-card">
+      <img src="assets/soma-logo.png" alt="" class="lock-logo">
+      <h3>App bloqueado</h3>
+      <p>Autentique-se para acessar seus dados.</p>
+      ${l.bio ? '<button class="btn btn-pdf" id="lock-bio">Desbloquear com biometria</button>' : ''}
+      ${l.pin ? '<div class="lock-pin"><input type="password" inputmode="numeric" id="lock-pin-input" placeholder="PIN" maxlength="12"><button class="btn btn-excel" id="lock-pin-ok">Entrar</button></div>' : ''}
+      <p class="lock-msg" id="lock-msg"></p>` + '</div>';
+  document.body.appendChild(div);
+  document.body.classList.add('locked');
+
+  async function tryBio() {
+    try { await unlockBio(); hideLock(); }
+    catch (e) { $('lock-msg').textContent = 'Falha na biometria. Tente de novo' + (l.pin ? ' ou use o PIN.' : '.'); }
+  }
+  if (l.bio) { $('lock-bio').addEventListener('click', tryBio); setTimeout(tryBio, 350); }
+  if (l.pin) {
+    const ok = async () => { if (await checkPin($('lock-pin-input').value)) hideLock(); else $('lock-msg').textContent = 'PIN incorreto.'; };
+    $('lock-pin-ok').addEventListener('click', ok);
+    $('lock-pin-input').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') ok(); });
+  }
+}
+function hideLock() { const d = $('lock-screen'); if (d) d.remove(); document.body.classList.remove('locked'); }
+
+function refreshSecStatus() {
+  const l = loadLock();
+  const bio = $('sec-bio'); if (bio) bio.textContent = l.bio ? 'Desativar biometria' : 'Ativar biometria';
+  const st = $('sec-status'); if (st) {
+    st.textContent = lockEnabled()
+      ? 'Bloqueio ATIVO' + (l.bio ? ' · biometria' : '') + (l.pin ? ' · PIN' : '')
+      : 'Bloqueio desativado.';
+    st.className = 'sync-status' + (lockEnabled() ? ' ok' : '');
+  }
+}
+function setupSecurityUI() {
+  refreshSecStatus();
+  if (!$('sec-bio')) return;
+  $('sec-bio').addEventListener('click', async () => {
+    const cur = loadLock();
+    if (cur.bio) { delete cur.bio; saveLock(cur); refreshSecStatus(); toast('Biometria desativada.'); }
+    else if (await enableBio()) { refreshSecStatus(); toast('Biometria ativada.'); }
+  });
+  $('sec-pin-set').addEventListener('click', async () => {
+    const pin = ($('sec-pin').value || '').trim();
+    const cur = loadLock();
+    if (cur.pin && !pin) { delete cur.pin; saveLock(cur); refreshSecStatus(); toast('PIN removido.'); return; }
+    if (!/^\d{4,12}$/.test(pin)) { toast('Use um PIN de 4 a 12 dígitos.'); return; }
+    await setPin(pin); $('sec-pin').value = ''; refreshSecStatus(); toast('PIN definido.');
+  });
+}
+
+/* ============================================================
+   Backup / Restauração (arquivo JSON) + cópia versionada no Git
+   ============================================================ */
+async function exportBackup() {
+  try {
+    const json = JSON.stringify(currentDoc(), null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    await shareOrDownload(blob, 'backup-despesas-' + todayISO() + '.json', 'Backup de Despesas');
+    const st = $('bk-status');
+    if (isSyncConfigured() && navigator.onLine) {
+      try { await ghPutBackup(loadSyncCfg(), json); if (st) { st.textContent = 'Backup salvo (local + cópia versionada no Git).'; st.className = 'sync-status ok'; } }
+      catch (e) { console.error(e); if (st) { st.textContent = 'Backup local salvo. (Falha ao gravar cópia no Git.)'; st.className = 'sync-status warn'; } }
+    } else if (st) { st.textContent = 'Backup local salvo.'; st.className = 'sync-status ok'; }
+  } catch (e) { console.error(e); toast('Erro ao exportar backup: ' + e.message); }
+}
+async function ghPutBackup(cfg, jsonStr) {
+  const path = 'backups/backup-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json';
+  const url = `${GH_API}/repos/${cfg.repo}/contents/${path}`;
+  const body = { message: 'Backup ' + new Date().toISOString(), content: b64EncodeUtf8(jsonStr) };
+  const res = await fetch(url, { method: 'PUT', headers: ghHeaders(cfg.token), body: JSON.stringify(body) });
+  if (!res.ok) throw new Error('GitHub ' + res.status);
+}
+function importBackupFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const imported = JSON.parse(reader.result);
+      if (!imported || (!imported.reembolso && !imported.history)) { toast('Arquivo de backup inválido.'); return; }
+      if (!confirm('Importar este backup e MESCLAR com os dados atuais?\n(Lançamentos mais recentes prevalecem; nada é perdido.)')) return;
+      const merged = mergeDocs(currentDoc(), imported);
+      applyDoc(merged);
+      setDirty(true); scheduleSync();
+      const st = $('bk-status'); if (st) { st.textContent = 'Backup importado e mesclado.'; st.className = 'sync-status ok'; }
+      toast('Backup importado.');
+    } catch (e) { console.error(e); toast('Não foi possível ler o arquivo: ' + e.message); }
+  };
+  reader.readAsText(file);
+}
+function setupBackupUI() {
+  if (!$('bk-export')) return;
+  $('bk-export').addEventListener('click', exportBackup);
+  $('bk-import-btn').addEventListener('click', () => $('bk-import').click());
+  $('bk-import').addEventListener('change', (e) => { if (e.target.files && e.target.files[0]) importBackupFile(e.target.files[0]); e.target.value = ''; });
+}
+
+/* ---------------- Modo escuro ---------------- */
+function currentTheme() {
+  const p = localStorage.getItem(THEME_KEY);
+  if (p === 'dark' || p === 'light') return p;
+  return (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+}
+function applyTheme() {
+  const t = currentTheme();
+  document.documentElement.setAttribute('data-theme', t);
+  const btn = $('theme-toggle');
+  if (btn) { btn.textContent = t === 'dark' ? '☀️' : '🌙'; btn.title = t === 'dark' ? 'Tema claro' : 'Tema escuro'; }
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', t === 'dark' ? '#201a17' : '#b3262d');
+}
+function toggleTheme() {
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
+  try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+  applyTheme();
+}
+function setupTheme() {
+  applyTheme();
+  if ($('theme-toggle')) $('theme-toggle').addEventListener('click', toggleTheme);
+  if (window.matchMedia) {
+    try {
+      matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if (!localStorage.getItem(THEME_KEY)) applyTheme();   // segue o sistema só sem escolha manual
+      });
+    } catch (e) {}
+  }
+}
+
 /* ---------------- Persistência de campos ---------------- */
 function bindField(id, getter, setter) {
   const el = $(id);
@@ -915,8 +1245,26 @@ function bindField(id, getter, setter) {
 }
 
 function newMonth() {
-  if (!confirm('Iniciar um novo mês? Os lançamentos atuais serão apagados.\n(Seus dados pessoais e bancários são mantidos.)')) return;
+  const tem = state.reembolso.length || state.alelo.length;
+  const msg = tem
+    ? 'Arquivar o mês atual e começar um novo?\nOs lançamentos atuais vão para o Histórico (você pode reabrir/reexportar depois).'
+    : 'Iniciar um novo mês?';
+  if (!confirm(msg)) return;
   const now = Date.now();
+  // arquiva snapshot do mês atual
+  if (tem) {
+    state.history.unshift({
+      id: uid(),
+      archivedAt: now,
+      label: monthLabelFor(state),
+      funcionario: state.funcionario,
+      dataSolicitacao: state.dataSolicitacao,
+      referente: state.referente,
+      bank: Object.assign({}, state.bank),
+      reembolso: state.reembolso.map((e) => Object.assign({}, e)),
+      alelo: state.alelo.map((e) => Object.assign({}, e))
+    });
+  }
   for (const t of ['reembolso', 'alelo']) {
     for (const e of state[t]) state.tomb[t][e.id] = now;   // lápides p/ a sincronização
     state[t] = [];
@@ -925,12 +1273,16 @@ function newMonth() {
   touchProfile();
   saveState();
   render();
-  toast('Pronto para um novo mês.');
+  toast(tem ? 'Mês arquivado no histórico.' : 'Pronto para um novo mês.');
 }
 
 /* ---------------- Inicialização ---------------- */
 function init() {
+  maybeLock();
   render();
+
+  maskCurrencyEl($('m-valor'));
+  maskCpfEl($('bk-cpf'));
 
   bindField('funcionario', null, (v) => state.funcionario = v);
   bindField('dataSolicitacao', null, (v) => state.dataSolicitacao = v);
@@ -944,20 +1296,26 @@ function init() {
 
   document.querySelectorAll('[data-add]').forEach((btn) =>
     btn.addEventListener('click', () => openModal(btn.dataset.add, null)));
+  document.querySelectorAll('[data-repeat]').forEach((btn) =>
+    btn.addEventListener('click', () => repeatLast(btn.dataset.repeat)));
 
   $('m-save').addEventListener('click', saveEntry);
   $('m-cancel').addEventListener('click', closeModal);
   $('m-delete').addEventListener('click', deleteEntry);
+  $('m-duplicate').addEventListener('click', duplicateInModal);
   $('m-categoria').addEventListener('change', updateCatHint);
   $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeModal(); });
 
-  $('btn-excel').addEventListener('click', exportExcel);
-  $('btn-pdf').addEventListener('click', exportPDF);
+  $('btn-excel').addEventListener('click', () => exportExcel());
+  $('btn-pdf').addEventListener('click', () => exportPDF());
   $('btn-new-month').addEventListener('click', newMonth);
 
+  setupTheme();
   setupServiceWorker();
   setupConnectivity();
   setupSyncUI();
+  setupSecurityUI();
+  setupBackupUI();
   updateFooter();
   updateSyncIndicator();
   $('sync-ind').addEventListener('click', () => syncNow(false));
