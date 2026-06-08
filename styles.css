@@ -195,12 +195,19 @@ details.card[open] summary .chev { transform: rotate(180deg); }
   body { background: #f8f4f2; padding: 0; }
   .app-header, main, .action-bar, .toast, .modal-backdrop { display: none !important; }
   #print-root { display: block; background: #f8f4f2; }
+  /* força o navegador a imprimir fundos/gradientes (senão o PDF sai sem as cores) */
+  #print-root, #print-root * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }
 
 #print-root {
   font-family: Arial, Helvetica, sans-serif;
   color: #2e2622;
   font-size: 11px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 #print-root .p-top { display: flex; align-items: stretch; gap: 10px; margin-bottom: 12px; }
 #print-root .p-logo { width: 92px; display: flex; align-items: center; justify-content: center; }
