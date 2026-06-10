@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v17';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v18';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -192,6 +192,7 @@ function render() {
 
   renderCatSummary();
   renderReports();
+  if (typeof updateGdPending === 'function') updateGdPending();
 }
 
 /* ---------------- Histórico de meses ---------------- */
@@ -1679,25 +1680,44 @@ async function getPhotoBlob(foto) {
 }
 
 /* ---- envia fotos que ficaram pendentes (offline) quando reconectar ---- */
-async function flushPendingPhotos() {
-  if (!gdConfigured() || !gdConnected()) return;
-  let changed = false;
+function countPendingPhotos() {
+  let n = 0;
+  for (const t of ['reembolso', 'alelo']) for (const e of state[t]) if (e.foto && e.foto.pending) n++;
+  return n;
+}
+function updateGdPending() {
+  const b = $('gd-flush'); if (!b) return;
+  const n = countPendingPhotos();
+  if (n > 0 && gdConfigured()) { b.style.display = ''; b.textContent = 'Enviar ' + n + ' comprovante(s) pendente(s)'; }
+  else b.style.display = 'none';
+}
+
+async function flushPendingPhotos(report) {
+  if (!gdConfigured() || !gdConnected()) { if (report) setGdStatus('Conecte o Google para enviar os pendentes.', 'warn'); return { sent: 0, failed: 0 }; }
+  let sent = 0, failed = 0, lastErr = '';
   for (const tabela of ['reembolso', 'alelo']) {
     for (const e of state[tabela]) {
       if (e.foto && e.foto.pending) {
         try {
           const rec = await idbGet('p_' + e.foto.pending);
-          if (!rec) { e.foto = null; changed = true; continue; }
+          if (!rec) { e.foto = null; continue; }
           const id = await gdUpload(rec.blob, rec.name);
           await idbDel('p_' + e.foto.pending);
           e.foto = { id, name: rec.name, w: e.foto.w, h: e.foto.h };
           e.updatedAt = Date.now();
-          changed = true;
-        } catch (err) { console.error('Falha ao enviar foto pendente', err); }
+          sent++;
+        } catch (err) { console.error('Falha ao enviar foto pendente', err); failed++; lastErr = err.message; }
       }
     }
   }
-  if (changed) { touchDoc(); saveState(); render(); toast('Comprovantes pendentes enviados ao Drive.'); }
+  if (sent) { touchDoc(); saveState(); render(); }
+  if (report) {
+    if (failed) setGdStatus('Enviados: ' + sent + ' · falharam: ' + failed + ' (' + lastErr + ')', 'err');
+    else if (sent) setGdStatus(sent + ' comprovante(s) enviado(s) ao Drive ✓', 'ok');
+    else setGdStatus('Nenhum comprovante pendente.', 'ok');
+  } else if (sent) { toast(sent + ' comprovante(s) enviado(s) ao Drive.'); }
+  updateGdPending();
+  return { sent, failed };
 }
 
 async function viewPhoto(foto) {
@@ -1730,9 +1750,20 @@ function setupGDriveUI() {
       const email = await gdEmail();
       await gdEnsureFolder();
       setGdStatus('Conectado como ' + email + ' ✓', 'ok');
-      flushPendingPhotos();
+      await flushPendingPhotos(true);
     } catch (e) { console.error(e); setGdStatus('Erro: ' + e.message, 'err'); }
   });
+  $('gd-flush').addEventListener('click', async () => {
+    const c = loadGd();
+    if (!c.clientId) { setGdStatus('Cole o Client ID primeiro.', 'warn'); return; }
+    setGdStatus('Enviando comprovantes pendentes…');
+    try {
+      await gdGetToken(true);
+      await gdEnsureFolder();
+      await flushPendingPhotos(true);
+    } catch (e) { console.error(e); setGdStatus('Erro: ' + e.message, 'err'); }
+  });
+  updateGdPending();
   $('gd-clear').addEventListener('click', () => {
     if (!confirm('Desconectar o Google Drive deste aparelho?')) return;
     gdAccess = { token: '', exp: 0 };
@@ -1744,6 +1775,7 @@ function setupGDriveUI() {
 }
 function setGdStatus(msg, kind) { const el = $('gd-status'); if (el) { el.textContent = msg; el.className = 'sync-status' + (kind ? ' ' + kind : ''); } }
 function refreshGdStatus() {
+  updateGdPending();
   if (!gdConfigured()) { setGdStatus('Não configurado.', ''); return; }
   setGdStatus(gdConnected() ? 'Conectado ✓' : 'Configurado. Toque em “Conectar Google”.', gdConnected() ? 'ok' : '');
 }
