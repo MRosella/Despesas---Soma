@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v15';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v16';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -133,7 +133,10 @@ const ICONS = {
   'alert-triangle': '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
-  repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>'
+  repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+  paperclip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>'
 };
 function icon(name, size) {
   const p = ICONS[name]; if (!p) return '';
@@ -339,16 +342,17 @@ function renderList(tabela, ul) {
     li.innerHTML = `
       <div class="e-main">
         <div class="e-desc">${escapeHtml(e.descricao || '(sem descrição)')}</div>
-        <div class="e-meta"><span class="cat-tag">${escapeHtml(e.categoria || '—')}</span>${fmtDateBR(e.data)}</div>
+        <div class="e-meta"><span class="cat-tag">${escapeHtml(e.categoria || '—')}</span>${fmtDateBR(e.data)}${e.foto ? ' <span class="e-clip" data-icon="paperclip" data-size="14" title="Comprovante anexado"></span>' : ''}</div>
       </div>
       <div class="e-val">${formatMoney(e.valor)}</div>
       <div class="e-quick">
         <button class="qbtn" data-q="dup" title="Duplicar" aria-label="Duplicar lançamento" data-icon="copy" data-size="18"></button>
         <button class="qbtn danger" data-q="del" title="Excluir" aria-label="Excluir lançamento" data-icon="trash-2" data-size="18"></button>
       </div>`;
-    li.addEventListener('click', (ev) => { if (!ev.target.closest('.e-quick')) openModal(tabela, e.id); });
+    li.addEventListener('click', (ev) => { if (!ev.target.closest('.e-quick') && !ev.target.closest('.e-clip')) openModal(tabela, e.id); });
     li.querySelector('[data-q=dup]').addEventListener('click', () => quickDuplicate(tabela, e.id));
     li.querySelector('[data-q=del]').addEventListener('click', () => quickDelete(tabela, e.id));
+    const clip = li.querySelector('.e-clip'); if (clip) clip.addEventListener('click', (ev) => { ev.stopPropagation(); viewPhoto(e.foto); });
     ul.appendChild(li);
   }
   setupIcons(ul);
@@ -403,11 +407,62 @@ function openModal(tabela, id, prefill) {
   $('m-valor').value = entry.valor ? formatMoneyInput(entry.valor) : '';
   updateCatHint();
 
+  resetModalPhoto(isEdit ? (entry.foto || null) : null);
+  renderModalPhoto();
+
   $('modal').classList.add('open');
   setTimeout(() => $('m-descricao').focus(), 150);
 }
 
 function closeModal() { $('modal').classList.remove('open'); }
+
+/* ---- comprovante no modal ---- */
+let modalPhoto = { mode: 'keep', existing: null, blob: null, dataUrl: null, w: 0, h: 0 };
+function resetModalPhoto(existing) { modalPhoto = { mode: 'keep', existing: existing || null, blob: null, dataUrl: null, w: 0, h: 0 }; }
+function renderModalPhoto() {
+  const attach = $('m-foto-attach'), prev = $('m-foto-preview');
+  if (!attach || !prev) return;
+  const has = modalPhoto.mode === 'new' || (modalPhoto.mode === 'keep' && modalPhoto.existing);
+  attach.style.display = has ? 'none' : '';
+  prev.style.display = has ? '' : 'none';
+  const thumb = $('m-foto-thumb');
+  if (modalPhoto.mode === 'new') {
+    thumb.src = modalPhoto.dataUrl; thumb.style.display = '';
+    $('m-foto-label').textContent = 'Comprovante pronto para enviar';
+    $('m-foto-view').style.display = 'none';
+  } else if (modalPhoto.existing) {
+    thumb.style.display = 'none';
+    $('m-foto-label').textContent = modalPhoto.existing.pending ? 'Comprovante anexado (envio pendente)' : 'Comprovante anexado';
+    $('m-foto-view').style.display = '';
+  }
+}
+async function onPhotoSelected(file) {
+  if (!file) return;
+  try {
+    toast('Processando imagem…');
+    const { blob, w, h } = await compressImage(file);
+    modalPhoto = { mode: 'new', existing: modalPhoto.existing, blob, dataUrl: await blobToDataUrl(blob), w, h };
+    renderModalPhoto();
+  } catch (e) { console.error(e); toast('Erro na imagem: ' + e.message); }
+}
+async function applyModalPhoto(entry) {
+  if (modalPhoto.mode === 'keep') return;
+  if (modalPhoto.mode === 'remove') { entry.foto = null; return; }   // só desvincula (não apaga do Drive)
+  const name = 'comprovante-' + (entry.data || todayISO()) + '-' + entry.id + '.jpg';
+  if (gdConfigured() && gdConnected()) {
+    try {
+      toast('Enviando comprovante ao Drive…');
+      const fid = await gdUpload(modalPhoto.blob, name);
+      entry.foto = { id: fid, name, w: modalPhoto.w, h: modalPhoto.h };
+      return;
+    } catch (e) { console.error(e); }
+  }
+  const localId = uid();
+  await idbPut('p_' + localId, { blob: modalPhoto.blob, name });
+  entry.foto = { pending: localId, name, w: modalPhoto.w, h: modalPhoto.h };
+  if (gdConfigured()) toast('Comprovante salvo localmente; será enviado ao Drive ao conectar.');
+  else toast('Comprovante salvo localmente. Configure o Google Drive para enviá-lo.');
+}
 
 /* Repetir último lançamento da seção (despesas recorrentes) */
 function repeatLast(tabela) {
@@ -462,7 +517,7 @@ function updateCatHint() {
   $('m-cat-hint').textContent = hint;
 }
 
-function saveEntry() {
+async function saveEntry() {
   const tabela = $('m-tabela').value;
   const id = $('m-id').value;
   const data = $('m-data').value;
@@ -476,14 +531,16 @@ function saveEntry() {
   if (!valor) { toast('Informe um valor válido.'); return; }
 
   const now = Date.now();
+  let entry;
   if (id) {
-    const e = state[tabela].find((x) => x.id === id);
-    if (e) Object.assign(e, { data, descricao, categoria, valor, updatedAt: now });
+    entry = state[tabela].find((x) => x.id === id);
+    if (entry) Object.assign(entry, { data, descricao, categoria, valor, updatedAt: now });
   } else {
-    const nid = uid();
-    state[tabela].push({ id: nid, data, descricao, categoria, valor, updatedAt: now });
-    lastAddedId = nid;
+    entry = { id: uid(), data, descricao, categoria, valor, updatedAt: now };
+    state[tabela].push(entry);
+    lastAddedId = entry.id;
   }
+  if (entry) { try { await applyModalPhoto(entry); } catch (e) { console.error(e); } }
   touchDoc();
   state[tabela].sort((a, b) => (a.data || '').localeCompare(b.data || ''));
   saveState();
@@ -907,6 +964,32 @@ async function generatePdfBlob(src, sections) {
       pdf.addImage(imgData, 'JPEG', margin, position, imgW, imgH);
       heightLeft -= usableH;
     }
+
+    // anexa comprovantes (Drive ou fila local) como páginas finais
+    const inc = sections || { reembolso: true, alelo: true };
+    const D = src || state;
+    const fotos = [];
+    if (inc.reembolso) fotos.push(...(D.reembolso || []));
+    if (inc.alelo) fotos.push(...(D.alelo || []));
+    for (const e of fotos) {
+      if (!e.foto) continue;
+      if (e.foto.id && !gdConnected()) continue;   // evita pedir login no meio da exportação
+      let blob = null;
+      try { blob = await getPhotoBlob(e.foto); } catch (er) { console.error(er); }
+      if (!blob) continue;
+      try {
+        const durl = await blobToDataUrl(blob);
+        const props = pdf.getImageProperties(durl);
+        pdf.addPage();
+        pdf.setFontSize(10);
+        pdf.text('Comprovante — ' + (e.descricao || '') + ' (' + fmtDateBR(e.data) + ')', margin, margin + 4);
+        const availW = pageW - margin * 2, availH = pageH - margin * 2 - 8;
+        let iw = availW, ih = props.height * (availW / props.width);
+        if (ih > availH) { ih = availH; iw = props.width * (availH / props.height); }
+        pdf.addImage(durl, 'JPEG', margin + (availW - iw) / 2, margin + 8, iw, ih);
+      } catch (er) { console.error('Falha ao anexar comprovante', er); }
+    }
+
     return pdf.output('blob');
   } finally {
     root.setAttribute('style', prevStyle);
@@ -1424,6 +1507,232 @@ function setupFilters() {
   });
 }
 
+/* ============================================================
+   Comprovantes no Google Drive (escopo drive.file) + fila offline
+   ============================================================ */
+const GDRIVE_KEY = 'despesas-soma-gdrive-v1';
+const GD_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const GD_FOLDER_NAME = 'Comprovantes - Despesas Soma';
+let gdAccess = { token: '', exp: 0 };
+let gdTokenClient = null;
+let gdGisLoading = null;
+let gdPending = null;
+
+function loadGd() { try { return Object.assign({ clientId: '', folderId: '' }, JSON.parse(localStorage.getItem(GDRIVE_KEY) || '{}')); } catch (e) { return { clientId: '', folderId: '' }; } }
+function saveGd(c) { try { localStorage.setItem(GDRIVE_KEY, JSON.stringify(c)); } catch (e) {} }
+function gdConfigured() { return !!loadGd().clientId; }
+function gdConnected() { return !!gdAccess.token && Date.now() < gdAccess.exp; }
+
+function gdLoadGis() {
+  if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
+  if (gdGisLoading) return gdGisLoading;
+  gdGisLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client'; s.async = true; s.defer = true;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Falha ao carregar o Google (você está online?).'));
+    document.head.appendChild(s);
+  });
+  return gdGisLoading;
+}
+
+function gdInitClient(cfg) {
+  gdTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: cfg.clientId,
+    scope: GD_SCOPE,
+    callback: (resp) => {
+      if (resp && resp.access_token) {
+        gdAccess = { token: resp.access_token, exp: Date.now() + ((resp.expires_in || 3600) - 60) * 1000 };
+        if (gdPending) gdPending.resolve(resp.access_token);
+      } else if (gdPending) { gdPending.reject(new Error('Autorização não concedida.')); }
+      gdPending = null;
+    }
+  });
+}
+
+async function gdGetToken(interactive) {
+  if (gdConnected()) return gdAccess.token;
+  const cfg = loadGd();
+  if (!cfg.clientId) throw new Error('Configure o Client ID do Google.');
+  if (!navigator.onLine) throw new Error('Sem conexão com a internet.');
+  await gdLoadGis();
+  if (!gdTokenClient) gdInitClient(cfg);
+  return new Promise((resolve, reject) => {
+    gdPending = { resolve, reject };
+    try { gdTokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' }); }
+    catch (e) { gdPending = null; reject(e); }
+  });
+}
+
+async function gdEmail() {
+  const t = await gdGetToken(false);
+  const r = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', { headers: { Authorization: 'Bearer ' + t } });
+  if (!r.ok) throw new Error('Drive ' + r.status);
+  return (await r.json()).user.emailAddress;
+}
+
+async function gdEnsureFolder() {
+  const cfg = loadGd();
+  if (cfg.folderId) return cfg.folderId;
+  const t = await gdGetToken(false);
+  const q = `mimeType='application/vnd.google-apps.folder' and name='${GD_FOLDER_NAME}' and trashed=false`;
+  let r = await fetch('https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(q) + '&fields=files(id,name)', { headers: { Authorization: 'Bearer ' + t } });
+  let j = await r.json();
+  let id = j.files && j.files[0] && j.files[0].id;
+  if (!id) {
+    r = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: GD_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+    });
+    j = await r.json(); id = j.id;
+  }
+  cfg.folderId = id; saveGd(cfg);
+  return id;
+}
+
+async function gdUpload(blob, name) {
+  const t = await gdGetToken(false);
+  const folderId = await gdEnsureFolder();
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify({ name, parents: [folderId] })], { type: 'application/json' }));
+  form.append('file', blob);
+  const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + t }, body: form
+  });
+  if (!r.ok) throw new Error('Upload Drive ' + r.status);
+  return (await r.json()).id;
+}
+
+async function gdDownloadBlob(fileId) {
+  const t = await gdGetToken(false);
+  const r = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media', { headers: { Authorization: 'Bearer ' + t } });
+  if (!r.ok) throw new Error('Download Drive ' + r.status);
+  return await r.blob();
+}
+
+/* ---- IndexedDB (fila de fotos pendentes / offline) ---- */
+let _idb = null;
+function idb() {
+  if (_idb) return _idb;
+  _idb = new Promise((resolve, reject) => {
+    const req = indexedDB.open('despesas-soma', 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('photos'); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return _idb;
+}
+async function idbPut(key, val) { const db = await idb(); return new Promise((res, rej) => { const tx = db.transaction('photos', 'readwrite'); tx.objectStore('photos').put(val, key); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
+async function idbGet(key) { const db = await idb(); return new Promise((res, rej) => { const tx = db.transaction('photos', 'readonly'); const r = tx.objectStore('photos').get(key); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function idbDel(key) { const db = await idb(); return new Promise((res, rej) => { const tx = db.transaction('photos', 'readwrite'); tx.objectStore('photos').delete(key); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
+
+/* ---- Compressão de imagem (canvas) ---- */
+function compressImage(file, maxDim, quality) {
+  maxDim = maxDim || 1400; quality = quality || 0.72;
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      const scale = Math.min(1, maxDim / Math.max(w, h));
+      w = Math.round(w * scale); h = Math.round(h * scale);
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      c.toBlob((blob) => blob ? resolve({ blob, w, h }) : reject(new Error('Falha ao processar imagem')), 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Imagem inválida')); };
+    img.src = url;
+  });
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+/* ---- obtém o blob da foto de um lançamento (Drive ou fila local) ---- */
+async function getPhotoBlob(foto) {
+  if (!foto) return null;
+  if (foto.pending) { const rec = await idbGet('p_' + foto.pending); return rec ? rec.blob : null; }
+  if (foto.id) return await gdDownloadBlob(foto.id);
+  return null;
+}
+
+/* ---- envia fotos que ficaram pendentes (offline) quando reconectar ---- */
+async function flushPendingPhotos() {
+  if (!gdConfigured() || !gdConnected()) return;
+  let changed = false;
+  for (const tabela of ['reembolso', 'alelo']) {
+    for (const e of state[tabela]) {
+      if (e.foto && e.foto.pending) {
+        try {
+          const rec = await idbGet('p_' + e.foto.pending);
+          if (!rec) { e.foto = null; changed = true; continue; }
+          const id = await gdUpload(rec.blob, rec.name);
+          await idbDel('p_' + e.foto.pending);
+          e.foto = { id, name: rec.name, w: e.foto.w, h: e.foto.h };
+          e.updatedAt = Date.now();
+          changed = true;
+        } catch (err) { console.error('Falha ao enviar foto pendente', err); }
+      }
+    }
+  }
+  if (changed) { touchDoc(); saveState(); render(); toast('Comprovantes pendentes enviados ao Drive.'); }
+}
+
+async function viewPhoto(foto) {
+  try {
+    toast('Abrindo comprovante…');
+    const blob = await getPhotoBlob(foto);
+    if (!blob) { toast('Comprovante não encontrado.'); return; }
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) { console.error(e); toast('Erro ao abrir: ' + e.message); }
+}
+
+function setupGDriveUI() {
+  const cfg = loadGd();
+  if ($('gd-client')) $('gd-client').value = cfg.clientId || '';
+  refreshGdStatus();
+  if (!$('gd-connect')) return;
+  $('gd-client').addEventListener('change', () => {
+    const c = loadGd(); c.clientId = ($('gd-client').value || '').trim();
+    if (c.clientId !== loadGd().clientId) c.folderId = '';   // troca de projeto reseta pasta
+    saveGd(c); refreshGdStatus();
+  });
+  $('gd-connect').addEventListener('click', async () => {
+    const c = loadGd();
+    if (!c.clientId) { setGdStatus('Cole o Client ID primeiro.', 'warn'); return; }
+    setGdStatus('Conectando ao Google…');
+    try {
+      await gdGetToken(true);
+      const email = await gdEmail();
+      await gdEnsureFolder();
+      setGdStatus('Conectado como ' + email + ' ✓', 'ok');
+      flushPendingPhotos();
+    } catch (e) { console.error(e); setGdStatus('Erro: ' + e.message, 'err'); }
+  });
+  $('gd-clear').addEventListener('click', () => {
+    if (!confirm('Desconectar o Google Drive deste aparelho?')) return;
+    gdAccess = { token: '', exp: 0 };
+    const c = loadGd(); localStorage.removeItem(GDRIVE_KEY);
+    $('gd-client').value = '';
+    refreshGdStatus();
+    toast('Google Drive desconectado.');
+  });
+}
+function setGdStatus(msg, kind) { const el = $('gd-status'); if (el) { el.textContent = msg; el.className = 'sync-status' + (kind ? ' ' + kind : ''); } }
+function refreshGdStatus() {
+  if (!gdConfigured()) { setGdStatus('Não configurado.', ''); return; }
+  setGdStatus(gdConnected() ? 'Conectado ✓' : 'Configurado. Toque em “Conectar Google”.', gdConnected() ? 'ok' : '');
+}
+
 /* ---------------- Modo escuro ---------------- */
 function currentTheme() {
   const p = localStorage.getItem(THEME_KEY);
@@ -1522,6 +1831,11 @@ function init() {
   $('m-delete').addEventListener('click', deleteEntry);
   $('m-duplicate').addEventListener('click', duplicateInModal);
   $('m-categoria').addEventListener('change', updateCatHint);
+  $('m-foto-attach').addEventListener('click', () => $('m-foto-file').click());
+  $('m-foto-change').addEventListener('click', () => $('m-foto-file').click());
+  $('m-foto-file').addEventListener('change', (ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; onPhotoSelected(f); });
+  $('m-foto-view').addEventListener('click', () => viewPhoto(modalPhoto.existing));
+  $('m-foto-remove').addEventListener('click', () => { modalPhoto = { mode: 'remove', existing: modalPhoto.existing, blob: null, dataUrl: null, w: 0, h: 0 }; renderModalPhoto(); });
   $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeModal(); });
 
   $('btn-excel').addEventListener('click', () => openExportChooser('excel', state));
@@ -1541,6 +1855,7 @@ function init() {
   setupSyncUI();
   setupSecurityUI();
   setupBackupUI();
+  setupGDriveUI();
   updateFooter();
   updateSyncIndicator();
   $('sync-ind').addEventListener('click', () => syncNow(false));
@@ -1551,9 +1866,11 @@ function init() {
   // ao voltar a ficar online, envia o que ficou pendente offline (o merge decide
   // se o mais recente é do servidor ou deste aparelho)
   window.addEventListener('online', () => {
-    if (!isSyncConfigured()) return;
-    if (isDirty()) toast('Conexão restaurada — enviando lançamentos…');
-    syncNow(true);
+    if (isSyncConfigured()) {
+      if (isDirty()) toast('Conexão restaurada — enviando lançamentos…');
+      syncNow(true);
+    }
+    flushPendingPhotos();
   });
 
   // ao voltar para o app (reabrir/trazer ao foco), sincroniza para pegar a

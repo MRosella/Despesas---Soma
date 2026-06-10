@@ -348,6 +348,15 @@ body.locked { overflow: hidden; }
   .modal { border-radius: 18px; }
 }
 
+/* ---------- Comprovante (foto) ---------- */
+.foto-attach { width: 100%; }
+.foto-preview { display: flex; gap: 12px; align-items: center; margin-top: 4px; }
+.foto-preview img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.foto-info { flex: 1; min-width: 0; }
+.foto-info > span { display: block; font-size: .85rem; font-weight: 600; color: var(--brown); margin-bottom: 6px; }
+.foto-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.e-clip { display: inline-flex; vertical-align: middle; color: var(--orange); margin-left: 4px; cursor: pointer; }
+
 /* ---------- Opções de exportação ---------- */
 .exp-opt {
   display: flex; align-items: center; gap: 12px;

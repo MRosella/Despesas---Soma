@@ -236,6 +236,27 @@
         </div>
       </section>
 
+      <!-- Comprovantes (Google Drive) -->
+      <section class="card">
+        <div class="card-head"><h2>Comprovantes (Google Drive)</h2></div>
+        <div class="card-body">
+          <p class="hint" style="margin-top:0">Anexe a foto do cupom em cada lançamento. As imagens são
+            guardadas no <b>seu</b> Google Drive (pasta “Comprovantes - Despesas Soma”, que você pode mover
+            para onde quiser) e entram como páginas finais do PDF.</p>
+          <div class="field">
+            <label for="gd-client">Client ID do Google (OAuth)</label>
+            <input type="text" id="gd-client" placeholder="...apps.googleusercontent.com" autocapitalize="off" autocomplete="off" spellcheck="false" />
+            <p class="hint">Crie no Google Cloud (tipo “Aplicativo da Web”, origem
+              <b>https://mrosella.github.io</b>). Funciona só no site publicado (HTTPS).</p>
+          </div>
+          <div class="sync-actions">
+            <button class="btn btn-excel" id="gd-connect" type="button">Conectar Google</button>
+          </div>
+          <p class="sync-status" id="gd-status">Não configurado.</p>
+          <button class="btn btn-danger-text" id="gd-clear" type="button" style="padding:8px 0">Desconectar Google deste aparelho</button>
+        </div>
+      </section>
+
       <!-- Backup / Restauração -->
       <section class="card">
         <div class="card-head"><h2>Backup / Restaurar</h2></div>
@@ -297,6 +318,22 @@
       <div class="field">
         <label for="m-valor">Valor (R$)</label>
         <input type="text" id="m-valor" inputmode="decimal" placeholder="0,00" />
+      </div>
+      <div class="field">
+        <label>Comprovante (Google Drive)</label>
+        <input type="file" id="m-foto-file" accept="image/*" capture="environment" style="display:none" />
+        <button type="button" class="btn btn-ghost foto-attach" id="m-foto-attach"><span class="bic" data-icon="camera" data-size="18"></span> Anexar comprovante</button>
+        <div class="foto-preview" id="m-foto-preview" style="display:none">
+          <img id="m-foto-thumb" alt="Comprovante" style="display:none" />
+          <div class="foto-info">
+            <span id="m-foto-label">Comprovante anexado</span>
+            <div class="foto-actions">
+              <button type="button" class="hist-btn" id="m-foto-view">Ver</button>
+              <button type="button" class="hist-btn" id="m-foto-change">Trocar</button>
+              <button type="button" class="hist-btn danger" id="m-foto-remove">Remover</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="modal-actions">
         <button class="btn btn-danger-text" id="m-delete" style="display:none">Excluir</button>

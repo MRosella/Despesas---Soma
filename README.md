@@ -79,6 +79,8 @@ A partir daí funciona **sem internet**.
   - O **valor** e o **CPF** são formatados automaticamente enquanto você digita.
 - **Busca e filtros:** use a barra de busca (texto, categoria e período) para encontrar
   lançamentos rapidamente quando o mês tiver muitos itens.
+- **Comprovante (foto):** no lançamento, toque em **Anexar comprovante** para fotografar/escolher o
+  cupom. A imagem é enviada ao **seu Google Drive** e entra como página final do PDF (veja a seção 7).
 - **Dados Bancários (Se Aplicável):** preencha uma vez; ficam salvos para os próximos meses.
 - No fim do mês, toque em **Excel** ou **PDF** para gerar o relatório.
   - Abre uma caixa para escolher o que incluir: **Despesas para Reembolso**, **Cartão Alelo**
@@ -162,6 +164,35 @@ aparelho**; use **Desconectar** para removê-lo de um dispositivo.
 > **Segurança:** o token dá acesso de escrita só a esse repositório privado.
 > Se o aparelho for perdido, gere um novo token e **revogue** o antigo em
 > <https://github.com/settings/tokens?type=beta>.
+
+---
+
+## 7. Comprovantes no Google Drive (opcional)
+
+Permite anexar a foto do cupom a cada lançamento. As imagens ficam no **seu** Google Drive
+(pasta `Comprovantes - Despesas Soma`, que você pode mover para onde quiser) e entram como
+**páginas finais do PDF**. O app usa o escopo `drive.file` — ele só acessa os arquivos que
+ele mesmo cria, nunca o resto do seu Drive.
+
+### 7.1 Criar o Client ID (uma vez)
+
+1. Acesse <https://console.cloud.google.com> e crie um projeto (ex.: **Despesas Soma**).
+2. **APIs e serviços → Biblioteca** → habilite a **Google Drive API**.
+3. **Tela de consentimento OAuth** → tipo **Externo** → preencha nome e seu e‑mail → em
+   **Usuários de teste**, adicione **o seu próprio e‑mail** (deixe em modo "Testing").
+4. **Credenciais → Criar credenciais → ID do cliente OAuth** → **Aplicativo da Web** → em
+   **Origens JavaScript autorizadas** adicione `https://mrosella.github.io` → criar e
+   **copiar o Client ID** (termina em `.apps.googleusercontent.com`).
+
+### 7.2 Configurar no app
+
+1. Abra o app (pela URL publicada — OAuth não funciona em teste local), vá em **Configurações →
+   Comprovantes (Google Drive)**, cole o **Client ID** e toque em **Conectar Google**.
+2. Faça login na sua conta e autorize. Pronto: ao anexar fotos, elas vão para o seu Drive.
+
+> Observações: o login vale por ~1h (reconectar é um toque). Fotos tiradas **offline** ficam numa
+> fila local e são enviadas ao Drive assim que você reconectar. Para abrir os comprovantes no
+> computador, conecte o mesmo Google lá também.
 
 ---
 
