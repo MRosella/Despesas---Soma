@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v16';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v17';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -27,6 +27,7 @@ function emptyState() {
     alelo: [],
     history: [],                          // meses arquivados (snapshots)
     histTomb: {},                         // lápides do histórico: id -> ts
+    driveFolderId: '',                    // pasta dos comprovantes no Drive (compartilhada entre dispositivos)
     tomb: { reembolso: {}, alelo: {} },   // lápides: id -> updatedAt (deleções)
     meta: { updatedAt: 0, profileUpdatedAt: 0 }
   };
@@ -50,6 +51,7 @@ function loadState() {
     st.tomb.alelo = st.tomb.alelo || {};
     st.history = Array.isArray(st.history) ? st.history : [];
     st.histTomb = st.histTomb || {};
+    st.driveFolderId = st.driveFolderId || '';
     // migração: garante updatedAt nas entradas e relógio do doc se for estado antigo
     for (const t of ['reembolso', 'alelo']) {
       st[t] = (st[t] || []).map((e) => e.updatedAt ? e : Object.assign({}, e, { updatedAt: Date.now() }));
@@ -1125,6 +1127,7 @@ function currentDoc() {
     alelo: state.alelo.map((e) => Object.assign({}, e)),
     history: state.history.map((h) => JSON.parse(JSON.stringify(h))),
     histTomb: Object.assign({}, state.histTomb),
+    driveFolderId: state.driveFolderId || '',
     tomb: {
       reembolso: Object.assign({}, state.tomb.reembolso),
       alelo: Object.assign({}, state.tomb.alelo)
@@ -1144,6 +1147,7 @@ function applyDoc(doc) {
   state.alelo = doc.alelo || [];
   state.history = Array.isArray(doc.history) ? doc.history : [];
   state.histTomb = doc.histTomb || {};
+  state.driveFolderId = doc.driveFolderId || '';
   state.tomb = {
     reembolso: (doc.tomb && doc.tomb.reembolso) || {},
     alelo: (doc.tomb && doc.tomb.alelo) || {}
@@ -1210,6 +1214,7 @@ function mergeDocs(a, b) {
   const mh = mergeHistory(a, b);
   out.history = mh.list;
   out.histTomb = mh.tomb;
+  out.driveFolderId = a.driveFolderId || b.driveFolderId || '';   // id da pasta do Drive (estável)
   out.meta = {
     updatedAt: Math.max((a.meta && a.meta.updatedAt) || 0, (b.meta && b.meta.updatedAt) || 0),
     profileUpdatedAt: Math.max(pa, pb)
@@ -1571,9 +1576,19 @@ async function gdEmail() {
   return (await r.json()).user.emailAddress;
 }
 
+function cacheLocalFolder(id) { const cfg = loadGd(); if (cfg.folderId !== id) { cfg.folderId = id; saveGd(cfg); } }
+function setDriveFolderId(id) {
+  cacheLocalFolder(id);
+  if (state.driveFolderId !== id) { state.driveFolderId = id; touchDoc(); saveState(); }   // propaga via dados.json
+}
+
 async function gdEnsureFolder() {
+  // 1) id compartilhado entre dispositivos (sincronizado) tem prioridade
+  if (state.driveFolderId) { cacheLocalFolder(state.driveFolderId); return state.driveFolderId; }
+  // 2) cache local (ex.: configurado antes da sincronização)
   const cfg = loadGd();
-  if (cfg.folderId) return cfg.folderId;
+  if (cfg.folderId) { setDriveFolderId(cfg.folderId); return cfg.folderId; }
+  // 3) procura por nome; se não achar, cria — e guarda o id (local + sincronizado)
   const t = await gdGetToken(false);
   const q = `mimeType='application/vnd.google-apps.folder' and name='${GD_FOLDER_NAME}' and trashed=false`;
   let r = await fetch('https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(q) + '&fields=files(id,name)', { headers: { Authorization: 'Bearer ' + t } });
@@ -1586,7 +1601,7 @@ async function gdEnsureFolder() {
     });
     j = await r.json(); id = j.id;
   }
-  cfg.folderId = id; saveGd(cfg);
+  setDriveFolderId(id);
   return id;
 }
 
