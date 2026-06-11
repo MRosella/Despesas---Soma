@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v20';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v21';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -343,7 +343,7 @@ function emptyStateEl() {
 }
 
 function renderList(tabela, ul) {
-  const all = state[tabela];
+  const all = state[tabela].slice().sort((a, b) => (b.data || '').localeCompare(a.data || ''));   // exibe mais recente no topo (estado/relatório seguem cronológicos)
   ul.innerHTML = '';
   if (!all.length) { ul.appendChild(emptyStateEl()); setupIcons(ul); return; }
 
@@ -356,20 +356,33 @@ function renderList(tabela, ul) {
     li.innerHTML = `
       <div class="e-main">
         <div class="e-desc">${escapeHtml(e.descricao || '(sem descrição)')}</div>
-        <div class="e-meta"><span class="cat-tag">${escapeHtml(e.categoria || '—')}</span>${fmtDateBR(e.data)}${e.foto ? ' <span class="e-clip" data-icon="paperclip" data-size="14" title="Comprovante anexado"></span>' : ''}</div>
+        <div class="e-meta"><span class="cat-tag">${escapeHtml(e.categoria || '—')}</span>${fmtDateBR(e.data)}${e.foto ? ' <img class="e-thumb" data-eid="' + escapeHtml(e.id) + '" alt="comprovante" hidden> <span class="e-clip" data-icon="paperclip" data-size="14" title="Comprovante anexado"></span>' : ''}</div>
       </div>
       <div class="e-val">${formatMoney(e.valor)}</div>
       <div class="e-quick">
         <button class="qbtn" data-q="dup" title="Duplicar" aria-label="Duplicar lançamento" data-icon="copy" data-size="18"></button>
         <button class="qbtn danger" data-q="del" title="Excluir" aria-label="Excluir lançamento" data-icon="trash-2" data-size="18"></button>
       </div>`;
-    li.addEventListener('click', (ev) => { if (!ev.target.closest('.e-quick') && !ev.target.closest('.e-clip')) openModal(tabela, e.id); });
+    li.addEventListener('click', (ev) => { if (!ev.target.closest('.e-quick') && !ev.target.closest('.e-clip') && !ev.target.closest('.e-thumb')) openModal(tabela, e.id); });
     li.querySelector('[data-q=dup]').addEventListener('click', () => quickDuplicate(tabela, e.id));
     li.querySelector('[data-q=del]').addEventListener('click', () => quickDelete(tabela, e.id));
-    const clip = li.querySelector('.e-clip'); if (clip) clip.addEventListener('click', (ev) => { ev.stopPropagation(); viewPhoto(e.foto); });
+    const clip = li.querySelector('.e-clip'); if (clip) clip.addEventListener('click', (ev) => { ev.stopPropagation(); viewPhoto(e.foto, e.id); });
+    const thumb = li.querySelector('.e-thumb'); if (thumb) thumb.addEventListener('click', (ev) => { ev.stopPropagation(); viewPhoto(e.foto, e.id); });
     ul.appendChild(li);
   }
   setupIcons(ul);
+  hydrateThumbs(ul);
+}
+
+/* mostra as miniaturas locais (IndexedDB) nos itens que têm comprovante */
+async function hydrateThumbs(ul) {
+  const imgs = ul.querySelectorAll('img.e-thumb[data-eid]');
+  for (const img of imgs) {
+    try {
+      const url = await idbGet('thumb_' + img.dataset.eid);
+      if (url) { img.src = url; img.hidden = false; const clip = img.nextElementSibling; if (clip && clip.classList.contains('e-clip')) clip.style.display = 'none'; }
+    } catch (e) { /* mantém o clipe como fallback */ }
+  }
 }
 
 /* limite de reembolso por categoria (apenas aviso visual) */
@@ -462,7 +475,8 @@ async function onPhotoSelected(file) {
 }
 async function applyModalPhoto(entry) {
   if (modalPhoto.mode === 'keep') return;
-  if (modalPhoto.mode === 'remove') { entry.foto = null; return; }   // só desvincula (não apaga do Drive)
+  if (modalPhoto.mode === 'remove') { entry.foto = null; idbDel('thumb_' + entry.id).catch(() => {}); return; }   // só desvincula (não apaga do Drive)
+  saveThumb(entry.id, modalPhoto.blob);   // miniatura local p/ a lista (não sincroniza)
   const name = receiptFileName(entry);
   if (gdConfigured() && gdConnected()) {
     try {
@@ -541,6 +555,11 @@ async function saveEntry() {
   if (!descricao) { toast('Informe a descrição.'); return; }
   if (!categoria) { toast('Selecione a categoria.'); return; }
   if (!valor) { toast('Informe um valor válido.'); return; }
+
+  // aviso de possível duplicado (mesma data + categoria + valor de outro lançamento)
+  const cents = Math.round(valor * 100);
+  const dup = state[tabela].some((x) => x.id !== id && x.data === data && x.categoria === categoria && Math.round((x.valor || 0) * 100) === cents);
+  if (dup && !confirm('Já existe um lançamento com a mesma data, categoria e valor. Adicionar mesmo assim?')) return;
 
   const now = Date.now();
   let entry;
@@ -1403,7 +1422,7 @@ function showLock() {
     $('lock-pin-input').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') ok(); });
   }
 }
-function hideLock() { const d = $('lock-screen'); if (d) d.remove(); document.body.classList.remove('locked'); }
+function hideLock() { const d = $('lock-screen'); if (d) d.remove(); document.body.classList.remove('locked'); maybePromptDrive(); }
 
 function refreshSecStatus() {
   const l = loadLock();
@@ -1876,6 +1895,14 @@ function blobToDataUrl(blob) {
   });
 }
 
+/* ---- miniatura local (IndexedDB, não sincroniza) p/ a lista ---- */
+async function saveThumb(entryId, blob) {
+  try {
+    const t = await compressImage(blob, 160, 0.6);
+    await idbPut('thumb_' + entryId, await blobToDataUrl(t.blob));
+  } catch (e) { /* miniatura é opcional */ }
+}
+
 /* ---- obtém o blob da foto de um lançamento (Drive ou fila local) ---- */
 async function getPhotoBlob(foto) {
   if (!foto) return null;
@@ -1925,11 +1952,12 @@ async function flushPendingPhotos(report) {
   return { sent, failed };
 }
 
-async function viewPhoto(foto) {
+async function viewPhoto(foto, entryId) {
   try {
     toast('Abrindo comprovante…');
     const blob = await getPhotoBlob(foto);
     if (!blob) { toast('Comprovante não encontrado.'); return; }
+    if (entryId) { idbGet('thumb_' + entryId).then((t) => { if (!t) saveThumb(entryId, blob); }); }   // cacheia miniatura (ex.: foto vinda de outro aparelho)
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -1946,18 +1974,7 @@ function setupGDriveUI() {
     if (c.clientId !== loadGd().clientId) c.folderId = '';   // troca de projeto reseta pasta
     saveGd(c); refreshGdStatus();
   });
-  $('gd-connect').addEventListener('click', async () => {
-    const c = loadGd();
-    if (!c.clientId) { setGdStatus('Cole o Client ID primeiro.', 'warn'); return; }
-    setGdStatus('Conectando ao Google…');
-    try {
-      await gdGetToken(true);
-      const email = await gdEmail();
-      await gdEnsureFolder();
-      setGdStatus('Conectado como ' + email + ' ✓', 'ok');
-      await flushPendingPhotos(true);
-    } catch (e) { console.error(e); setGdStatus('Erro: ' + e.message, 'err'); }
-  });
+  $('gd-connect').addEventListener('click', () => gdConnectFlow());
   $('gd-flush').addEventListener('click', async () => {
     const c = loadGd();
     if (!c.clientId) { setGdStatus('Cole o Client ID primeiro.', 'warn'); return; }
@@ -1983,6 +2000,68 @@ function refreshGdStatus() {
   updateGdPending();
   if (!gdConfigured()) { setGdStatus('Não configurado.', ''); return; }
   setGdStatus(gdConnected() ? 'Conectado ✓' : 'Configurado. Toque em “Conectar Google”.', gdConnected() ? 'ok' : '');
+}
+
+/* ---- Conexão do Drive: fluxo único + reconexão silenciosa + popup ao abrir ---- */
+async function gdConnectFlow() {
+  const c = loadGd();
+  if (!c.clientId) { setGdStatus('Cole o Client ID primeiro.', 'warn'); return false; }
+  setGdStatus('Conectando ao Google…');
+  try {
+    await gdGetToken(true);
+    const email = await gdEmail();
+    await gdEnsureFolder();
+    setGdStatus('Conectado como ' + email + ' ✓', 'ok');
+    await flushPendingPhotos(true);
+    return true;
+  } catch (e) { console.error(e); setGdStatus('Erro: ' + e.message, 'err'); return false; }
+}
+
+async function gdSilentReconnect() {
+  if (!gdConfigured() || !navigator.onLine || gdConnected()) return gdConnected();
+  try {
+    // sem UI: só funciona se a sessão Google ainda vale; timeout evita travar se o callback não vier
+    await Promise.race([
+      gdGetToken(false),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))
+    ]);
+    await gdEnsureFolder();
+    refreshGdStatus();
+    await flushPendingPhotos(false);
+    return true;
+  } catch (e) { return false; }
+}
+
+function showDriveConnectNotice() {
+  if ($('gd-connect-notice')) return;
+  const pend = countPendingPhotos();
+  const div = document.createElement('div');
+  div.id = 'gd-connect-notice';
+  div.className = 'offline-notice';
+  div.innerHTML = `
+    <div class="offline-card">
+      <div class="offline-icon">☁️</div>
+      <h3>Conecte ao Google Drive</h3>
+      <p>É preciso conectar para enviar seus comprovantes ao Drive.${pend ? ' Você tem <b>' + pend + '</b> comprovante(s) aguardando envio.' : ''}</p>
+      <div class="notice-actions">
+        <button class="btn btn-excel" id="gd-notice-connect">Conectar agora</button>
+        <button class="btn btn-ghost" id="gd-notice-later">Agora não</button>
+      </div>
+    </div>`;
+  document.body.appendChild(div);
+  $('gd-notice-later').addEventListener('click', () => div.remove());
+  $('gd-notice-connect').addEventListener('click', async () => {
+    $('gd-notice-connect').disabled = true;
+    const ok = await gdConnectFlow();
+    if (ok) { div.remove(); toast('Google Drive conectado.'); }
+    else { $('gd-notice-connect').disabled = false; toast('Não foi possível conectar. Tente de novo.'); }
+  });
+}
+
+async function maybePromptDrive() {
+  if (!gdConfigured() || !navigator.onLine || gdConnected()) return;
+  const ok = await gdSilentReconnect();
+  if (!ok && !gdConnected()) showDriveConnectNotice();
 }
 
 /* ---------------- Modo escuro ---------------- */
@@ -2055,6 +2134,22 @@ function newMonth() {
   toast(tem ? 'Mês arquivado no histórico.' : 'Pronto para um novo mês.');
 }
 
+/* copia os dados bancários formatados (p/ colar no e-mail de reembolso) */
+async function copyBankData() {
+  const b = state.bank || {};
+  const linhas = [
+    ['Nome', b.nome], ['CPF', b.cpf], ['Banco', b.banco],
+    ['Agência', b.agencia], ['Conta', b.conta], ['Chave Pix', b.pix]
+  ].filter((x) => (x[1] || '').trim());
+  if (!linhas.length) { toast('Preencha os dados bancários primeiro.'); return; }
+  const txt = linhas.map((x) => x[0] + ': ' + x[1]).join('\n');
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(txt);
+    else { const ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+    toast('Dados bancários copiados.');
+  } catch (e) { console.error(e); toast('Não foi possível copiar.'); }
+}
+
 /* ---------------- Inicialização ---------------- */
 function init() {
   maybeLock();
@@ -2072,6 +2167,7 @@ function init() {
   bindField('bk-agencia', null, (v) => state.bank.agencia = v);
   bindField('bk-conta', null, (v) => state.bank.conta = v);
   bindField('bk-pix', null, (v) => state.bank.pix = v);
+  if ($('bk-copy')) $('bk-copy').addEventListener('click', copyBankData);
 
   document.querySelectorAll('[data-add]').forEach((btn) =>
     btn.addEventListener('click', () => openModal(btn.dataset.add, null)));
@@ -2130,8 +2226,13 @@ function init() {
   // ao voltar para o app (reabrir/trazer ao foco), sincroniza para pegar a
   // versão mais recente e enviar pendências
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && isSyncConfigured() && navigator.onLine) syncNow(true);
+    if (document.visibilityState !== 'visible') return;
+    if (isSyncConfigured() && navigator.onLine) syncNow(true);
+    maybePromptDrive();
   });
+
+  // popup de conexão do Drive ao abrir (se houver bloqueio, dispara após o desbloqueio)
+  if (!lockEnabled()) maybePromptDrive();
 }
 
 /* ---------------- Auto-atualização (Service Worker) ---------------- */
@@ -2174,7 +2275,7 @@ function setupServiceWorker() {
 function setupConnectivity() {
   if (!navigator.onLine) showOfflineNotice();
   window.addEventListener('offline', () => { showOfflineNotice(); updateSyncIndicator(); });
-  window.addEventListener('online', () => { const n = $('offline-notice'); if (n) n.remove(); updateSyncIndicator(); });
+  window.addEventListener('online', () => { const n = $('offline-notice'); if (n) n.remove(); updateSyncIndicator(); maybePromptDrive(); });
 }
 
 function showOfflineNotice() {

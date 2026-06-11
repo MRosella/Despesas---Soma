@@ -37,7 +37,7 @@ https://mrosella.github.io/Despesas---Soma/
 | Estado / persistência | 51–105 | `emptyState`, `loadState`, `saveState`, `touchDoc/touchProfile` |
 | Utils (moeda, data, uid, toast) | 111–152 | `parseMoney`, `formatMoney`, `todayISO`, `fmtDateBR`, `dateToSerial` |
 | Ícones SVG | 155–192 | `ICONS`, `icon`, `setupIcons` |
-| Render telas/listas | 194–410 | `render`, `renderReports`, `renderList`, `limitExcedido`, `emptyStateEl` |
+| Render telas/listas | 194–410 | `render`, `renderReports`, `renderList` (exibe **mais recente no topo**; `hydrateThumbs` = miniaturas), `limitExcedido`, `emptyStateEl` |
 | Modal de lançamento | 428–598 | `openModal`, `saveEntry`, `deleteEntry`, `updateCatHint`, máscaras |
 | **Foto/anexo + OCR hook** | 457–503 | `renderModalPhoto`, `onPhotoSelected` (dispara OCR), `applyModalPhoto` (nome do arquivo) |
 | Excel (XLSX) | 600–838 | `buildXlsx`, `exportExcel`, `filteredDoc` |
@@ -48,7 +48,7 @@ https://mrosella.github.io/Despesas---Soma/
 | `populateCategorySelects` | ~1507 | popula `#m-categoria` (chamado no `init`; já não há mais filtros) |
 | **Editor de categorias (UI)** | ~1516–1590 | `getCatDraft`, `renderCatEditor`, `saveCatEditor`, `setupCatUI` |
 | **OCR / Gemini** | 1619–1735 | `AI_KEY`, `GEMINI_MODEL`, `loadAi/saveAi`, `aiConfigured`, `buildDescricao`, `ocrReceipt`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI` |
-| **Google Drive** | ~1690–1960 | `loadGd/saveGd`, `gdGetToken`, `gdEnsureFolder`, **subpastas Ano/Mês** (`MESES`, `gdFindOrCreateChild`, `gdEnsureMonthFolder`), `gdUpload(blob,name,dateISO)`, IndexedDB (`idbPut/Get/Del`), `compressImage`, `flushPendingPhotos` |
+| **Google Drive** | ~1690–2010 | `loadGd/saveGd`, `gdGetToken`, `gdEnsureFolder`, **subpastas Ano/Mês** (`MESES`, `gdFindOrCreateChild`, `gdEnsureMonthFolder`), `gdUpload(blob,name,dateISO)`, **conexão ao abrir** (`gdConnectFlow`, `gdSilentReconnect`, `showDriveConnectNotice`, `maybePromptDrive`), miniaturas (`saveThumb`), IndexedDB (`idbPut/Get/Del`: `p_`=pendentes, `thumb_`=miniaturas locais), `compressImage`, `flushPendingPhotos` |
 | Tema | 2002–2032 | `applyTheme`, `toggleTheme`, `setupTheme` |
 | Init / bootstrap | 2033–2210 | `bindField`, `newMonth`, `init` (registra todos os `setup*`), SW, conectividade |
 
@@ -92,6 +92,12 @@ para perfil/banco/**config**. Lápides garantem que deleções propaguem.
   removida; o rótulo da 2ª tabela é "Despesas Cartão Santander - Soma".)
 - **Comprovantes no Drive vão para subpastas `{Ano}/{Mês}`** (pela data do lançamento),
   dentro da pasta raiz compartilhada; resolvidas por nome (idempotente entre aparelhos).
+- **Conexão do Drive ao abrir:** token OAuth vive só em memória (~1h) → ao abrir/voltar ao
+  foco, `maybePromptDrive` tenta reconexão silenciosa e, se falhar, mostra popup `gd-connect-notice`
+  ("Conectar agora" = `gdConnectFlow`). Sequenciado após o desbloqueio (chamado em `hideLock`).
+- **Miniaturas** dos comprovantes são **locais** (IndexedDB `thumb_<id>`, não sincronizam).
+  Lista exibe **mais recente no topo** (estado/Excel/PDF seguem cronológicos). Há botão
+  "Copiar dados bancários" (`copyBankData`) e aviso de duplicado (mesma data+categoria+valor) no `saveEntry`.
   Renomear "Alelo"→"Santander - Soma" foi só rótulo visível (tela/PDF/Excel via
   `template.xlsx` sharedStrings); a chave de dados `alelo` é estrutural e **não muda**.
 - Categoria nova fora da validação do `template.xlsx` é gravada mesmo assim; o Excel

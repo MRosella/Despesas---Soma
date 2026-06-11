@@ -346,6 +346,7 @@ body.locked { overflow: hidden; }
 .foto-info > span { display: block; font-size: .85rem; font-weight: 600; color: var(--brown); margin-bottom: 6px; }
 .foto-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .e-clip { display: inline-flex; vertical-align: middle; color: var(--orange); margin-left: 4px; cursor: pointer; }
+.e-thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; margin-left: 6px; vertical-align: middle; cursor: pointer; border: 1px solid var(--line); }
 
 /* ---------- Opções de exportação ---------- */
 .exp-opt {
@@ -418,6 +419,7 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 .offline-notice h3 { margin: 0 0 8px; color: var(--red); font-size: 1.15rem; }
 .offline-notice p { margin: 0 0 18px; font-size: .9rem; color: var(--brown); line-height: 1.5; }
 .offline-notice .btn { width: 100%; }
+.notice-actions { display: flex; flex-direction: column; gap: 8px; }
 
 /* ---------- Print (PDF) area — hidden on screen ---------- */
 #print-root { display: none; }
