@@ -9,12 +9,43 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v18';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v19';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
 
-const CATEGORIAS = ['Café da Manha', 'Almoço', 'Café da Tarde', 'Jantar', 'Combustível', 'Pedágio', 'Outras Despesas'];
+/* Categorias e limites — padrão de fábrica. A configuração efetiva fica em
+   state.config.categorias (editável em Configurações e sincronizada como o perfil). */
+const DEFAULT_CATEGORIAS = [
+  { nome: 'Café da Manha', limite: 30, grupo: 'Alimentação' },
+  { nome: 'Almoço', limite: 70, grupo: 'Alimentação' },
+  { nome: 'Café da Tarde', limite: 30, grupo: 'Alimentação' },
+  { nome: 'Jantar', limite: 70, grupo: 'Alimentação' },
+  { nome: 'Combustível', limite: 0, grupo: 'Combustível' },
+  { nome: 'Pedágio', limite: 0, grupo: 'Pedágio' },
+  { nome: 'Outras Despesas', limite: 0, grupo: 'Outras Despesas' }
+];
+
+function normalizeCatConfig(cfg) {
+  const arr = (cfg && Array.isArray(cfg.categorias)) ? cfg.categorias : null;
+  const list = (arr && arr.length)
+    ? arr.map((c) => ({ nome: String(c.nome || '').trim(), limite: +c.limite || 0, grupo: (c.grupo || c.nome || '').trim() }))
+         .filter((c) => c.nome)
+    : DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c));
+  return { categorias: list.length ? list : DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c)) };
+}
+function getCatConfig() { return (state.config && Array.isArray(state.config.categorias) && state.config.categorias.length) ? state.config.categorias : DEFAULT_CATEGORIAS; }
+function getCategorias() { return getCatConfig().map((c) => c.nome); }
+function catByName(nome) { return getCatConfig().find((c) => c.nome === nome) || null; }
+function limiteDaCategoria(nome) { const c = catByName(nome); return (c && c.limite) ? c.limite : 0; }
+function grupoDaCategoria(nome) { const c = catByName(nome); return (c && c.grupo) || nome || ''; }
+/* Texto de observação de limites para o PDF — agrupa categorias por valor de limite. */
+function limitsObsText() {
+  const byLim = {};
+  getCatConfig().forEach((c) => { if (c.limite > 0) (byLim[c.limite] = byLim[c.limite] || []).push(c.nome); });
+  const parts = Object.keys(byLim).map((l) => byLim[l].join(' e ') + ': ' + formatMoney(+l) + ' cada');
+  return parts.length ? ('Os valores máximos reembolsáveis são — ' + parts.join('; ') + '.') : '';
+}
 
 /* ---------------- Estado ---------------- */
 function emptyState() {
@@ -28,6 +59,7 @@ function emptyState() {
     history: [],                          // meses arquivados (snapshots)
     histTomb: {},                         // lápides do histórico: id -> ts
     driveFolderId: '',                    // pasta dos comprovantes no Drive (compartilhada entre dispositivos)
+    config: { categorias: DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c)) },  // categorias + limites
     tomb: { reembolso: {}, alelo: {} },   // lápides: id -> updatedAt (deleções)
     meta: { updatedAt: 0, profileUpdatedAt: 0 }
   };
@@ -52,6 +84,7 @@ function loadState() {
     st.history = Array.isArray(st.history) ? st.history : [];
     st.histTomb = st.histTomb || {};
     st.driveFolderId = st.driveFolderId || '';
+    st.config = normalizeCatConfig(st.config);
     // migração: garante updatedAt nas entradas e relógio do doc se for estado antigo
     for (const t of ['reembolso', 'alelo']) {
       st[t] = (st[t] || []).map((e) => e.updatedAt ? e : Object.assign({}, e, { updatedAt: Date.now() }));
@@ -361,9 +394,9 @@ function renderList(tabela, ul) {
   setupIcons(ul);
 }
 
-/* limite de reembolso por refeição (apenas aviso visual) */
+/* limite de reembolso por categoria (apenas aviso visual) */
 function limitExcedido(e) {
-  const lim = { 'Almoço': 70, 'Jantar': 70, 'Café da Manha': 30, 'Café da Tarde': 30 }[e.categoria];
+  const lim = limiteDaCategoria(e.categoria);
   return lim ? (e.valor || 0) > lim : false;
 }
 
@@ -446,12 +479,13 @@ async function onPhotoSelected(file) {
     const { blob, w, h } = await compressImage(file);
     modalPhoto = { mode: 'new', existing: modalPhoto.existing, blob, dataUrl: await blobToDataUrl(blob), w, h };
     renderModalPhoto();
+    if (aiConfigured()) await runReceiptOcr();
   } catch (e) { console.error(e); toast('Erro na imagem: ' + e.message); }
 }
 async function applyModalPhoto(entry) {
   if (modalPhoto.mode === 'keep') return;
   if (modalPhoto.mode === 'remove') { entry.foto = null; return; }   // só desvincula (não apaga do Drive)
-  const name = 'comprovante-' + (entry.data || todayISO()) + '-' + entry.id + '.jpg';
+  const name = receiptFileName(entry);
   if (gdConfigured() && gdConnected()) {
     try {
       toast('Enviando comprovante ao Drive…');
@@ -513,11 +547,8 @@ function maskCpfEl(el) {
 }
 
 function updateCatHint() {
-  const cat = $('m-categoria').value;
-  let hint = '';
-  if (cat === 'Almoço' || cat === 'Jantar') hint = 'Limite de reembolso: R$ 70,00';
-  else if (cat === 'Café da Manha' || cat === 'Café da Tarde') hint = 'Limite de reembolso: R$ 30,00';
-  $('m-cat-hint').textContent = hint;
+  const lim = limiteDaCategoria($('m-categoria').value);
+  $('m-cat-hint').textContent = lim ? ('Limite de reembolso: ' + formatMoney(lim)) : '';
 }
 
 async function saveEntry() {
@@ -910,8 +941,7 @@ function buildPrint(src, sections) {
       <tr><td class="lab">Conta:</td><td>${escapeHtml(b.conta)}</td><td class="lab">Chave Pix:</td><td>${escapeHtml(b.pix)}</td></tr>
     </table>
     <div class="p-obs">
-      <b>Observações:</b> Para despesas com alimentação, os valores máximos reembolsáveis por refeição são —
-      Almoço e Jantar: R$ 70,00 cada; Café da manhã e da tarde: R$ 30,00 cada.
+      <b>Observações:</b> ${limitsObsText()}
       Enviar junto a este relatório os cupons das despesas. Em caso de gasto reembolsável,
       informar os dados da conta bancária para o recebimento.
     </div>`;
@@ -1129,6 +1159,7 @@ function currentDoc() {
     history: state.history.map((h) => JSON.parse(JSON.stringify(h))),
     histTomb: Object.assign({}, state.histTomb),
     driveFolderId: state.driveFolderId || '',
+    config: { categorias: getCatConfig().map((c) => Object.assign({}, c)) },
     tomb: {
       reembolso: Object.assign({}, state.tomb.reembolso),
       alelo: Object.assign({}, state.tomb.alelo)
@@ -1149,6 +1180,7 @@ function applyDoc(doc) {
   state.history = Array.isArray(doc.history) ? doc.history : [];
   state.histTomb = doc.histTomb || {};
   state.driveFolderId = doc.driveFolderId || '';
+  state.config = normalizeCatConfig(doc.config);
   state.tomb = {
     reembolso: (doc.tomb && doc.tomb.reembolso) || {},
     alelo: (doc.tomb && doc.tomb.alelo) || {}
@@ -1156,6 +1188,9 @@ function applyDoc(doc) {
   state.meta = Object.assign({ updatedAt: 0, profileUpdatedAt: 0 }, doc.meta || {});
   saveState();
   render();
+  catDraft = null;
+  populateCategorySelects();
+  renderCatEditor();
   applyingRemote = false;
 }
 
@@ -1208,6 +1243,7 @@ function mergeDocs(a, b) {
     dataSolicitacao: p.dataSolicitacao || '',
     referente: p.referente || '',
     bank: Object.assign({}, p.bank || {}),
+    config: normalizeCatConfig(p.config),
     tomb: { reembolso: {}, alelo: {} }
   };
   out.reembolso = mergeTable('reembolso', a, b, out.tomb);
@@ -1488,12 +1524,20 @@ function setupNav() {
   showView('lancamentos');
 }
 
+/* Preenche os <select> de categoria (modal e filtro) a partir da config.
+   Preserva a seleção atual quando a categoria ainda existir. */
+function populateCategorySelects() {
+  const cats = getCategorias();
+  const opts = cats.map((c) => `<option>${escapeHtml(c)}</option>`).join('');
+  const mc = $('m-categoria');
+  if (mc) { const cur = mc.value; mc.innerHTML = '<option value="">Selecione…</option>' + opts; if (cats.indexOf(cur) >= 0) mc.value = cur; }
+  const fc = $('flt-cat');
+  if (fc) { const cur = fc.value; fc.innerHTML = '<option value="">Todas as categorias</option>' + opts; if (cats.indexOf(cur) >= 0) fc.value = cur; }
+}
+
 /* ---------------- Filtros / busca ---------------- */
 function setupFilters() {
-  const cat = $('flt-cat');
-  if (cat && cat.options.length <= 1) {
-    CATEGORIAS.forEach((c) => { const o = document.createElement('option'); o.value = c; o.textContent = c; cat.appendChild(o); });
-  }
+  populateCategorySelects();
   const apply = () => {
     filters.text = ($('flt-text').value || '').trim();
     filters.categoria = $('flt-cat').value || '';
@@ -1511,6 +1555,180 @@ function setupFilters() {
     $('flt-text').value = ''; $('flt-cat').value = ''; $('flt-from').value = ''; $('flt-to').value = '';
     apply();
   });
+}
+
+/* ---------------- Editor de categorias e limites ---------------- */
+let catDraft = null;
+function getCatDraft() { if (!catDraft) catDraft = getCatConfig().map((c) => Object.assign({}, c)); return catDraft; }
+function setCatStatus(msg, cls) { const s = $('cat-status'); if (s) { s.textContent = msg || ''; s.className = 'sync-status' + (cls ? ' ' + cls : ''); } }
+function renderCatEditor() {
+  const box = $('cat-list'); if (!box) return;
+  const rows = getCatDraft();
+  box.innerHTML = rows.map((c, i) => `
+    <div class="cat-row" data-i="${i}">
+      <input type="text" class="cat-nome" data-i="${i}" value="${escapeHtml(c.nome)}" placeholder="Categoria" autocapitalize="words" />
+      <input type="number" class="cat-lim" data-i="${i}" inputmode="decimal" min="0" step="0.01" value="${c.limite ? c.limite : ''}" placeholder="Limite R$" />
+      <button type="button" class="hist-btn danger cat-del" data-i="${i}" aria-label="Remover categoria">✕</button>
+    </div>`).join('');
+}
+function saveCatEditor() {
+  const rows = getCatDraft();
+  const seen = {}, out = [];
+  for (const r of rows) {
+    const nome = (r.nome || '').trim();
+    if (!nome) continue;
+    if (seen[nome]) { setCatStatus('Categoria repetida: ' + nome, 'err'); return; }
+    seen[nome] = 1;
+    out.push({ nome, limite: +r.limite || 0, grupo: (r.grupo || '').trim() || nome });
+  }
+  if (!out.length) { setCatStatus('Defina ao menos uma categoria.', 'err'); return; }
+  state.config = { categorias: out };
+  touchProfile();
+  saveState();
+  catDraft = null;
+  populateCategorySelects();
+  updateCatHint();
+  render();
+  renderCatEditor();
+  setCatStatus('Categorias salvas.', 'ok');
+}
+function setupCatUI() {
+  const box = $('cat-list'); if (!box) return;
+  renderCatEditor();
+  box.addEventListener('input', (e) => {
+    const t = e.target, i = +t.dataset.i;
+    if (isNaN(i) || !catDraft || !catDraft[i]) return;
+    if (t.classList.contains('cat-nome')) catDraft[i].nome = t.value;
+    else if (t.classList.contains('cat-lim')) catDraft[i].limite = +t.value || 0;
+  });
+  box.addEventListener('click', (e) => {
+    const del = e.target.closest('.cat-del'); if (!del) return;
+    getCatDraft().splice(+del.dataset.i, 1); renderCatEditor(); setCatStatus('');
+  });
+  $('cat-add').addEventListener('click', () => { getCatDraft().push({ nome: '', limite: 0, grupo: '' }); renderCatEditor(); });
+  $('cat-save').addEventListener('click', saveCatEditor);
+  $('cat-reset').addEventListener('click', () => {
+    if (!confirm('Restaurar as categorias e limites padrão?')) return;
+    catDraft = DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c)); renderCatEditor(); setCatStatus('');
+  });
+}
+
+/* ============================================================
+   Leitura automática do comprovante (OCR via Google Gemini)
+   ============================================================ */
+const AI_KEY = 'despesas-soma-ai-v1';
+const GEMINI_MODEL = 'gemini-2.5-flash';   // visão + JSON estruturado, barato
+function loadAi() { try { return Object.assign({ key: '', enabled: true }, JSON.parse(localStorage.getItem(AI_KEY) || '{}')); } catch (e) { return { key: '', enabled: true }; } }
+function saveAi(c) { try { localStorage.setItem(AI_KEY, JSON.stringify(c)); } catch (e) {} }
+function aiConfigured() { const a = loadAi(); return !!a.key && a.enabled !== false; }
+
+/* descrição padronizada: "Despesa de {Grupo} durante viagem a {Cidade}/{UF}" */
+function buildDescricao(category, city, uf) {
+  const grupo = grupoDaCategoria(category);
+  const local = (city || '') + (uf ? ('/' + uf) : '');
+  const head = grupo ? ('Despesa de ' + grupo) : 'Despesa';
+  return local ? `${head} durante viagem a ${local}` : `${head} durante viagem`;
+}
+
+async function ocrReceipt(blob) {
+  const a = loadAi();
+  if (!a.key) throw new Error('Chave do Gemini não configurada.');
+  const b64 = String(await blobToDataUrl(blob)).split(',')[1];
+  const cats = getCategorias();
+  const prompt = [
+    'Você é um leitor de cupons fiscais e notas fiscais brasileiras (NF/NFC-e/cupom).',
+    'Extraia da imagem os campos pedidos. Responda SOMENTE no JSON do schema.',
+    '- nfNumber: número da nota/cupom (apenas dígitos; null se não houver).',
+    '- date: data de emissão no formato AAAA-MM-DD (null se ilegível).',
+    '- city / uf: cidade e UF do estabelecimento emissor (ex.: "Porto Seguro", "BA").',
+    '- total: valor total pago, em reais, como número (ponto decimal).',
+    '- category: escolha UMA destas categorias exatas: ' + cats.join(' | ') + '.',
+    '  Refeições => a categoria de refeição correspondente; posto de combustível => Combustível;',
+    '  pedágio => Pedágio; o restante => Outras Despesas.'
+  ].join('\n');
+  const body = {
+    contents: [{ parts: [{ inline_data: { mime_type: 'image/jpeg', data: b64 } }, { text: prompt }] }],
+    generationConfig: {
+      temperature: 0,
+      response_mime_type: 'application/json',
+      response_schema: {
+        type: 'OBJECT',
+        properties: {
+          nfNumber: { type: 'STRING', nullable: true },
+          date: { type: 'STRING', nullable: true },
+          city: { type: 'STRING', nullable: true },
+          uf: { type: 'STRING', nullable: true },
+          total: { type: 'NUMBER', nullable: true },
+          category: { type: 'STRING', enum: cats, nullable: true }
+        }
+      }
+    }
+  };
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + encodeURIComponent(a.key);
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) { let m = 'HTTP ' + r.status; try { const j = await r.json(); if (j.error && j.error.message) m = j.error.message; } catch (e) {} throw new Error(m); }
+  const j = await r.json();
+  const c = j && j.candidates && j.candidates[0];
+  const txt = c && c.content && c.content.parts && c.content.parts[0] && c.content.parts[0].text;
+  if (!txt) throw new Error('Resposta vazia da IA.');
+  const data = JSON.parse(txt);
+  return {
+    nfNumber: data.nfNumber ? String(data.nfNumber).replace(/\D/g, '') : '',
+    dateISO: (data.date && /^\d{4}-\d{2}-\d{2}$/.test(data.date)) ? data.date : '',
+    city: (data.city || '').trim(),
+    uf: (data.uf || '').trim().toUpperCase(),
+    total: (typeof data.total === 'number' && isFinite(data.total)) ? data.total : null,
+    category: cats.indexOf(data.category) >= 0 ? data.category : ''
+  };
+}
+
+/* preenche o modal só nos campos ainda vazios (não sobrescreve o que o usuário digitou) */
+function fillFromOcr(ocr) {
+  const dEl = $('m-data');
+  if (ocr.dateISO && (!dEl.value || dEl.value === todayISO())) dEl.value = ocr.dateISO;
+  const cEl = $('m-categoria');
+  if (ocr.category && !cEl.value) { cEl.value = ocr.category; updateCatHint(); }
+  const descEl = $('m-descricao');
+  if (!descEl.value.trim()) descEl.value = buildDescricao(ocr.category, ocr.city, ocr.uf);
+  const vEl = $('m-valor');
+  if (ocr.total != null && !vEl.value.trim()) vEl.value = formatMoneyInput(ocr.total);
+}
+async function runReceiptOcr() {
+  try {
+    toast('Lendo comprovante…');
+    const ocr = await ocrReceipt(modalPhoto.blob);
+    modalPhoto.ocr = { nfNumber: ocr.nfNumber, dateISO: ocr.dateISO, city: ocr.city, uf: ocr.uf };
+    fillFromOcr(ocr);
+    toast('Comprovante lido — confira os campos.');
+  } catch (e) { console.error(e); toast('Não consegui ler o comprovante: ' + e.message); }
+}
+
+/* nome do arquivo no Drive: "NF {nº} {DD.MM}" com os dados que houver */
+function sanitizeFileName(s) { return String(s || '').replace(/[\/\\:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+function ddmm(iso) { const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? (m[2] + '.' + m[1]) : ''; }
+function receiptFileName(entry) {
+  const o = modalPhoto.ocr || {};
+  const num = o.nfNumber || '';
+  const ocrD = ddmm(o.dateISO);
+  // com nº da NF: usa a data da NF ou, na falta, a data do lançamento
+  if (num) return sanitizeFileName('NF ' + num + ((ocrD || ddmm(entry.data)) ? ' ' + (ocrD || ddmm(entry.data)) : '')) + '.jpg';
+  // sem nº, mas com data da NF detectada: "NF DD.MM"
+  if (ocrD) return sanitizeFileName('NF ' + ocrD) + '.jpg';
+  // sem nº e sem data da NF: mantém o nome padrão
+  return 'comprovante-' + (entry.data || todayISO()) + '-' + entry.id + '.jpg';
+}
+
+function setAiStatus(msg, cls) { const s = $('ai-status'); if (s) { s.textContent = msg || ''; s.className = 'sync-status' + (cls ? ' ' + cls : ''); } }
+function setupAiUI() {
+  if (!$('ai-key')) return;
+  const a = loadAi();
+  $('ai-key').value = a.key || '';
+  if ($('ai-enabled')) $('ai-enabled').checked = a.enabled !== false;
+  const persist = () => saveAi({ key: ($('ai-key').value || '').trim(), enabled: $('ai-enabled') ? $('ai-enabled').checked : true });
+  $('ai-key').addEventListener('change', () => { persist(); setAiStatus(aiConfigured() ? 'Pronto para ler comprovantes ✓' : 'Cole a chave para ativar.', aiConfigured() ? 'ok' : ''); });
+  if ($('ai-enabled')) $('ai-enabled').addEventListener('change', () => { persist(); setAiStatus(aiConfigured() ? 'Leitura ativada ✓' : 'Leitura desativada.', aiConfigured() ? 'ok' : 'warn'); });
+  if ($('ai-clear')) $('ai-clear').addEventListener('click', () => { saveAi({ key: '', enabled: true }); $('ai-key').value = ''; if ($('ai-enabled')) $('ai-enabled').checked = true; setAiStatus('Chave removida deste aparelho.', 'warn'); });
+  setAiStatus(aiConfigured() ? 'Pronto para ler comprovantes ✓' : 'Não configurado.', aiConfigured() ? 'ok' : '');
 }
 
 /* ============================================================
@@ -1903,6 +2121,8 @@ function init() {
   setupSecurityUI();
   setupBackupUI();
   setupGDriveUI();
+  setupCatUI();
+  setupAiUI();
   updateFooter();
   updateSyncIndicator();
   $('sync-ind').addEventListener('click', () => syncNow(false));

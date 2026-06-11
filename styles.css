@@ -406,6 +406,12 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 .sync-status.err { color: var(--red); }
 .sync-status.warn { color: #a35a10; }
 
+/* ---------- Editor de categorias ---------- */
+.cat-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.cat-row .cat-nome { flex: 1 1 auto; min-width: 0; }
+.cat-row .cat-lim { width: 96px; flex: 0 0 auto; }
+.cat-row .cat-del { flex: 0 0 auto; }
+
 /* ---------- Aviso de offline ---------- */
 .offline-notice {
   position: fixed; inset: 0; z-index: 80;

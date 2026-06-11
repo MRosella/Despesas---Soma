@@ -258,6 +258,44 @@
         </div>
       </section>
 
+      <!-- Leitura de comprovante (IA / Gemini) -->
+      <section class="card">
+        <div class="card-head"><h2>Leitura de comprovante (IA)</h2></div>
+        <div class="card-body">
+          <p class="hint" style="margin-top:0">Ao anexar a foto do cupom/NF, o app lê a nota e preenche
+            automaticamente <b>valor, data, categoria e descrição</b>, além de nomear o arquivo no Drive como
+            <b>NF nº data</b>. Usa a API <b>Google Gemini</b> com uma chave sua (do Google AI Studio), guardada
+            só neste aparelho. Há camada gratuita; acima dela o custo é de centavos por foto.</p>
+          <label class="ai-toggle" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <input type="checkbox" id="ai-enabled" /> <span>Ler o comprovante automaticamente ao anexar</span>
+          </label>
+          <div class="field">
+            <label for="ai-key">Chave da API Gemini</label>
+            <input type="password" id="ai-key" placeholder="AIza..." autocapitalize="off" autocomplete="off" spellcheck="false" />
+            <p class="hint">Gere em <b>aistudio.google.com</b> → “Get API key”. Funciona só no site publicado (HTTPS).</p>
+          </div>
+          <p class="sync-status" id="ai-status">Não configurado.</p>
+          <button class="btn btn-danger-text" id="ai-clear" type="button" style="padding:8px 0">Remover chave deste aparelho</button>
+        </div>
+      </section>
+
+      <!-- Categorias e limites -->
+      <section class="card">
+        <div class="card-head"><h2>Categorias e limites</h2></div>
+        <div class="card-body">
+          <p class="hint" style="margin-top:0">Edite as categorias de despesa e o teto de reembolso de cada uma
+            (deixe vazio/0 para sem limite). Vale para o seletor de lançamentos, os avisos de limite, o rodapé do
+            PDF e a leitura automática do comprovante. Renomear uma categoria não altera lançamentos já salvos.</p>
+          <div id="cat-list"></div>
+          <div class="sync-actions">
+            <button class="btn btn-ghost" id="cat-add" type="button">Adicionar categoria</button>
+            <button class="btn btn-excel" id="cat-save" type="button">Salvar categorias</button>
+          </div>
+          <p class="sync-status" id="cat-status"></p>
+          <button class="btn btn-danger-text" id="cat-reset" type="button" style="padding:8px 0">Restaurar padrão</button>
+        </div>
+      </section>
+
       <!-- Backup / Restauração -->
       <section class="card">
         <div class="card-head"><h2>Backup / Restaurar</h2></div>
@@ -306,13 +344,6 @@
         <label for="m-categoria">Categoria</label>
         <select id="m-categoria">
           <option value="">Selecione…</option>
-          <option>Café da Manha</option>
-          <option>Almoço</option>
-          <option>Café da Tarde</option>
-          <option>Jantar</option>
-          <option>Combustível</option>
-          <option>Pedágio</option>
-          <option>Outras Despesas</option>
         </select>
         <p class="hint" id="m-cat-hint"></p>
       </div>
