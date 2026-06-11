@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v26';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v27';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -2240,6 +2240,49 @@ async function gdListReceipts(tabela) {
   return out;
 }
 
+/* ---- modal de progresso da varredura (mostra ao usuário o que está acontecendo) ---- */
+const scanProgress = {
+  el: null, statusEl: null, logEl: null, footEl: null,
+  open() {
+    if (this.el) return;
+    const div = document.createElement('div');
+    div.id = 'scan-progress';
+    div.className = 'offline-notice';
+    div.innerHTML = `
+      <div class="offline-card scan-card">
+        <div class="offline-icon">☁️</div>
+        <h3>Procurando comprovantes no Drive</h3>
+        <div class="scan-status"><span class="scan-spinner"></span><span id="scan-status-txt">Iniciando…</span></div>
+        <ul class="scan-log" id="scan-log"></ul>
+        <div class="notice-actions" id="scan-foot"></div>
+      </div>`;
+    document.body.appendChild(div);
+    this.el = div;
+    this.statusEl = $('scan-status-txt');
+    this.logEl = $('scan-log');
+    this.footEl = $('scan-foot');
+  },
+  status(msg) { if (this.statusEl) this.statusEl.textContent = msg; },
+  log(msg, kind) {
+    if (!this.logEl) return;
+    const li = document.createElement('li');
+    if (kind) li.className = kind;
+    li.innerHTML = msg;
+    this.logEl.appendChild(li);
+    this.logEl.scrollTop = this.logEl.scrollHeight;
+  },
+  done(summary) {
+    const sp = this.el && this.el.querySelector('.scan-spinner');
+    if (sp) sp.remove();
+    if (summary) this.status(summary);
+    if (this.footEl) {
+      this.footEl.innerHTML = '<button class="btn btn-excel" id="scan-close">Fechar</button>';
+      $('scan-close').addEventListener('click', () => this.close());
+    }
+  },
+  close() { if (this.el) { this.el.remove(); this.el = null; } }
+};
+
 let scanningDrive = false;
 async function scanDriveForReceipts() {
   if (scanningDrive) return;
@@ -2248,21 +2291,33 @@ async function scanDriveForReceipts() {
   if (!navigator.onLine) { toast('Sem conexão com a internet.'); return; }
   scanningDrive = true;
   const btn = $('gd-scan-main'); if (btn) { btn.disabled = true; }
+  scanProgress.open();
   try {
-    if (!gdConnected()) { try { await gdGetToken(true); } catch (e) { toast('Conecte o Google Drive (autorize o acesso de leitura).'); return; } }
-    toast('Procurando comprovantes no Drive…');
+    if (!gdConnected()) {
+      scanProgress.status('Conectando ao Google Drive…');
+      try { await gdGetToken(true); }
+      catch (e) { scanProgress.log('Não foi possível conectar ao Drive (autorize o acesso de leitura).', 'err'); scanProgress.done('Conexão necessária.'); return; }
+    }
     const known = knownDriveIds();
-    let novos = 0, pend = 0, erros = 0;
+    let novos = 0, pend = 0, erros = 0, jaLanc = 0, total = 0, lidos = 0;
+    const LBL = { reembolso: 'Reembolso', alelo: 'Cartão Santander' };
     for (const tabela of ['reembolso', 'alelo']) {
+      scanProgress.status('Listando pasta de ' + LBL[tabela] + '…');
       let files = [];
-      try { files = await gdListReceipts(tabela); } catch (e) { console.error(e); erros++; continue; }
+      try { files = await gdListReceipts(tabela); }
+      catch (e) { console.error(e); erros++; scanProgress.log('Erro ao listar a pasta de <b>' + LBL[tabela] + '</b>: ' + escapeHtml(e.message || String(e)), 'err'); continue; }
+      const novosArq = files.filter((f) => !known.has(f.id));
+      scanProgress.log('Pasta <b>' + LBL[tabela] + '</b>: ' + files.length + ' arquivo(s), ' + novosArq.length + ' novo(s).', 'info');
       for (const f of files) {
-        if (known.has(f.id)) continue;
+        total++;
+        if (known.has(f.id)) { jaLanc++; continue; }
         known.add(f.id);
         state.driveKnown[f.id] = 1;
-        let ocr = null;
+        lidos++;
+        scanProgress.status('Analisando ' + lidos + '/' + novosArq.length + ' — ' + LBL[tabela] + '…');
+        let ocr = null, falhou = false;
         try { const blob = await gdDownloadBlob(f.id); ocr = await ocrReceipt(blob, f.mimeType); }
-        catch (e) { console.error('OCR/scan falhou', e); }
+        catch (e) { console.error('OCR/scan falhou', e); falhou = true; }
         if (ocr && ocr.dateISO && ocr.total != null) {
           const entry = {
             id: uid(), data: ocr.dateISO, descricao: buildDescricao(ocr.category, ocr.city, ocr.uf),
@@ -2273,21 +2328,36 @@ async function scanDriveForReceipts() {
           state[tabela].push(entry);
           state[tabela].sort((a, b) => (a.data || '').localeCompare(b.data || ''));
           novos++;
+          scanProgress.log('✓ <b>' + escapeHtml(f.name) + '</b> → lançado (' + formatMoney(ocr.total) + ' · ' + fmtDateBR(ocr.dateISO) + ').', 'ok');
         } else {
           state.pending.push({
             fileId: f.id, name: f.name, tabela, mimeType: f.mimeType, createdTime: f.createdTime || '',
             ocr: ocr ? { dateISO: ocr.dateISO, category: ocr.category, total: ocr.total, descricao: buildDescricao(ocr.category, ocr.city, ocr.uf), establishment: ocr.establishment || '' } : null
           });
           pend++;
+          const motivo = falhou ? 'falha na leitura'
+            : (!ocr ? 'não reconhecido'
+            : (ocr.dateISO == null && ocr.total == null ? 'sem data e valor'
+            : (ocr.dateISO == null ? 'sem data' : 'sem valor')));
+          scanProgress.log('⚠ <b>' + escapeHtml(f.name) + '</b> → pendente (' + motivo + ').', 'pend');
         }
       }
     }
     touchDoc(); saveState(); render();
     const partes = [];
-    partes.push(novos + ' lançado(s) automaticamente');
-    partes.push(pend + ' pendente(s) para revisar');
+    partes.push('<b>' + novos + '</b> lançado(s) automaticamente');
+    partes.push('<b>' + pend + '</b> pendente(s) para revisar');
+    if (jaLanc) partes.push(jaLanc + ' já conhecido(s)');
     if (erros) partes.push(erros + ' pasta(s) com erro');
-    toast(partes.join(' · ') + '.');
+    scanProgress.log('Concluído: ' + partes.join(' · ') + '.', novos || pend ? 'info' : 'info');
+    if (total === 0) scanProgress.log('Nenhum arquivo encontrado nas pastas do Drive.', 'info');
+    else if (lidos === 0) scanProgress.log('Todos os arquivos já estavam lançados ou descartados.', 'info');
+    if (pend) scanProgress.log('Os pendentes aparecem no card "Lançamentos pendentes (Drive)" — lá você pode preencher à mão ou pedir nova análise.', 'info');
+    scanProgress.done(novos + ' lançado(s) · ' + pend + ' pendente(s)');
+  } catch (e) {
+    console.error(e);
+    scanProgress.log('Erro inesperado: ' + escapeHtml(e.message || String(e)), 'err');
+    scanProgress.done('Falhou.');
   } finally {
     scanningDrive = false;
     if (btn) btn.disabled = false;
@@ -2334,13 +2404,50 @@ function renderPending() {
       : 'sem leitura automática';
     li.innerHTML = `<div class="pending-info"><b>${escapeHtml(p.name)}</b><span>${tabelaLbl} · ${hint}</span></div>
       <div class="pending-actions">
+        <button type="button" class="hist-btn" data-act="retry">Analisar de novo</button>
         <button type="button" class="hist-btn" data-act="fill">Preencher</button>
         <button type="button" class="hist-btn danger" data-act="dismiss">Descartar</button>
       </div>`;
+    li.querySelector('[data-act=retry]').addEventListener('click', (ev) => retryPendingOcr(p.fileId, ev.currentTarget));
     li.querySelector('[data-act=fill]').addEventListener('click', () => openPendingEntry(p));
     li.querySelector('[data-act=dismiss]').addEventListener('click', () => dismissPending(p.fileId));
     ul.appendChild(li);
   });
+}
+
+/* reanalisa um pendente com a IA; se reconhecer data+valor, vira lançamento automático */
+async function retryPendingOcr(fileId, btn) {
+  const p = (state.pending || []).find((x) => x.fileId === fileId);
+  if (!p) return;
+  if (!aiConfigured()) { toast('Configure a leitura por IA (Gemini) primeiro.'); return; }
+  if (!navigator.onLine) { toast('Sem conexão com a internet.'); return; }
+  if (!gdConnected()) { try { await gdGetToken(true); } catch (e) { toast('Conecte o Google Drive primeiro.'); return; } }
+  if (btn) { btn.disabled = true; btn.textContent = 'Analisando…'; }
+  try {
+    let ocr = null;
+    try { const blob = await gdDownloadBlob(fileId); ocr = await ocrReceipt(blob, p.mimeType); }
+    catch (e) { console.error('Reanálise falhou', e); toast('Falha ao ler o comprovante. Tente novamente.'); return; }
+    if (ocr && ocr.dateISO && ocr.total != null) {
+      const entry = {
+        id: uid(), data: ocr.dateISO, descricao: buildDescricao(ocr.category, ocr.city, ocr.uf),
+        categoria: ocr.category, valor: ocr.total, updatedAt: Date.now(),
+        foto: { id: p.fileId, name: p.name }
+      };
+      if (p.tabela === 'alelo') { entry.estabelecimento = ocr.establishment || ''; entry.justificativa = ''; }
+      state[p.tabela].push(entry);
+      state[p.tabela].sort((a, b) => (a.data || '').localeCompare(b.data || ''));
+      state.pending = (state.pending || []).filter((x) => x.fileId !== fileId);
+      touchDoc(); saveState(); render();
+      toast('Reconhecido! Lançado: ' + formatMoney(ocr.total) + ' · ' + fmtDateBR(ocr.dateISO) + '.');
+    } else {
+      p.ocr = ocr ? { dateISO: ocr.dateISO, category: ocr.category, total: ocr.total, descricao: buildDescricao(ocr.category, ocr.city, ocr.uf), establishment: ocr.establishment || '' } : null;
+      touchDoc(); saveState(); renderPending();
+      const motivo = !ocr ? 'não reconhecido' : (ocr.dateISO == null && ocr.total == null ? 'sem data e valor' : (ocr.dateISO == null ? 'sem data' : 'sem valor'));
+      toast('Ainda não consegui ler tudo (' + motivo + '). Preencha à mão.');
+    }
+  } finally {
+    if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = 'Analisar de novo'; }
+  }
 }
 
 /* ---- exclusão de comprovantes no Drive (com fila p/ retry offline) ---- */

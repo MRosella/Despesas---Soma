@@ -433,6 +433,36 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 .offline-notice .btn { width: 100%; }
 .notice-actions { display: flex; flex-direction: column; gap: 8px; }
 
+/* ---------- Modal de progresso da varredura do Drive ---------- */
+.scan-card { text-align: left !important; max-width: 420px !important; }
+.scan-card h3 { text-align: center; }
+.scan-status {
+  display: flex; align-items: center; gap: 10px; justify-content: center;
+  font-size: .9rem; color: var(--brown); margin-bottom: 12px; min-height: 22px;
+}
+.scan-spinner {
+  width: 18px; height: 18px; flex: none; border-radius: 50%;
+  border: 2.5px solid var(--line); border-top-color: var(--red);
+  animation: scanspin .7s linear infinite;
+}
+@keyframes scanspin { to { transform: rotate(360deg); } }
+.scan-log {
+  list-style: none; margin: 0 0 14px; padding: 0;
+  max-height: 46vh; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg); font-size: .8rem;
+}
+.scan-log li {
+  padding: 7px 10px; border-top: 1px solid var(--line);
+  color: var(--brown); line-height: 1.35; word-break: break-word;
+}
+.scan-log li:first-child { border-top: none; }
+.scan-log li.ok { color: #1f8a4c; }
+.scan-log li.pend { color: #b6791f; }
+.scan-log li.err { color: var(--red); }
+.scan-log li.info { color: var(--muted); }
+.scan-log li b { font-weight: 600; }
+
 /* ---------- Print (PDF) area — hidden on screen ---------- */
 #print-root { display: none; }
 

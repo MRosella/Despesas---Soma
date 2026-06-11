@@ -135,6 +135,13 @@ descartados (`driveDismissed`); `driveKnown`/`driveDismissed` = união (evita re
   `#view-lancamentos` (`renderPending`/`openPendingEntry`/`dismissPending`). `openPendingEntry`
   abre o modal pré-preenchido e vincula o arquivo existente (`applyModalPhoto` no modo `keep` seta
   `entry.foto` se for lançamento novo). Custo Gemini → só no botão manual.
+  **Modal de progresso (v27):** `scanProgress` (objeto: `open/status/log/done/close`, overlay
+  `#scan-progress` reusando `.offline-notice`/`.scan-*` no CSS) mostra ao vivo cada arquivo —
+  ✓ lançado / ⚠ pendente (com **motivo**: sem data, sem valor, falha na leitura, não reconhecido)
+  / já conhecido / erro de pasta — e o resumo final. Resolve "cliquei e não aconteceu nada".
+  **Botão "Analisar de novo" (v27)** em cada pendente (`retryPendingOcr(fileId,btn)`): rebaixa o
+  arquivo do Drive e reroda `ocrReceipt`; se vier data+total, vira lançamento e some da lista;
+  senão atualiza `p.ocr` e avisa o motivo.
 - **Conexão do Drive ao abrir:** token OAuth vive só em memória (~1h) → ao abrir/voltar ao
   foco, `maybePromptDrive` tenta reconexão silenciosa (sem UI) e **só** mostra o popup
   `gd-connect-notice` se `countPendingDrive() > 0` (fotos a enviar ou exclusões a propagar) —
