@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v22';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v23';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -59,7 +59,8 @@ function emptyState() {
     alelo: [],
     history: [],                          // meses arquivados (snapshots)
     histTomb: {},                         // lápides do histórico: id -> ts
-    driveFolderId: '',                    // pasta dos comprovantes no Drive (compartilhada entre dispositivos)
+    driveFolderId: '',                    // (legado) pasta única dos comprovantes; migra p/ a raiz de reembolso
+    driveFolders: { reembolso: '', alelo: '' },  // pastas raiz separadas no Drive (sincronizadas)
     config: { categorias: DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c)) },  // categorias + limites
     tomb: { reembolso: {}, alelo: {} },   // lápides: id -> updatedAt (deleções)
     meta: { updatedAt: 0, profileUpdatedAt: 0 }
@@ -85,6 +86,8 @@ function loadState() {
     st.history = Array.isArray(st.history) ? st.history : [];
     st.histTomb = st.histTomb || {};
     st.driveFolderId = st.driveFolderId || '';
+    st.driveFolders = Object.assign({ reembolso: '', alelo: '' }, st.driveFolders || {});
+    if (!st.driveFolders.reembolso && st.driveFolderId) st.driveFolders.reembolso = st.driveFolderId;   // migração: raiz legada vira a de reembolso
     st.config = normalizeCatConfig(st.config);
     // migração: garante updatedAt nas entradas e relógio do doc se for estado antigo
     for (const t of ['reembolso', 'alelo']) {
@@ -406,8 +409,14 @@ function quickDuplicate(tabela, id) {
   toast('Lançamento duplicado.');
 }
 
-function quickDelete(tabela, id) {
-  if (!confirm('Excluir este lançamento?')) return;
+async function quickDelete(tabela, id) {
+  const entry = state[tabela].find((x) => x.id === id);
+  const temFoto = !!(entry && entry.foto);
+  const msg = temFoto
+    ? 'Excluir este lançamento? O comprovante anexado também será removido do Google Drive.'
+    : 'Excluir este lançamento?';
+  if (!confirm(msg)) return;
+  if (entry) { try { await purgeEntryPhoto(entry); } catch (e) { console.error(e); } }   // apaga foto no Drive/fila/miniatura
   state[tabela] = state[tabela].filter((x) => x.id !== id);
   state.tomb[tabela][id] = Date.now();
   touchDoc(); saveState(); render();
@@ -457,8 +466,13 @@ function renderModalPhoto() {
   prev.style.display = has ? '' : 'none';
   const thumb = $('m-foto-thumb');
   if (modalPhoto.mode === 'new') {
-    thumb.src = modalPhoto.dataUrl; thumb.style.display = '';
-    $('m-foto-label').textContent = 'Comprovante pronto para enviar';
+    if (modalPhoto.kind === 'pdf') {
+      thumb.style.display = 'none';
+      $('m-foto-label').textContent = 'PDF pronto para enviar';
+    } else {
+      thumb.src = modalPhoto.dataUrl; thumb.style.display = '';
+      $('m-foto-label').textContent = 'Comprovante pronto para enviar';
+    }
     $('m-foto-view').style.display = 'none';
   } else if (modalPhoto.existing) {
     thumb.style.display = 'none';
@@ -469,28 +483,36 @@ function renderModalPhoto() {
 async function onPhotoSelected(file) {
   if (!file) return;
   try {
+    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+    if (isPdf) {
+      modalPhoto = { mode: 'new', kind: 'pdf', existing: modalPhoto.existing, blob: file, dataUrl: null, w: 0, h: 0 };
+      renderModalPhoto();
+      if (aiConfigured()) await runReceiptOcr();
+      return;
+    }
     toast('Processando imagem…');
     const { blob, w, h } = await compressImage(file);
-    modalPhoto = { mode: 'new', existing: modalPhoto.existing, blob, dataUrl: await blobToDataUrl(blob), w, h };
+    modalPhoto = { mode: 'new', kind: 'img', existing: modalPhoto.existing, blob, dataUrl: await blobToDataUrl(blob), w, h };
     renderModalPhoto();
     if (aiConfigured()) await runReceiptOcr();
-  } catch (e) { console.error(e); toast('Erro na imagem: ' + e.message); }
+  } catch (e) { console.error(e); toast('Erro no arquivo: ' + e.message); }
 }
 async function applyModalPhoto(entry) {
   if (modalPhoto.mode === 'keep') return;
   if (modalPhoto.mode === 'remove') { entry.foto = null; idbDel('thumb_' + entry.id).catch(() => {}); return; }   // só desvincula (não apaga do Drive)
   saveThumb(entry.id, modalPhoto.blob);   // miniatura local p/ a lista (não sincroniza)
   const name = receiptFileName(entry);
+  const tabela = $('m-tabela').value;     // raiz do Drive depende da tabela (reembolso / cartão)
   if (gdConfigured() && gdConnected()) {
     try {
       toast('Enviando comprovante ao Drive…');
-      const fid = await gdUpload(modalPhoto.blob, name, reportFolderDateISO() || entry.data);
+      const fid = await gdUpload(modalPhoto.blob, name, reportFolderDateISO() || entry.data, tabela);
       entry.foto = { id: fid, name, w: modalPhoto.w, h: modalPhoto.h };
       return;
     } catch (e) { console.error(e); }
   }
   const localId = uid();
-  await idbPut('p_' + localId, { blob: modalPhoto.blob, name, data: entry.data });
+  await idbPut('p_' + localId, { blob: modalPhoto.blob, name, data: entry.data, tabela });
   entry.foto = { pending: localId, name, w: modalPhoto.w, h: modalPhoto.h };
   if (gdConfigured()) toast('Comprovante salvo localmente; será enviado ao Drive ao conectar.');
   else toast('Comprovante salvo localmente. Configure o Google Drive para enviá-lo.');
@@ -1166,6 +1188,7 @@ function currentDoc() {
     history: state.history.map((h) => JSON.parse(JSON.stringify(h))),
     histTomb: Object.assign({}, state.histTomb),
     driveFolderId: state.driveFolderId || '',
+    driveFolders: Object.assign({ reembolso: '', alelo: '' }, state.driveFolders || {}),
     config: { categorias: getCatConfig().map((c) => Object.assign({}, c)) },
     tomb: {
       reembolso: Object.assign({}, state.tomb.reembolso),
@@ -1188,6 +1211,8 @@ function applyDoc(doc) {
   state.history = Array.isArray(doc.history) ? doc.history : [];
   state.histTomb = doc.histTomb || {};
   state.driveFolderId = doc.driveFolderId || '';
+  state.driveFolders = Object.assign({ reembolso: '', alelo: '' }, doc.driveFolders || {});
+  if (!state.driveFolders.reembolso && state.driveFolderId) state.driveFolders.reembolso = state.driveFolderId;
   state.config = normalizeCatConfig(doc.config);
   state.tomb = {
     reembolso: (doc.tomb && doc.tomb.reembolso) || {},
@@ -1261,6 +1286,11 @@ function mergeDocs(a, b) {
   out.history = mh.list;
   out.histTomb = mh.tomb;
   out.driveFolderId = a.driveFolderId || b.driveFolderId || '';   // id da pasta do Drive (estável)
+  const fa = a.driveFolders || {}, fb = b.driveFolders || {};      // raízes separadas: prefere id não-vazio
+  out.driveFolders = {
+    reembolso: fa.reembolso || fb.reembolso || a.driveFolderId || b.driveFolderId || '',
+    alelo: fa.alelo || fb.alelo || ''
+  };
   out.meta = {
     updatedAt: Math.max((a.meta && a.meta.updatedAt) || 0, (b.meta && b.meta.updatedAt) || 0),
     profileUpdatedAt: Math.max(pa, pb)
@@ -1615,10 +1645,11 @@ function buildDescricao(category, city, uf) {
   return local ? `${head} durante viagem a ${local}` : `${head} durante viagem`;
 }
 
-async function ocrReceipt(blob) {
+async function ocrReceipt(blob, mime) {
   const a = loadAi();
   if (!a.key) throw new Error('Chave do Gemini não configurada.');
   const b64 = String(await blobToDataUrl(blob)).split(',')[1];
+  const mimeType = mime || blob.type || 'image/jpeg';   // Gemini lê imagem ou PDF
   const cats = getCategorias();
   const prompt = [
     'Você é um leitor de cupons fiscais e notas fiscais brasileiras (NF/NFC-e/cupom).',
@@ -1632,7 +1663,7 @@ async function ocrReceipt(blob) {
     '  pedágio => Pedágio; o restante => Outras Despesas.'
   ].join('\n');
   const body = {
-    contents: [{ parts: [{ inline_data: { mime_type: 'image/jpeg', data: b64 } }, { text: prompt }] }],
+    contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: b64 } }, { text: prompt }] }],
     generationConfig: {
       temperature: 0,
       response_mime_type: 'application/json',
@@ -1681,7 +1712,7 @@ function fillFromOcr(ocr) {
 async function runReceiptOcr() {
   try {
     toast('Lendo comprovante…');
-    const ocr = await ocrReceipt(modalPhoto.blob);
+    const ocr = await ocrReceipt(modalPhoto.blob, modalPhoto.blob && modalPhoto.blob.type);
     modalPhoto.ocr = { nfNumber: ocr.nfNumber, dateISO: ocr.dateISO, city: ocr.city, uf: ocr.uf };
     fillFromOcr(ocr);
     toast('Comprovante lido — confira os campos.');
@@ -1691,16 +1722,19 @@ async function runReceiptOcr() {
 /* nome do arquivo no Drive: "NF {nº} {DD.MM}" com os dados que houver */
 function sanitizeFileName(s) { return String(s || '').replace(/[\/\\:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim(); }
 function ddmm(iso) { const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? (m[2] + '.' + m[1]) : ''; }
+function ddmmaaaa(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? (m[3] + '.' + m[2] + '.' + m[1]) : ''; }
+function receiptExt() { return (modalPhoto && modalPhoto.kind === 'pdf') ? '.pdf' : '.jpg'; }
 function receiptFileName(entry) {
+  const ext = receiptExt();
   const o = modalPhoto.ocr || {};
   const num = o.nfNumber || '';
   const ocrD = ddmm(o.dateISO);
   // com nº da NF: usa a data da NF ou, na falta, a data do lançamento
-  if (num) return sanitizeFileName('NF ' + num + ((ocrD || ddmm(entry.data)) ? ' ' + (ocrD || ddmm(entry.data)) : '')) + '.jpg';
+  if (num) return sanitizeFileName('NF ' + num + ((ocrD || ddmm(entry.data)) ? ' ' + (ocrD || ddmm(entry.data)) : '')) + ext;
   // sem nº, mas com data da NF detectada: "NF DD.MM"
-  if (ocrD) return sanitizeFileName('NF ' + ocrD) + '.jpg';
-  // sem nº e sem data da NF: mantém o nome padrão
-  return 'comprovante-' + (entry.data || todayISO()) + '-' + entry.id + '.jpg';
+  if (ocrD) return sanitizeFileName('NF ' + ocrD) + ext;
+  // sem leitura da IA: usa a data digitada manualmente — "NF DD.MM.AAAA"
+  return sanitizeFileName('NF ' + ddmmaaaa(entry.data || todayISO())) + ext;
 }
 
 function setAiStatus(msg, cls) { const s = $('ai-status'); if (s) { s.textContent = msg || ''; s.className = 'sync-status' + (cls ? ' ' + cls : ''); } }
@@ -1722,7 +1756,9 @@ function setupAiUI() {
 const GDRIVE_KEY = 'despesas-soma-gdrive-v1';
 const GDDEL_KEY = 'despesas-soma-gddel-v1';   // fila de fileIds a excluir no Drive (retry ao reconectar)
 const GD_SCOPE = 'https://www.googleapis.com/auth/drive.file';
-const GD_FOLDER_NAME = 'Comprovantes - Despesas Soma';
+const GD_FOLDER_NAME = 'Comprovantes - Despesas Soma';                 // raiz do reembolso (= nome legado, mantém os antigos)
+const GD_FOLDER_SANTANDER = 'Comprovantes Cartao Santander - Despesas Soma';
+const GD_ROOT_NAMES = { reembolso: GD_FOLDER_NAME, alelo: GD_FOLDER_SANTANDER };
 let gdAccess = { token: '', exp: 0 };
 let gdTokenClient = null;
 let gdGisLoading = null;
@@ -1781,32 +1817,40 @@ async function gdEmail() {
   return (await r.json()).user.emailAddress;
 }
 
-function cacheLocalFolder(id) { const cfg = loadGd(); if (cfg.folderId !== id) { cfg.folderId = id; saveGd(cfg); } }
-function setDriveFolderId(id) {
-  cacheLocalFolder(id);
-  if (state.driveFolderId !== id) { state.driveFolderId = id; touchDoc(); saveState(); }   // propaga via dados.json
+function setDriveFolder(tabela, id) {
+  if (!state.driveFolders) state.driveFolders = { reembolso: '', alelo: '' };
+  if (state.driveFolders[tabela] === id) return;
+  state.driveFolders[tabela] = id;
+  if (tabela === 'reembolso') state.driveFolderId = id;   // mantém o campo legado coerente
+  touchDoc(); saveState();                                 // propaga via dados.json
 }
 
-async function gdEnsureFolder() {
-  // 1) id compartilhado entre dispositivos (sincronizado) tem prioridade
-  if (state.driveFolderId) { cacheLocalFolder(state.driveFolderId); return state.driveFolderId; }
-  // 2) cache local (ex.: configurado antes da sincronização)
-  const cfg = loadGd();
-  if (cfg.folderId) { setDriveFolderId(cfg.folderId); return cfg.folderId; }
-  // 3) procura por nome; se não achar, cria — e guarda o id (local + sincronizado)
+/* Raiz separada por tabela: 'reembolso' e 'alelo' (cartão Santander). */
+async function gdEnsureFolder(tabela) {
+  tabela = tabela || 'reembolso';
+  // 1) id sincronizado entre dispositivos tem prioridade
+  const known = state.driveFolders && state.driveFolders[tabela];
+  if (known) return known;
+  // 2) reembolso: aproveita o id legado / cache local (antes da separação de pastas)
+  if (tabela === 'reembolso') {
+    const legacy = state.driveFolderId || (loadGd().folderId || '');
+    if (legacy) { setDriveFolder('reembolso', legacy); return legacy; }
+  }
+  // 3) procura por nome; se não achar, cria — e guarda o id (sincronizado)
+  const name = GD_ROOT_NAMES[tabela] || GD_FOLDER_NAME;
   const t = await gdGetToken(false);
-  const q = `mimeType='application/vnd.google-apps.folder' and name='${GD_FOLDER_NAME}' and trashed=false`;
+  const q = `mimeType='application/vnd.google-apps.folder' and name='${name}' and trashed=false`;
   let r = await fetch('https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(q) + '&fields=files(id,name)', { headers: { Authorization: 'Bearer ' + t } });
   let j = await r.json();
   let id = j.files && j.files[0] && j.files[0].id;
   if (!id) {
     r = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
       method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: GD_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+      body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder' })
     });
     j = await r.json(); id = j.id;
   }
-  setDriveFolderId(id);
+  setDriveFolder(tabela, id);
   return id;
 }
 
@@ -1832,9 +1876,9 @@ async function gdFindOrCreateChild(parentId, name, token) {
   return id;
 }
 
-async function gdEnsureMonthFolder(dateISO) {
+async function gdEnsureMonthFolder(dateISO, tabela) {
   const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(dateISO || '');
-  const root = await gdEnsureFolder();
+  const root = await gdEnsureFolder(tabela);
   if (!m) return root;   // sem data válida → cai na raiz (comportamento antigo)
   const ano = m[1], mesNome = MESES[parseInt(m[2], 10) - 1];
   if (!mesNome) return root;
@@ -1843,9 +1887,9 @@ async function gdEnsureMonthFolder(dateISO) {
   return await gdFindOrCreateChild(anoId, mesNome, t);
 }
 
-async function gdUpload(blob, name, dateISO) {
+async function gdUpload(blob, name, dateISO, tabela) {
   const t = await gdGetToken(false);
-  const folderId = dateISO ? await gdEnsureMonthFolder(dateISO) : await gdEnsureFolder();
+  const folderId = dateISO ? await gdEnsureMonthFolder(dateISO, tabela) : await gdEnsureFolder(tabela);
   const form = new FormData();
   form.append('metadata', new Blob([JSON.stringify({ name, parents: [folderId] })], { type: 'application/json' }));
   form.append('file', blob);
@@ -1998,7 +2042,7 @@ async function flushPendingPhotos(report) {
         try {
           const rec = await idbGet('p_' + e.foto.pending);
           if (!rec) { e.foto = null; continue; }
-          const id = await gdUpload(rec.blob, rec.name, reportFolderDateISO() || e.data || rec.data);
+          const id = await gdUpload(rec.blob, rec.name, reportFolderDateISO() || e.data || rec.data, tabela);
           await idbDel('p_' + e.foto.pending);
           e.foto = { id, name: rec.name, w: e.foto.w, h: e.foto.h };
           e.updatedAt = Date.now();
@@ -2252,8 +2296,10 @@ function init() {
   $('m-duplicate').addEventListener('click', duplicateInModal);
   $('m-categoria').addEventListener('change', updateCatHint);
   $('m-foto-attach').addEventListener('click', () => $('m-foto-file').click());
-  $('m-foto-change').addEventListener('click', () => $('m-foto-file').click());
+  $('m-foto-change').addEventListener('click', () => $('m-foto-import').click());
+  if ($('m-foto-importbtn')) $('m-foto-importbtn').addEventListener('click', () => $('m-foto-import').click());
   $('m-foto-file').addEventListener('change', (ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; onPhotoSelected(f); });
+  if ($('m-foto-import')) $('m-foto-import').addEventListener('change', (ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; onPhotoSelected(f); });
   $('m-foto-view').addEventListener('click', () => viewPhoto(modalPhoto.existing));
   $('m-foto-remove').addEventListener('click', () => { modalPhoto = { mode: 'remove', existing: modalPhoto.existing, blob: null, dataUrl: null, w: 0, h: 0 }; renderModalPhoto(); });
   $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeModal(); });

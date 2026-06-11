@@ -342,7 +342,11 @@
       <div class="field">
         <label>Comprovante (Google Drive)</label>
         <input type="file" id="m-foto-file" accept="image/*" capture="environment" style="display:none" />
-        <button type="button" class="btn btn-ghost foto-attach" id="m-foto-attach"><span class="bic" data-icon="camera" data-size="18"></span> Anexar comprovante</button>
+        <input type="file" id="m-foto-import" accept="image/*,application/pdf" style="display:none" />
+        <div class="foto-attach-row" style="display:flex; gap:8px; flex-wrap:wrap">
+          <button type="button" class="btn btn-ghost foto-attach" id="m-foto-attach" style="flex:1"><span class="bic" data-icon="camera" data-size="18"></span> Tirar foto</button>
+          <button type="button" class="btn btn-ghost foto-attach" id="m-foto-importbtn" style="flex:1"><span class="bic" data-icon="paperclip" data-size="18"></span> Importar arquivo</button>
+        </div>
         <div class="foto-preview" id="m-foto-preview" style="display:none">
           <img id="m-foto-thumb" alt="Comprovante" style="display:none" />
           <div class="foto-info">
