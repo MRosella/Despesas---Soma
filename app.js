@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v24';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v25';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -63,6 +63,9 @@ function emptyState() {
     driveFolders: { reembolso: '', alelo: '' },  // pastas raiz separadas no Drive (sincronizadas)
     config: { categorias: DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c)) },  // categorias + limites
     tomb: { reembolso: {}, alelo: {} },   // lápides: id -> updatedAt (deleções)
+    pending: [],                          // comprovantes no Drive sem lançamento (revisar manualmente)
+    driveKnown: {},                       // fileIds já vistos pela varredura (não reprocessa)
+    driveDismissed: {},                   // fileIds descartados pelo usuário (não reaparecem)
     meta: { updatedAt: 0, profileUpdatedAt: 0 }
   };
 }
@@ -88,6 +91,9 @@ function loadState() {
     st.driveFolderId = st.driveFolderId || '';
     st.driveFolders = Object.assign({ reembolso: '', alelo: '' }, st.driveFolders || {});
     if (!st.driveFolders.reembolso && st.driveFolderId) st.driveFolders.reembolso = st.driveFolderId;   // migração: raiz legada vira a de reembolso
+    st.pending = Array.isArray(st.pending) ? st.pending : [];
+    st.driveKnown = st.driveKnown || {};
+    st.driveDismissed = st.driveDismissed || {};
     st.config = normalizeCatConfig(st.config);
     // migração: garante updatedAt nas entradas e relógio do doc se for estado antigo
     for (const t of ['reembolso', 'alelo']) {
@@ -217,6 +223,7 @@ function render() {
 
   renderCatSummary();
   renderReports();
+  if (typeof renderPending === 'function') renderPending();
   if (typeof updateGdPending === 'function') updateGdPending();
 }
 
@@ -453,7 +460,7 @@ function openModal(tabela, id, prefill) {
   setTimeout(() => $('m-descricao').focus(), 150);
 }
 
-function closeModal() { $('modal').classList.remove('open'); }
+function closeModal() { $('modal').classList.remove('open'); linkedPendingId = null; }
 
 /* ---- comprovante no modal ---- */
 let modalPhoto = { mode: 'keep', existing: null, blob: null, dataUrl: null, w: 0, h: 0 };
@@ -498,7 +505,13 @@ async function onPhotoSelected(file) {
   } catch (e) { console.error(e); toast('Erro no arquivo: ' + e.message); }
 }
 async function applyModalPhoto(entry) {
-  if (modalPhoto.mode === 'keep') return;
+  if (modalPhoto.mode === 'keep') {
+    // vincula um arquivo do Drive já existente (ex.: pendente preenchido) a um lançamento novo
+    if (!entry.foto && modalPhoto.existing && modalPhoto.existing.id) {
+      entry.foto = { id: modalPhoto.existing.id, name: modalPhoto.existing.name };
+    }
+    return;
+  }
   if (modalPhoto.mode === 'remove') { entry.foto = null; idbDel('thumb_' + entry.id).catch(() => {}); return; }   // só desvincula (não apaga do Drive)
   saveThumb(entry.id, modalPhoto.blob);   // miniatura local p/ a lista (não sincroniza)
   const name = receiptFileName(entry);
@@ -597,6 +610,8 @@ async function saveEntry() {
     lastAddedId = entry.id;
   }
   if (entry) { try { await applyModalPhoto(entry); } catch (e) { console.error(e); } }
+  // pendente do Drive preenchido vira lançamento → sai da lista de pendentes
+  if (!id && linkedPendingId) { state.pending = (state.pending || []).filter((p) => p.fileId !== linkedPendingId); linkedPendingId = null; }
   touchDoc();
   state[tabela].sort((a, b) => (a.data || '').localeCompare(b.data || ''));
   saveState();
@@ -1396,6 +1411,9 @@ function currentDoc() {
     histTomb: Object.assign({}, state.histTomb),
     driveFolderId: state.driveFolderId || '',
     driveFolders: Object.assign({ reembolso: '', alelo: '' }, state.driveFolders || {}),
+    pending: (state.pending || []).map((p) => Object.assign({}, p)),
+    driveKnown: Object.assign({}, state.driveKnown || {}),
+    driveDismissed: Object.assign({}, state.driveDismissed || {}),
     config: { categorias: getCatConfig().map((c) => Object.assign({}, c)) },
     tomb: {
       reembolso: Object.assign({}, state.tomb.reembolso),
@@ -1420,6 +1438,9 @@ function applyDoc(doc) {
   state.driveFolderId = doc.driveFolderId || '';
   state.driveFolders = Object.assign({ reembolso: '', alelo: '' }, doc.driveFolders || {});
   if (!state.driveFolders.reembolso && state.driveFolderId) state.driveFolders.reembolso = state.driveFolderId;
+  state.pending = Array.isArray(doc.pending) ? doc.pending : [];
+  state.driveKnown = doc.driveKnown || {};
+  state.driveDismissed = doc.driveDismissed || {};
   state.config = normalizeCatConfig(doc.config);
   state.tomb = {
     reembolso: (doc.tomb && doc.tomb.reembolso) || {},
@@ -1498,6 +1519,21 @@ function mergeDocs(a, b) {
     reembolso: fa.reembolso || fb.reembolso || a.driveFolderId || b.driveFolderId || '',
     alelo: fa.alelo || fb.alelo || ''
   };
+  // varredura do Drive: união de vistos/descartados; pendentes = união por fileId,
+  // exceto os que já viraram lançamento (foto.id) ou foram descartados (evita "ressuscitar")
+  out.driveKnown = Object.assign({}, a.driveKnown || {}, b.driveKnown || {});
+  out.driveDismissed = Object.assign({}, a.driveDismissed || {}, b.driveDismissed || {});
+  const linked = new Set();
+  const collectFoto = (arr) => { for (const e of (arr || [])) if (e.foto && e.foto.id) linked.add(e.foto.id); };
+  collectFoto(out.reembolso); collectFoto(out.alelo);
+  for (const h of out.history) { collectFoto(h.reembolso); collectFoto(h.alelo); }
+  const pmap = {};
+  for (const p of (a.pending || []).concat(b.pending || [])) {
+    if (!p || !p.fileId) continue;
+    if (linked.has(p.fileId) || out.driveDismissed[p.fileId]) continue;
+    pmap[p.fileId] = p;
+  }
+  out.pending = Object.values(pmap);
   out.meta = {
     updatedAt: Math.max((a.meta && a.meta.updatedAt) || 0, (b.meta && b.meta.updatedAt) || 0),
     profileUpdatedAt: Math.max(pa, pb)
@@ -1962,7 +1998,7 @@ function setupAiUI() {
    ============================================================ */
 const GDRIVE_KEY = 'despesas-soma-gdrive-v1';
 const GDDEL_KEY = 'despesas-soma-gddel-v1';   // fila de fileIds a excluir no Drive (retry ao reconectar)
-const GD_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const GD_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly';   // drive.file p/ criar/apagar o que o app envia; drive.readonly p/ ler arquivos subidos manualmente (varredura)
 const GD_FOLDER_NAME = 'Comprovantes - Despesas Soma';                 // raiz do reembolso (= nome legado, mantém os antigos)
 const GD_FOLDER_SANTANDER = 'Comprovantes Cartao Santander - Despesas Soma';
 const GD_ROOT_NAMES = { reembolso: GD_FOLDER_NAME, alelo: GD_FOLDER_SANTANDER };
@@ -2116,6 +2152,147 @@ async function gdDownloadBlob(fileId) {
 
 /* mês de referência do relatório → pasta única no Drive (vazio = organiza por data do lançamento) */
 function reportFolderDateISO() { return state.reportMonth ? state.reportMonth + '-01' : null; }
+
+/* ============================================================
+   Varredura do Drive: reconhece comprovantes subidos manualmente que ainda
+   não viraram lançamento. Sucesso na IA → lança automático; falha → fila de
+   pendentes (revisão manual). Requer o escopo drive.readonly. */
+function knownDriveIds() {
+  const s = new Set();
+  const add = (arr) => { for (const e of (arr || [])) if (e.foto && e.foto.id) s.add(e.foto.id); };
+  add(state.reembolso); add(state.alelo);
+  for (const h of (state.history || [])) { add(h.reembolso); add(h.alelo); }
+  for (const k of Object.keys(state.driveKnown || {})) s.add(k);
+  for (const k of Object.keys(state.driveDismissed || {})) s.add(k);
+  for (const p of (state.pending || [])) if (p && p.fileId) s.add(p.fileId);
+  return s;
+}
+
+/* lista todos os arquivos (recursivo) sob a raiz da tabela, incluindo subpastas Ano/Mês */
+async function gdListReceipts(tabela) {
+  const root = await gdEnsureFolder(tabela);
+  const t = await gdGetToken(false);
+  const out = [];
+  async function walk(folderId) {
+    let pageToken = '';
+    do {
+      const q = `'${folderId}' in parents and trashed=false`;
+      const url = 'https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(q) +
+        '&fields=nextPageToken,files(id,name,mimeType,createdTime)&pageSize=200' + (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');
+      const r = await fetch(url, { headers: { Authorization: 'Bearer ' + t } });
+      if (!r.ok) throw new Error('Listar Drive ' + r.status);
+      const j = await r.json();
+      for (const f of (j.files || [])) {
+        if (f.mimeType === 'application/vnd.google-apps.folder') await walk(f.id);
+        else out.push(f);
+      }
+      pageToken = j.nextPageToken || '';
+    } while (pageToken);
+  }
+  await walk(root);
+  return out;
+}
+
+let scanningDrive = false;
+async function scanDriveForReceipts() {
+  if (scanningDrive) return;
+  if (!gdConfigured()) { toast('Configure o Google Drive primeiro.'); return; }
+  if (!aiConfigured()) { toast('Configure a leitura por IA (Gemini) para reconhecer os comprovantes.'); return; }
+  if (!navigator.onLine) { toast('Sem conexão com a internet.'); return; }
+  scanningDrive = true;
+  const btn = $('gd-scan'); if (btn) { btn.disabled = true; }
+  try {
+    if (!gdConnected()) { try { await gdGetToken(true); } catch (e) { toast('Conecte o Google Drive (autorize o acesso de leitura).'); return; } }
+    toast('Procurando comprovantes no Drive…');
+    const known = knownDriveIds();
+    let novos = 0, pend = 0, erros = 0;
+    for (const tabela of ['reembolso', 'alelo']) {
+      let files = [];
+      try { files = await gdListReceipts(tabela); } catch (e) { console.error(e); erros++; continue; }
+      for (const f of files) {
+        if (known.has(f.id)) continue;
+        known.add(f.id);
+        state.driveKnown[f.id] = 1;
+        let ocr = null;
+        try { const blob = await gdDownloadBlob(f.id); ocr = await ocrReceipt(blob, f.mimeType); }
+        catch (e) { console.error('OCR/scan falhou', e); }
+        if (ocr && ocr.dateISO && ocr.total != null) {
+          const entry = {
+            id: uid(), data: ocr.dateISO, descricao: buildDescricao(ocr.category, ocr.city, ocr.uf),
+            categoria: ocr.category, valor: ocr.total, updatedAt: Date.now(),
+            foto: { id: f.id, name: f.name }
+          };
+          state[tabela].push(entry);
+          state[tabela].sort((a, b) => (a.data || '').localeCompare(b.data || ''));
+          novos++;
+        } else {
+          state.pending.push({
+            fileId: f.id, name: f.name, tabela, mimeType: f.mimeType, createdTime: f.createdTime || '',
+            ocr: ocr ? { dateISO: ocr.dateISO, category: ocr.category, total: ocr.total, descricao: buildDescricao(ocr.category, ocr.city, ocr.uf) } : null
+          });
+          pend++;
+        }
+      }
+    }
+    touchDoc(); saveState(); render();
+    const partes = [];
+    partes.push(novos + ' lançado(s) automaticamente');
+    partes.push(pend + ' pendente(s) para revisar');
+    if (erros) partes.push(erros + ' pasta(s) com erro');
+    toast(partes.join(' · ') + '.');
+  } finally {
+    scanningDrive = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
+/* ---- pendentes (Drive) ---- */
+let linkedPendingId = null;   // fileId do pendente sendo preenchido no modal (vincula sem reenviar)
+function openPendingEntry(p) {
+  if (!p) return;
+  linkedPendingId = p.fileId;
+  const o = p.ocr || {};
+  openModal(p.tabela, null, {
+    data: o.dateISO || todayISO(),
+    descricao: o.descricao || '',
+    categoria: o.category || '',
+    valor: (o.total != null ? o.total : '')
+  });
+  // vincula o arquivo do Drive já existente (não reenvia ao salvar)
+  modalPhoto = { mode: 'keep', existing: { id: p.fileId, name: p.name }, blob: null, dataUrl: null, w: 0, h: 0 };
+  renderModalPhoto();
+}
+function dismissPending(fileId) {
+  if (!confirm('Descartar este comprovante? Ele continua no Drive, mas deixa de aparecer aqui.')) return;
+  state.pending = (state.pending || []).filter((p) => p.fileId !== fileId);
+  state.driveDismissed[fileId] = Date.now();   // não reaparece na próxima varredura/sincronização
+  touchDoc(); saveState(); renderPending();
+}
+function renderPending() {
+  const card = $('pending-card'); if (!card) return;
+  const list = state.pending || [];
+  if (!list.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  if ($('pending-count')) $('pending-count').textContent = list.length;
+  const ul = $('pending-list'); if (!ul) return;
+  ul.innerHTML = '';
+  list.forEach((p) => {
+    const li = document.createElement('li');
+    li.className = 'pending-item';
+    const tabelaLbl = p.tabela === 'alelo' ? 'Cartão Santander' : 'Reembolso';
+    const hint = (p.ocr && p.ocr.total != null)
+      ? (formatMoney(p.ocr.total) + (p.ocr.dateISO ? ' · ' + fmtDateBR(p.ocr.dateISO) : ''))
+      : 'sem leitura automática';
+    li.innerHTML = `<div class="pending-info"><b>${escapeHtml(p.name)}</b><span>${tabelaLbl} · ${hint}</span></div>
+      <div class="pending-actions">
+        <button type="button" class="hist-btn" data-act="fill">Preencher</button>
+        <button type="button" class="hist-btn danger" data-act="dismiss">Descartar</button>
+      </div>`;
+    li.querySelector('[data-act=fill]').addEventListener('click', () => openPendingEntry(p));
+    li.querySelector('[data-act=dismiss]').addEventListener('click', () => dismissPending(p.fileId));
+    ul.appendChild(li);
+  });
+}
 
 /* ---- exclusão de comprovantes no Drive (com fila p/ retry offline) ---- */
 function loadGdDel() { try { const a = JSON.parse(localStorage.getItem(GDDEL_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
@@ -2302,6 +2479,7 @@ function setupGDriveUI() {
       await flushGdDeletions(true);
     } catch (e) { console.error(e); setGdStatus('Erro: ' + e.message, 'err'); }
   });
+  if ($('gd-scan')) $('gd-scan').addEventListener('click', () => scanDriveForReceipts());
   updateGdPending();
   $('gd-clear').addEventListener('click', () => {
     if (!confirm('Desconectar o Google Drive deste aparelho?')) return;

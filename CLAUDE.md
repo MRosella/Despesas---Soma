@@ -40,15 +40,15 @@ https://mrosella.github.io/Despesas---Soma/
 | Render telas/listas | 194–410 | `render`, `renderReports`, `renderList` (exibe **mais recente no topo**; `hydrateThumbs` = miniaturas), `limitExcedido`, `emptyStateEl` |
 | Modal de lançamento | 428–598 | `openModal`, `saveEntry`, `deleteEntry`, `updateCatHint`, máscaras |
 | **Foto/anexo + OCR hook** | 457–503 | `renderModalPhoto`, `onPhotoSelected` (dispara OCR), `applyModalPhoto` (nome do arquivo) |
-| Excel (XLSX) | 600–838 | `buildXlsx`, `exportExcel`, `filteredDoc` |
+| Excel (XLSX) | 600–960 | `buildXlsx`, `buildSantanderXlsx` (formato exclusivo cartão), `exportExcel`, `filteredDoc`, `santanderFileBase` |
 | Compartilhar/baixar | 839–885 | `shareOrDownload`, `downloadBlob`, chooser de export |
-| PDF | 887–1037 | `buildPrint`, `exportPDF`, `generatePdfBlob` |
+| PDF | 887–1200 | `buildPrint`, `buildSantanderPrint` (Prestação de Contas), `exportPDF`, `generatePdfBlob(src,sections,santander)` |
 | **Sync GitHub (privado)** | 1038–1360 | `ghGetFile/ghPutFile`, `currentDoc`, `applyDoc`, `mergeDocs`, `syncNow`, `setupSyncUI` |
 | Bloqueio (bio/PIN) | ~1340–1505 | `enableBio`, `unlockBio`, `setPin/checkPin`, `showLock` |
 | `populateCategorySelects` | ~1507 | popula `#m-categoria` (chamado no `init`; já não há mais filtros) |
 | **Editor de categorias (UI)** | ~1516–1590 | `getCatDraft`, `renderCatEditor`, `saveCatEditor`, `setupCatUI` |
 | **OCR / Gemini** | 1619–1735 | `AI_KEY`, `GEMINI_MODEL`, `loadAi/saveAi`, `aiConfigured`, `buildDescricao`, `ocrReceipt`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI` |
-| **Google Drive** | ~1690–2090 | `loadGd/saveGd`, `gdGetToken`, `gdEnsureFolder`, **subpastas Ano/Mês** (`MESES`, `gdFindOrCreateChild`, `gdEnsureMonthFolder`), `reportFolderDateISO` (mês de referência → pasta única), `gdUpload(blob,name,dateISO)`, **exclusão** (`gdDeleteFile`, fila `loadGdDel/queueGdDelete/flushGdDeletions`, `purgeEntryPhoto`), **conexão ao abrir** (`gdConnectFlow`, `gdSilentReconnect`, `showDriveConnectNotice`, `maybePromptDrive`, `countPendingDrive`), miniaturas (`saveThumb`), IndexedDB (`idbPut/Get/Del`: `p_`=pendentes, `thumb_`=miniaturas locais), `compressImage`, `flushPendingPhotos` |
+| **Google Drive** | ~1900–2400 | `loadGd/saveGd`, `gdGetToken`, `GD_SCOPE` (drive.file **+ drive.readonly**), **raízes separadas** (`gdEnsureFolder(tabela)`, `GD_ROOT_NAMES`, `setDriveFolder`), **subpastas Ano/Mês** (`gdFindOrCreateChild`, `gdEnsureMonthFolder(dateISO,tabela)`), `gdUpload(blob,name,dateISO,tabela)`, **exclusão** (`gdDeleteFile`, fila `queueGdDelete/flushGdDeletions`, `purgeEntryPhoto`), **conexão ao abrir** (`gdConnectFlow`, `gdSilentReconnect`, `maybePromptDrive`, `countPendingDrive`), **varredura** (`gdListReceipts`, `scanDriveForReceipts`, `knownDriveIds`) + **pendentes** (`renderPending`, `openPendingEntry`, `dismissPending`, `linkedPendingId`), miniaturas (`saveThumb`), IndexedDB (`p_`/`thumb_`), `compressImage`, `flushPendingPhotos` |
 | Tema | 2002–2032 | `applyTheme`, `toggleTheme`, `setupTheme` |
 | Init / bootstrap | 2033–2210 | `bindField`, `newMonth`, `init` (registra todos os `setup*`), SW, conectividade |
 
@@ -57,15 +57,19 @@ https://mrosella.github.io/Despesas---Soma/
 { funcionario, dataSolicitacao, referente,
   reportMonth,                       // 'YYYY-MM' (perfil): pasta única dos comprovantes no Drive; vazio = por data do lançamento
   bank:{nome,cpf,banco,agencia,conta,pix},
-  reembolso:[], alelo:[],            // lançamentos (duas tabelas)
+  reembolso:[], alelo:[],            // lançamentos (duas tabelas). entry.foto = {id|pending, name, w, h}
   history:[], histTomb:{},           // meses arquivados + lápides
-  driveFolderId,                     // pasta de comprovantes (compartilhada)
+  driveFolderId,                     // (legado) raiz única; migra p/ driveFolders.reembolso
+  driveFolders:{reembolso,alelo},    // RAÍZES SEPARADAS no Drive (reembolso × cartão Santander)
+  pending:[], driveKnown:{}, driveDismissed:{},  // varredura do Drive (item v25): pendentes p/ revisar; ids já vistos; ids descartados
   config:{ categorias:[{nome,limite,grupo}] },  // editável em Configurações
   tomb:{reembolso:{},alelo:{}},      // lápides de deleção (id->updatedAt)
   meta:{updatedAt, profileUpdatedAt} }
 ```
 Merge de sync: `meta.updatedAt` para tabelas; `profileUpdatedAt` (last-write-wins)
-para perfil/banco/**config**. Lápides garantem que deleções propaguem.
+para perfil/banco/**config**/`driveFolders`/`reportMonth`. Lápides garantem que deleções
+propaguem. `pending` = união por `fileId` **menos** os já virados lançamento (`foto.id`) ou
+descartados (`driveDismissed`); `driveKnown`/`driveDismissed` = união (evita reprocessar/ressuscitar).
 
 ## Chaves de localStorage
 `despesas-soma-v1` (estado) · `-sync-v1` (GitHub) · `-gdrive-v1` (Drive) ·
@@ -92,15 +96,36 @@ para perfil/banco/**config**. Lápides garantem que deleções propaguem.
 - `index.html` `#m-categoria` é **populado por JS** (`populateCategorySelects`, chamado no
   `init`) a partir de `getCategorias()` — não recriar `<option>` fixos. (A busca/filtros foi
   removida; o rótulo da 2ª tabela é "Despesas Cartão Santander - Soma".)
-- **Comprovantes no Drive vão para subpastas `{Ano}/{Mês}`** dentro da pasta raiz compartilhada;
+- **DUAS raízes separadas no Drive** (`gdEnsureFolder(tabela)`): `Comprovantes - Despesas Soma`
+  (reembolso, = nome legado, reaproveita a pasta antiga) e `Comprovantes Cartao Santander -
+  Despesas Soma` (cartão/`alelo`). `state.driveFolders={reembolso,alelo}` (sincronizado;
+  `driveFolderId` legado migra p/ reembolso). `gdUpload(blob,name,dateISO,tabela)` e
+  `gdEnsureMonthFolder(dateISO,tabela)` recebem a tabela.
+- **Comprovantes no Drive vão para subpastas `{Ano}/{Mês}`** dentro da raiz **da tabela**;
   resolvidas por nome (idempotente entre aparelhos). O mês é o **`reportMonth`** (campo "Mês de
   referência", `reportFolderDateISO`) — **todo** o relatório aberto cai na MESMA pasta, mesmo
-  comprovantes de outra data. Se `reportMonth` vazio, cai na pasta da **data do lançamento**
-  (comportamento antigo). Botão 🗑️ (`newMonth`) arquiva e **zera** `reportMonth`.
-- **Excluir lançamento apaga o comprovante no Drive** (`deleteEntry`→`purgeEntryPhoto`): se
-  conectado, `gdDeleteFile` na hora; senão entra na fila `-gddel-v1` e é propagado por
-  `flushGdDeletions` ao reconectar. Limpa também `thumb_<id>` e o pendente `p_<id>`. Escopo
-  `drive.file` só apaga o que o app criou.
+  comprovantes de outra data. Se `reportMonth` vazio, cai na pasta da **data do lançamento**.
+  Botão 🗑️ (`newMonth`) arquiva e **zera** `reportMonth`.
+- **Excluir lançamento apaga o comprovante no Drive** — em **ambos** os caminhos: `deleteEntry`
+  (modal) **e** `quickDelete` (botão 🗑️ da lista) chamam `purgeEntryPhoto`. Conectado →
+  `gdDeleteFile` na hora; senão entra na fila `-gddel-v1` e propaga por `flushGdDeletions` ao
+  reconectar. Limpa `thumb_<id>` e o pendente `p_<id>`.
+- **Importar arquivo (imagem OU PDF)** no modal: botão "Importar arquivo" (`#m-foto-import`, sem
+  `capture`) além de "Tirar foto". `onPhotoSelected` detecta PDF (`modalPhoto.kind='pdf'`, sem
+  compressão/miniatura); `ocrReceipt(blob,mime)` manda imagem **ou** PDF ao Gemini. Nome do
+  arquivo sem leitura da IA = **`NF {DD.MM.AAAA}`** (`receiptFileName`/`ddmmaaaa`), extensão por tipo.
+- **Formato exclusivo do Cartão Santander** (`buildSantanderXlsx`/`buildSantanderPrint`, asset
+  `template-santander.xlsx`): acionado ao exportar **só** a seção `alelo` (Excel/PDF "Prestação de
+  Contas"). Layout próprio (E4=Nome, E6=Período, E7=Data Entrega, E8/J=Total; tabela linhas 17.. e
+  total na 35, expande se >18). Reembolso e "ambos" seguem `buildXlsx`/`buildPrint`.
+- **Varredura do Drive** (`scanDriveForReceipts`, botão `#gd-scan`): escopo agora é
+  `drive.file` **+ `drive.readonly`** (lê arquivos subidos manualmente → exige reconsentir 1x).
+  `gdListReceipts(tabela)` lista recursivo a raiz da tabela; ids desconhecidos (`knownDriveIds`)
+  → OCR. Sucesso (data+total) vira lançamento com `foto={id,name}` (sem reupload); falha vira
+  **pendente** (`state.pending`) revisável no card "Lançamentos pendentes (Drive)" em
+  `#view-lancamentos` (`renderPending`/`openPendingEntry`/`dismissPending`). `openPendingEntry`
+  abre o modal pré-preenchido e vincula o arquivo existente (`applyModalPhoto` no modo `keep` seta
+  `entry.foto` se for lançamento novo). Custo Gemini → só no botão manual.
 - **Conexão do Drive ao abrir:** token OAuth vive só em memória (~1h) → ao abrir/voltar ao
   foco, `maybePromptDrive` tenta reconexão silenciosa (sem UI) e **só** mostra o popup
   `gd-connect-notice` se `countPendingDrive() > 0` (fotos a enviar ou exclusões a propagar) —

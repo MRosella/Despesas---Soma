@@ -55,6 +55,14 @@
   <main>
     <!-- ===================== TELA: LANÇAMENTOS ===================== -->
     <section class="view" id="view-lancamentos">
+      <!-- Comprovantes do Drive sem lançamento (revisar) -->
+      <section class="card" id="pending-card" style="display:none">
+        <div class="card-head"><h2>Lançamentos pendentes (Drive) <span class="exp-count" id="pending-count"></span></h2></div>
+        <div class="card-body">
+          <p class="hint" style="margin-top:0">Comprovantes encontrados na sua pasta do Drive que ainda não têm lançamento. Toque em <b>Preencher</b> para completar os dados.</p>
+          <ul class="pending-list" id="pending-list"></ul>
+        </div>
+      </section>
       <!-- Dados do reembolso -->
       <section class="card">
         <div class="card-head"><h2>Dados do Reembolso</h2></div>
@@ -241,6 +249,8 @@
             <button class="btn btn-excel" id="gd-connect" type="button">Conectar Google</button>
           </div>
           <button class="btn btn-ghost" id="gd-flush" type="button" style="display:none; width:100%; margin-top:8px">Enviar comprovantes pendentes</button>
+          <button class="btn btn-ghost" id="gd-scan" type="button" style="width:100%; margin-top:8px">Procurar comprovantes no Drive</button>
+          <p class="hint" style="margin:6px 2px 0">Reconhece comprovantes que você subiu manualmente à pasta do Drive e ainda não têm lançamento. Pede permissão de <b>leitura</b> da pasta na 1ª vez. Usa a IA (Gemini) para ler cada arquivo.</p>
           <p class="sync-status" id="gd-status">Não configurado.</p>
           <button class="btn btn-danger-text" id="gd-clear" type="button" style="padding:8px 0">Desconectar Google deste aparelho</button>
         </div>

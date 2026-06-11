@@ -252,6 +252,18 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--orange); bo
 .hist-btn:active { background: var(--bg); }
 .hist-btn.danger { color: var(--red); border-color: #e7c3c3; }
 
+/* Lançamentos pendentes do Drive */
+.pending-list { list-style: none; margin: 0; padding: 0; }
+.pending-item {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 0; border-top: 1px solid var(--line);
+}
+.pending-item:first-child { border-top: none; }
+.pending-info { flex: 1; min-width: 150px; }
+.pending-info b { color: var(--brown); word-break: break-word; }
+.pending-info span { display: block; font-size: .76rem; color: var(--muted); margin-top: 2px; }
+.pending-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
 /* ---------- Tela de bloqueio ---------- */
 body.locked { overflow: hidden; }
 .lock-screen {
