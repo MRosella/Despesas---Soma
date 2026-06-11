@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v19';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v20';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -188,20 +188,7 @@ function setupIcons(root) {
   });
 }
 
-/* ---------------- Filtros (somente visualização) ---------------- */
-let filters = { text: '', categoria: '', from: '', to: '' };
 let lastAddedId = null;   // destaca o item recém-criado
-function filterActive() { return !!(filters.text || filters.categoria || filters.from || filters.to); }
-function entryMatchesFilter(e) {
-  if (filters.text) {
-    const t = filters.text.toLowerCase();
-    if (!((e.descricao || '').toLowerCase().includes(t) || (e.categoria || '').toLowerCase().includes(t))) return false;
-  }
-  if (filters.categoria && e.categoria !== filters.categoria) return false;
-  if (filters.from && (e.data || '') < filters.from) return false;
-  if (filters.to && (e.data || '') > filters.to) return false;
-  return true;
-}
 
 /* ---------------- Renderização ---------------- */
 function render() {
@@ -360,16 +347,7 @@ function renderList(tabela, ul) {
   ul.innerHTML = '';
   if (!all.length) { ul.appendChild(emptyStateEl()); setupIcons(ul); return; }
 
-  const list = filterActive() ? all.filter(entryMatchesFilter) : all;
-  if (!list.length) {
-    const li = document.createElement('li');
-    li.className = 'empty-list';
-    li.textContent = 'Nenhum lançamento corresponde ao filtro.';
-    ul.appendChild(li);
-    return;
-  }
-
-  for (const e of list) {
+  for (const e of all) {
     const over = limitExcedido(e);
     const li = document.createElement('li');
     li.className = 'entry' + (e.id === lastAddedId ? ' added' : '') + (over ? ' over-limit' : '');
@@ -489,13 +467,13 @@ async function applyModalPhoto(entry) {
   if (gdConfigured() && gdConnected()) {
     try {
       toast('Enviando comprovante ao Drive…');
-      const fid = await gdUpload(modalPhoto.blob, name);
+      const fid = await gdUpload(modalPhoto.blob, name, entry.data);
       entry.foto = { id: fid, name, w: modalPhoto.w, h: modalPhoto.h };
       return;
     } catch (e) { console.error(e); }
   }
   const localId = uid();
-  await idbPut('p_' + localId, { blob: modalPhoto.blob, name });
+  await idbPut('p_' + localId, { blob: modalPhoto.blob, name, data: entry.data });
   entry.foto = { pending: localId, name, w: modalPhoto.w, h: modalPhoto.h };
   if (gdConfigured()) toast('Comprovante salvo localmente; será enviado ao Drive ao conectar.');
   else toast('Comprovante salvo localmente. Configure o Google Drive para enviá-lo.');
@@ -906,7 +884,7 @@ function buildPrintTable(title, list, minRows) {
       </tr></thead>
       <tbody>${rows}
         <tr class="p-subtotal">
-          <td colspan="3" class="sub-lbl">${title === 'DESPESAS PARA REEMBOLSO' ? 'SUBTOTAL DESPESAS PARA REEMBOLSO:' : 'SUBTOTAL DESPESAS PARA CARTÃO ALELO:'}</td>
+          <td colspan="3" class="sub-lbl">${title === 'DESPESAS PARA REEMBOLSO' ? 'SUBTOTAL DESPESAS PARA REEMBOLSO:' : 'SUBTOTAL DESPESAS CARTÃO SANTANDER - SOMA:'}</td>
           <td class="sub-val">${formatMoney(sub)}</td>
         </tr>
       </tbody>
@@ -932,7 +910,7 @@ function buildPrint(src, sections) {
           <td class="lab">Reembolso Referente à:</td><td class="val">${escapeHtml(D.referente)}</td></tr>
     </table>
     ${inc.reembolso ? buildPrintTable('DESPESAS PARA REEMBOLSO', D.reembolso, 5) : ''}
-    ${inc.alelo ? buildPrintTable('DESPESAS CARTÃO ALELO', D.alelo, 5) : ''}
+    ${inc.alelo ? buildPrintTable('DESPESAS CARTÃO SANTANDER - SOMA', D.alelo, 5) : ''}
     <div class="p-total"><span>TOTAL DOS GASTOS</span><span>${formatMoney(s1 + s2)}</span></div>
     <div class="p-bank-title">Dados Bancários (Se Aplicável)</div>
     <table class="p-bank">
@@ -1531,30 +1509,6 @@ function populateCategorySelects() {
   const opts = cats.map((c) => `<option>${escapeHtml(c)}</option>`).join('');
   const mc = $('m-categoria');
   if (mc) { const cur = mc.value; mc.innerHTML = '<option value="">Selecione…</option>' + opts; if (cats.indexOf(cur) >= 0) mc.value = cur; }
-  const fc = $('flt-cat');
-  if (fc) { const cur = fc.value; fc.innerHTML = '<option value="">Todas as categorias</option>' + opts; if (cats.indexOf(cur) >= 0) fc.value = cur; }
-}
-
-/* ---------------- Filtros / busca ---------------- */
-function setupFilters() {
-  populateCategorySelects();
-  const apply = () => {
-    filters.text = ($('flt-text').value || '').trim();
-    filters.categoria = $('flt-cat').value || '';
-    filters.from = $('flt-from').value || '';
-    filters.to = $('flt-to').value || '';
-    const fc = $('flt-clear'); if (fc) fc.style.display = filterActive() ? '' : 'none';
-    render();
-  };
-  ['flt-text', 'flt-cat', 'flt-from', 'flt-to'].forEach((id) => {
-    const el = $(id); if (!el) return;
-    el.addEventListener('input', apply); el.addEventListener('change', apply);
-  });
-  const fc = $('flt-clear');
-  if (fc) fc.addEventListener('click', () => {
-    $('flt-text').value = ''; $('flt-cat').value = ''; $('flt-from').value = ''; $('flt-to').value = '';
-    apply();
-  });
 }
 
 /* ---------------- Editor de categorias e limites ---------------- */
@@ -1824,9 +1778,42 @@ async function gdEnsureFolder() {
   return id;
 }
 
-async function gdUpload(blob, name) {
+/* Subpastas Ano/Mês dentro da pasta raiz (organiza os comprovantes por período). */
+const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const gdFolderCache = new Map();   // "pai|nome" -> id (evita queries repetidas na mesma sessão)
+
+async function gdFindOrCreateChild(parentId, name, token) {
+  const ck = parentId + '|' + name;
+  if (gdFolderCache.has(ck)) return gdFolderCache.get(ck);
+  const q = `mimeType='application/vnd.google-apps.folder' and name='${name}' and '${parentId}' in parents and trashed=false`;
+  let r = await fetch('https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(q) + '&fields=files(id,name)', { headers: { Authorization: 'Bearer ' + token } });
+  let j = await r.json();
+  let id = j.files && j.files[0] && j.files[0].id;
+  if (!id) {
+    r = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] })
+    });
+    j = await r.json(); id = j.id;
+  }
+  gdFolderCache.set(ck, id);
+  return id;
+}
+
+async function gdEnsureMonthFolder(dateISO) {
+  const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(dateISO || '');
+  const root = await gdEnsureFolder();
+  if (!m) return root;   // sem data válida → cai na raiz (comportamento antigo)
+  const ano = m[1], mesNome = MESES[parseInt(m[2], 10) - 1];
+  if (!mesNome) return root;
   const t = await gdGetToken(false);
-  const folderId = await gdEnsureFolder();
+  const anoId = await gdFindOrCreateChild(root, ano, t);
+  return await gdFindOrCreateChild(anoId, mesNome, t);
+}
+
+async function gdUpload(blob, name, dateISO) {
+  const t = await gdGetToken(false);
+  const folderId = dateISO ? await gdEnsureMonthFolder(dateISO) : await gdEnsureFolder();
   const form = new FormData();
   form.append('metadata', new Blob([JSON.stringify({ name, parents: [folderId] })], { type: 'application/json' }));
   form.append('file', blob);
@@ -1919,7 +1906,7 @@ async function flushPendingPhotos(report) {
         try {
           const rec = await idbGet('p_' + e.foto.pending);
           if (!rec) { e.foto = null; continue; }
-          const id = await gdUpload(rec.blob, rec.name);
+          const id = await gdUpload(rec.blob, rec.name, e.data || rec.data);
           await idbDel('p_' + e.foto.pending);
           e.foto = { id, name: rec.name, w: e.foto.w, h: e.foto.h };
           e.updatedAt = Date.now();
@@ -2112,7 +2099,7 @@ function init() {
   $('export-modal').addEventListener('click', (e) => { if (e.target === $('export-modal')) closeExportModal(); });
 
   setupIcons();
-  setupFilters();
+  populateCategorySelects();
   setupNav();
   setupTheme();
   setupServiceWorker();

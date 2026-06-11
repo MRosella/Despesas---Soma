@@ -37,18 +37,18 @@ https://mrosella.github.io/Despesas---Soma/
 | Estado / persistência | 51–105 | `emptyState`, `loadState`, `saveState`, `touchDoc/touchProfile` |
 | Utils (moeda, data, uid, toast) | 111–152 | `parseMoney`, `formatMoney`, `todayISO`, `fmtDateBR`, `dateToSerial` |
 | Ícones SVG | 155–192 | `ICONS`, `icon`, `setupIcons` |
-| Render telas/listas | 194–423 | `render`, `renderReports`, `renderList`, `limitExcedido`, `emptyStateEl`, filtros |
+| Render telas/listas | 194–410 | `render`, `renderReports`, `renderList`, `limitExcedido`, `emptyStateEl` |
 | Modal de lançamento | 428–598 | `openModal`, `saveEntry`, `deleteEntry`, `updateCatHint`, máscaras |
 | **Foto/anexo + OCR hook** | 457–503 | `renderModalPhoto`, `onPhotoSelected` (dispara OCR), `applyModalPhoto` (nome do arquivo) |
 | Excel (XLSX) | 600–838 | `buildXlsx`, `exportExcel`, `filteredDoc` |
 | Compartilhar/baixar | 839–885 | `shareOrDownload`, `downloadBlob`, chooser de export |
 | PDF | 887–1037 | `buildPrint`, `exportPDF`, `generatePdfBlob` |
 | **Sync GitHub (privado)** | 1038–1360 | `ghGetFile/ghPutFile`, `currentDoc`, `applyDoc`, `mergeDocs`, `syncNow`, `setupSyncUI` |
-| Bloqueio (bio/PIN) | 1361–1538 | `enableBio`, `unlockBio`, `setPin/checkPin`, `showLock` |
-| Filtros | 1539–1561 | `setupFilters` |
-| **Editor de categorias (UI)** | 1562–1617 | `getCatDraft`, `renderCatEditor`, `saveCatEditor`, `setupCatUI` |
+| Bloqueio (bio/PIN) | ~1340–1505 | `enableBio`, `unlockBio`, `setPin/checkPin`, `showLock` |
+| `populateCategorySelects` | ~1507 | popula `#m-categoria` (chamado no `init`; já não há mais filtros) |
+| **Editor de categorias (UI)** | ~1516–1590 | `getCatDraft`, `renderCatEditor`, `saveCatEditor`, `setupCatUI` |
 | **OCR / Gemini** | 1619–1735 | `AI_KEY`, `GEMINI_MODEL`, `loadAi/saveAi`, `aiConfigured`, `buildDescricao`, `ocrReceipt`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI` |
-| **Google Drive** | 1737–2001 | `loadGd/saveGd`, `gdGetToken`, `gdEnsureFolder`, `gdUpload`, IndexedDB (`idbPut/Get/Del`), `compressImage`, `flushPendingPhotos` |
+| **Google Drive** | ~1690–1960 | `loadGd/saveGd`, `gdGetToken`, `gdEnsureFolder`, **subpastas Ano/Mês** (`MESES`, `gdFindOrCreateChild`, `gdEnsureMonthFolder`), `gdUpload(blob,name,dateISO)`, IndexedDB (`idbPut/Get/Del`), `compressImage`, `flushPendingPhotos` |
 | Tema | 2002–2032 | `applyTheme`, `toggleTheme`, `setupTheme` |
 | Init / bootstrap | 2033–2210 | `bindField`, `newMonth`, `init` (registra todos os `setup*`), SW, conectividade |
 
@@ -87,8 +87,13 @@ para perfil/banco/**config**. Lápides garantem que deleções propaguem.
 4. Pages publica em ~1 min; testar no celular.
 
 ## Pontos de atenção
-- `index.html` `#m-categoria` e `#flt-cat` são **populados por JS** (`populateCategorySelects`/
-  `setupFilters`) a partir de `getCategorias()` — não recriar `<option>` fixos.
+- `index.html` `#m-categoria` é **populado por JS** (`populateCategorySelects`, chamado no
+  `init`) a partir de `getCategorias()` — não recriar `<option>` fixos. (A busca/filtros foi
+  removida; o rótulo da 2ª tabela é "Despesas Cartão Santander - Soma".)
+- **Comprovantes no Drive vão para subpastas `{Ano}/{Mês}`** (pela data do lançamento),
+  dentro da pasta raiz compartilhada; resolvidas por nome (idempotente entre aparelhos).
+  Renomear "Alelo"→"Santander - Soma" foi só rótulo visível (tela/PDF/Excel via
+  `template.xlsx` sharedStrings); a chave de dados `alelo` é estrutural e **não muda**.
 - Categoria nova fora da validação do `template.xlsx` é gravada mesmo assim; o Excel
   pode avisar "valor fora da lista" — limitação conhecida.
 - `GEMINI_MODEL` (app.js:1620) é constante fácil de trocar se a família mudar.

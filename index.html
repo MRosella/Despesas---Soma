@@ -81,24 +81,6 @@
         </div>
       </section>
 
-      <!-- Busca e filtros -->
-      <section class="card filter-card">
-        <div class="card-body">
-          <div class="filter-row">
-            <span class="filter-ic" data-icon="search" data-size="18"></span>
-            <input type="text" id="flt-text" placeholder="Buscar por descrição ou categoria" autocomplete="off" />
-            <button class="icon-btn" id="flt-clear" data-icon="x" data-size="20" aria-label="Limpar filtros" style="display:none"></button>
-          </div>
-          <div class="row2 filter-extra">
-            <select id="flt-cat"><option value="">Todas as categorias</option></select>
-            <div class="filter-dates">
-              <input type="date" id="flt-from" aria-label="Data inicial" />
-              <input type="date" id="flt-to" aria-label="Data final" />
-            </div>
-          </div>
-        </div>
-      </section>
-
       <!-- Tabela 1: Reembolso -->
       <section class="card">
         <div class="card-head">
@@ -115,7 +97,7 @@
       <!-- Tabela 2: Alelo -->
       <section class="card">
         <div class="card-head">
-          <h2>Despesas Cartão Alelo</h2>
+          <h2>Despesas Cartão Santander - Soma</h2>
           <span class="sum" id="sum-alelo">R$ 0,00</span>
         </div>
         <ul class="entries" id="list-alelo"></ul>
@@ -387,7 +369,7 @@
       </label>
       <label class="exp-opt">
         <input type="checkbox" id="exp-alelo" checked />
-        <span>Despesas Cartão Alelo<span class="exp-count" id="exp-c-alelo"></span></span>
+        <span>Despesas Cartão Santander - Soma<span class="exp-count" id="exp-c-alelo"></span></span>
       </label>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="exp-cancel">Cancelar</button>

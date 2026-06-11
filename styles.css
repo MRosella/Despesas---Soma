@@ -149,16 +149,6 @@ svg { display: inline-block; vertical-align: middle; }
 .empty-title { font-weight: 700; color: var(--brown); font-size: .96rem; }
 .empty-sub { font-size: .82rem; }
 
-/* ---------- Busca e filtros ---------- */
-.filter-card .card-body { padding: 12px 16px; }
-.filter-row { display: flex; align-items: center; gap: 8px; }
-.filter-ic { color: var(--muted); display: inline-flex; flex: 0 0 auto; }
-.filter-row > input { flex: 1; }
-.filter-row .icon-btn { flex: 0 0 auto; min-width: 38px; min-height: 38px; color: var(--muted); }
-.filter-extra { margin-top: 10px; }
-.filter-dates { display: flex; gap: 8px; }
-.filter-dates input { flex: 1; min-width: 0; }
-
 /* ---------- Microinterações ---------- */
 @keyframes viewIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .view:not([hidden]) { animation: viewIn .22s ease; }
