@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v28';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v29';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -2928,7 +2928,9 @@ function init() {
 function setupServiceWorker() {
   if (!('serviceWorker' in navigator) || !location.protocol.startsWith('http')) return;
 
-  navigator.serviceWorker.register('sw.js').then((reg) => {
+  // updateViaCache:'none' = o próprio sw.js nunca é lido do cache HTTP na checagem de
+  // atualização → o navegador sempre vê a versão nova publicada no Pages.
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
     // procura nova versão ao abrir e periodicamente
     reg.update();
     setInterval(() => reg.update(), 60000);

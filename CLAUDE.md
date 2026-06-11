@@ -16,7 +16,7 @@ https://mrosella.github.io/Despesas---Soma/
 | `app.js` | ~2210 | **Toda a lógica.** Ver mapa abaixo. |
 | `index.html` | ~407 | 3 telas: `#view-lancamentos`, `#view-relatorios`, `#view-config`. |
 | `styles.css` | ~503 | Tema claro/escuro via variáveis CSS. Reusar `.card/.field/.sync-status/.cat-row`. |
-| `sw.js` | 54 | Service Worker network-first. `CACHE` na linha 4. |
+| `sw.js` | ~60 | Service Worker network-first **real** (v29: `install` precacheia com `cache:'reload'`; `fetch` revalida com `cache:'no-cache'` — fura o `max-age=600` do Pages que prendia o PWA na versão antiga). `CACHE` na linha 4. |
 | `template.xlsx` | — | Modelo Excel preenchido por `buildXlsx`. Não editar à mão. |
 | `lib/` | — | fflate, html2canvas, jspdf (offline, já cacheados). |
 

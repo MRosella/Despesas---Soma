@@ -1,7 +1,7 @@
 /* Service Worker — cache do app para funcionar offline.
    Estratégia: network-first (online sempre pega a versão nova; cache é
    só fallback offline). Isso evita o app ficar "preso" numa versão antiga. */
-const CACHE = 'despesas-soma-v28';
+const CACHE = 'despesas-soma-v29';
 const ASSETS = [
   './',
   './index.html',
@@ -21,7 +21,12 @@ const ASSETS = [
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting())
+    // {cache:'reload'} força baixar da REDE, ignorando o cache HTTP do navegador.
+    // Sem isso, o GitHub Pages serve assets com max-age=600 e o precache poderia
+    // gravar a versão ANTIGA do app.js, deixando o PWA preso numa versão velha.
+    caches.open(CACHE)
+      .then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -40,9 +45,11 @@ self.addEventListener('fetch', (e) => {
   if (new URL(req.url).origin !== self.location.origin) return;
 
   e.respondWith(
-    // Network-first: tenta a rede; se conseguir, atualiza o cache e devolve a
-    // versão fresca. Se falhar (offline), cai para o que estiver em cache.
-    fetch(req)
+    // Network-first DE VERDADE: {cache:'no-cache'} obriga revalidar com o servidor
+    // a cada carga (ignora o max-age=600 do cache HTTP). Se nada mudou, o GitHub Pages
+    // responde 304 via ETag — leve. Se conseguir, atualiza o cache e devolve a versão
+    // fresca; se falhar (offline), cai para o que estiver em cache.
+    fetch(req, { cache: 'no-cache' })
       .then((res) => {
         if (res && res.status === 200 && res.type === 'basic') {
           const copy = res.clone();
