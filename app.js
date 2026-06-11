@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v23';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v24';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -845,17 +845,159 @@ function filteredDoc(src, sections) {
   });
 }
 
+function santanderFileBase(src) {
+  const D = src || state;
+  const nome = (D.funcionario || 'Funcionario').trim().replace(/\s+/g, '_');
+  const ref = D.dataSolicitacao || (D.archivedAt ? new Date(D.archivedAt).toISOString().slice(0, 10) : todayISO());
+  return `Prestacao_Contas_Cartao_${nome}_${ref}`;
+}
+
+/* ---------------- Excel exclusivo do Cartão Santander (modelo "Despesas Cartão.xlsx") ----------------
+   Layout: info E4=Nome, E6=Período, E7=Data de Entrega (serial), E8=Total(=J{total}); tabela cabeçalho
+   linha 16, dados 17.. (capac. 18 → linhas 17-34), linha de total 35 (J=SUM). Colunas: B=DATA,
+   C:F=ESTABELECIMENTO, G:I=DESCRIÇÃO, J=VALOR, K=JUSTIFICATIVA. Os dados do cartão = tabela `alelo`. */
+async function buildSantanderXlsx(src) {
+  const D = src || state;
+  const buf = await fetch('template-santander.xlsx', { cache: 'no-store' }).then((r) => r.arrayBuffer());
+  const files = fflate.unzipSync(new Uint8Array(buf));
+  const dec = new TextDecoder();
+  const enc = new TextEncoder();
+  const parser = new DOMParser();
+  const ser = new XMLSerializer();
+
+  const doc = parser.parseFromString(dec.decode(files['xl/worksheets/sheet1.xml']), 'application/xml');
+  const draw = files['xl/drawings/drawing1.xml'] ? parser.parseFromString(dec.decode(files['xl/drawings/drawing1.xml']), 'application/xml') : null;
+  const sheetData = doc.getElementsByTagNameNS(MAIN, 'sheetData')[0];
+
+  const n = D.alelo.length;
+  const CAP = 18;                          // linhas 17..34
+  const extra = Math.max(0, n - CAP);
+  const totalRowBase = 35;
+  const totalRow = totalRowBase + extra;
+
+  function allCells() { return Array.from(doc.getElementsByTagNameNS(MAIN, 'c')); }
+  function getCell(ref) { for (const c of allCells()) if (c.getAttribute('r') === ref) return c; return null; }
+  function clearCell(c) { while (c.firstChild) c.removeChild(c.firstChild); c.removeAttribute('t'); c.removeAttribute('cm'); }
+  function setText(ref, value) {
+    const c = getCell(ref); if (!c) return;
+    clearCell(c);
+    if (value == null || value === '') return;
+    c.setAttribute('t', 'inlineStr');
+    const is = doc.createElementNS(MAIN, 'is');
+    const t = doc.createElementNS(MAIN, 't');
+    t.setAttributeNS(XMLNS_XML, 'xml:space', 'preserve');
+    t.textContent = String(value);
+    is.appendChild(t); c.appendChild(is);
+  }
+  function setNum(ref, value) {
+    const c = getCell(ref); if (!c) return;
+    clearCell(c);
+    if (value == null || value === '') return;
+    const v = doc.createElementNS(MAIN, 'v'); v.textContent = String(value); c.appendChild(v);
+  }
+  function setFormula(ref, formula, cached) {
+    const c = getCell(ref); if (!c) return;
+    clearCell(c);
+    const f = doc.createElementNS(MAIN, 'f'); f.textContent = formula;
+    const v = doc.createElementNS(MAIN, 'v'); v.textContent = String(cached);
+    c.appendChild(f); c.appendChild(v);
+  }
+  function getRow(nn) { for (const r of Array.from(sheetData.getElementsByTagNameNS(MAIN, 'row'))) if (r.getAttribute('r') === String(nn)) return r; return null; }
+  function shiftRows(fromRow, amount) {
+    if (amount === 0) return;
+    for (const r of Array.from(sheetData.getElementsByTagNameNS(MAIN, 'row'))) {
+      const rn = parseInt(r.getAttribute('r'), 10);
+      if (rn >= fromRow) {
+        r.setAttribute('r', String(rn + amount));
+        for (const c of Array.from(r.getElementsByTagNameNS(MAIN, 'c'))) {
+          const ref = c.getAttribute('r'); c.setAttribute('r', colOf(ref) + (rowOf(ref) + amount));
+        }
+      }
+    }
+    for (const mc of Array.from(doc.getElementsByTagNameNS(MAIN, 'mergeCell'))) {
+      mc.setAttribute('ref', mc.getAttribute('ref').split(':').map((p) => { const rn = rowOf(p); return rn >= fromRow ? colOf(p) + (rn + amount) : p; }).join(':'));
+    }
+    for (const dv of Array.from(doc.getElementsByTagNameNS(MAIN, 'dataValidation'))) {
+      const sq = dv.getAttribute('sqref'); if (!sq) continue;
+      dv.setAttribute('sqref', sq.split(/\s+/).map((rng) => rng.split(':').map((p) => { const rn = rowOf(p); return rn >= fromRow ? colOf(p) + (rn + amount) : p; }).join(':')).join(' '));
+    }
+    if (draw) { const b0 = fromRow - 1; for (const re of Array.from(draw.getElementsByTagNameNS(XDR, 'row'))) { const v = parseInt(re.textContent, 10); if (v >= b0) re.textContent = String(v + amount); } }
+  }
+  const ROW_STYLES = { A: '41', B: '42', C: '43', D: '44', E: '44', F: '45', G: '46', H: '44', I: '45', J: '47', K: '48', L: '49' };
+  function makeDataRow(rownum) {
+    const r = doc.createElementNS(MAIN, 'row');
+    r.setAttribute('r', String(rownum));
+    r.setAttribute('ht', '21.75'); r.setAttribute('customHeight', '1'); r.setAttribute('spans', '1:12');
+    for (const col of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']) {
+      const c = doc.createElementNS(MAIN, 'c'); c.setAttribute('r', col + rownum); c.setAttribute('s', ROW_STYLES[col]); r.appendChild(c);
+    }
+    return r;
+  }
+  function addMerge(ref) {
+    const mcs = doc.getElementsByTagNameNS(MAIN, 'mergeCells')[0]; if (!mcs) return;
+    const mc = doc.createElementNS(MAIN, 'mergeCell'); mc.setAttribute('ref', ref); mcs.appendChild(mc);
+    mcs.setAttribute('count', String(mcs.getElementsByTagNameNS(MAIN, 'mergeCell').length));
+  }
+
+  // ---- expansão: insere `extra` linhas de dados antes da linha de total ----
+  if (extra > 0) {
+    shiftRows(totalRowBase, extra);
+    const tRow = getRow(totalRow);
+    for (let i = 0; i < extra; i++) {
+      const rr = totalRowBase + i;        // 35..34+extra
+      sheetData.insertBefore(makeDataRow(rr), tRow);
+      addMerge('C' + rr + ':F' + rr);
+      addMerge('G' + rr + ':I' + rr);
+    }
+  }
+
+  // ---- cabeçalho ----
+  setText('E4', D.funcionario);            // Nome
+  setText('E6', D.referente);              // Período Prestação
+  if (D.dataSolicitacao) setNum('E7', dateToSerial(D.dataSolicitacao));   // Data de Entrega (serial/data)
+
+  // ---- lançamentos (tabela `alelo`) ----
+  D.alelo.forEach((e, i) => {
+    const r = 17 + i;
+    setText('B' + r, fmtDateBR(e.data));   // DATA
+    setText('G' + r, e.descricao);         // DESCRIÇÃO DA DESPESA (C:F Estabelecimento e K Justificativa ficam em branco)
+    setNum('J' + r, e.valor);              // VALOR
+  });
+
+  // ---- total ----
+  const sum = Math.round(sumOf(D.alelo) * 100) / 100;
+  setFormula('J' + totalRow, `SUM(J17:J${totalRow - 1})`, sum);
+  setFormula('E8', 'J' + totalRow, sum);
+
+  // ---- serializar ----
+  const xmlHead = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n';
+  const stripDecl = (s) => s.replace(/^\s*<\?xml[^>]*\?>\s*/i, '');
+  files['xl/worksheets/sheet1.xml'] = enc.encode(xmlHead + stripDecl(ser.serializeToString(doc)));
+  if (draw) files['xl/drawings/drawing1.xml'] = enc.encode(xmlHead + stripDecl(ser.serializeToString(draw)));
+  if (files['xl/calcChain.xml']) {
+    delete files['xl/calcChain.xml'];
+    if (files['[Content_Types].xml']) {
+      let ct = dec.decode(files['[Content_Types].xml']);
+      ct = ct.replace(/<Override[^>]*PartName="\/xl\/calcChain\.xml"[^>]*\/>/, '');
+      files['[Content_Types].xml'] = enc.encode(ct);
+    }
+  }
+  return fflate.zipSync(files);
+}
+
 async function exportExcel(src, sections) {
   const inc = sections || { reembolso: true, alelo: true };
   const base = src || state;
   const has = (inc.reembolso && base.reembolso.length) || (inc.alelo && base.alelo.length);
   if (!has) { toast('Nada para exportar com a seleção.'); return; }
+  const santander = !!inc.alelo && !inc.reembolso;   // só cartão → formato exclusivo (Prestação de Contas)
   try {
     toast('Gerando Excel…');
     const D = filteredDoc(base, inc);
-    const bytes = await buildXlsx(D);
+    const bytes = santander ? await buildSantanderXlsx(D) : await buildXlsx(D);
     const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    await shareOrDownload(blob, reportFileBase(D) + '.xlsx', 'Relatório de Despesas (Excel)');
+    const fname = (santander ? santanderFileBase(D) : reportFileBase(D)) + '.xlsx';
+    await shareOrDownload(blob, fname, santander ? 'Prestação de Contas - Cartão Santander' : 'Relatório de Despesas (Excel)');
   } catch (e) {
     console.error(e);
     toast('Erro ao gerar Excel: ' + e.message);
@@ -900,7 +1042,13 @@ function openExportChooser(kind, src) {
   $('exp-c-alelo').textContent = nA + ' lançamento(s) · ' + formatMoney(sumOf(D.alelo || []));
   $('exp-reembolso').checked = nR > 0;
   $('exp-alelo').checked = nA > 0;
+  updateExportHint();
   $('export-modal').classList.add('open');
+}
+function updateExportHint() {
+  const h = $('exp-hint-santander'); if (!h) return;
+  const only = $('exp-alelo').checked && !$('exp-reembolso').checked;
+  h.style.display = only ? '' : 'none';
 }
 function closeExportModal() { $('export-modal').classList.remove('open'); }
 function confirmExport() {
@@ -975,15 +1123,73 @@ function buildPrint(src, sections) {
     </div>`;
 }
 
+/* PDF exclusivo do Cartão Santander — replica o conteúdo do modelo "Prestação de Contas". */
+function buildSantanderPrint(src) {
+  const D = src || state;
+  const list = D.alelo || [];
+  const total = sumOf(list);
+  const minRows = 8;
+  let rows = '';
+  const nrows = Math.max(list.length, minRows);
+  for (let i = 0; i < nrows; i++) {
+    const e = list[i];
+    rows += `<tr>
+      <td class="c-data">${e ? fmtDateBR(e.data) : ''}</td>
+      <td></td>
+      <td>${e ? escapeHtml(e.descricao) : ''}</td>
+      <td class="c-val">${e ? formatMoney(e.valor) : ''}</td>
+      <td></td>
+    </tr>`;
+  }
+  const root = $('print-root');
+  root.innerHTML = `
+    <div class="p-top">
+      <div class="p-logo"><img src="assets/soma-logo.png" alt="Soma"></div>
+      <div class="p-title">PRESTAÇÃO DE CONTAS — CARTÃO DE CRÉDITO</div>
+    </div>
+    <table class="p-info">
+      <tr><td class="lab">Nome:</td><td class="val">${escapeHtml(D.funcionario)}</td>
+          <td class="lab">Data de Entrega:</td><td class="val">${fmtDateBR(D.dataSolicitacao)}</td></tr>
+      <tr><td class="lab">Período Prestação:</td><td class="val">${escapeHtml(D.referente)}</td>
+          <td class="lab">Total das Despesas:</td><td class="val">${formatMoney(total)}</td></tr>
+    </table>
+    <div class="p-obs" style="margin:8px 0">
+      <b>Anexar:</b> Comprovante do cartão de crédito (fatura) · Notas fiscais ou recibos de
+      todas as despesas · Relatório de viagem (se aplicável).
+    </div>
+    <table class="p-tbl">
+      <thead><tr>
+        <th class="c-data">DATA</th><th>ESTABELECIMENTO</th>
+        <th>DESCRIÇÃO DA DESPESA</th><th class="c-val">VALOR</th>
+        <th>JUSTIFICATIVA / FINALIDADE</th>
+      </tr></thead>
+      <tbody>${rows}
+        <tr class="p-subtotal">
+          <td colspan="3" class="sub-lbl">TOTAL DAS DESPESAS:</td>
+          <td class="sub-val">${formatMoney(total)}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="p-obs">
+      Declaro que os valores acima referem-se a despesas realizadas exclusivamente para fins
+      profissionais, conforme as normas da empresa/instituição. Solicitar inclusão de CNPJ na
+      emissão da nota fiscal. <b>Toda despesa sem o respectivo comprovante fiscal será
+      considerada indevida, sujeita à restituição por parte do colaborador.</b>
+    </div>`;
+}
+
 async function exportPDF(src, sections) {
   const inc = sections || { reembolso: true, alelo: true };
   const D = src || state;
   const has = (inc.reembolso && D.reembolso.length) || (inc.alelo && D.alelo.length);
   if (!has) { toast('Nada para exportar com a seleção.'); return; }
+  const santander = !!inc.alelo && !inc.reembolso;   // só cartão → formato exclusivo
   try {
     toast('Gerando PDF…');
-    const blob = await generatePdfBlob(D, inc);
-    await shareOrDownload(blob, reportFileBase(D) + '.pdf', 'Relatório de Despesas (PDF)');
+    const blob = await generatePdfBlob(D, inc, santander);
+    const fname = (santander ? santanderFileBase(D) : reportFileBase(D)) + '.pdf';
+    await shareOrDownload(blob, fname, santander ? 'Prestação de Contas - Cartão Santander' : 'Relatório de Despesas (PDF)');
   } catch (e) {
     console.error(e);
     toast('Erro ao gerar PDF: ' + e.message);
@@ -992,8 +1198,9 @@ async function exportPDF(src, sections) {
 
 /* Gera um PDF de verdade (arquivo) a partir do mesmo layout do relatório,
    capturado com html2canvas e montado com jsPDF (A4 retrato, multipágina). */
-async function generatePdfBlob(src, sections) {
-  buildPrint(src || state, sections);
+async function generatePdfBlob(src, sections, santander) {
+  if (santander) buildSantanderPrint(src || state);
+  else buildPrint(src || state, sections);
   const root = $('print-root');
   const prevStyle = root.getAttribute('style') || '';
   // torna o layout capturável fora da tela
@@ -2310,6 +2517,8 @@ function init() {
 
   $('exp-cancel').addEventListener('click', closeExportModal);
   $('exp-confirm').addEventListener('click', confirmExport);
+  $('exp-reembolso').addEventListener('change', updateExportHint);
+  $('exp-alelo').addEventListener('change', updateExportHint);
   $('export-modal').addEventListener('click', (e) => { if (e.target === $('export-modal')) closeExportModal(); });
 
   setupIcons();

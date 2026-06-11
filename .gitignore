@@ -3,6 +3,7 @@ server.ps1
 received.xlsx
 .claude/
 Relatorio de Despesas para Reembolso - Modelo.xlsx
+Despesas Cartão.xlsx
 
 # Artefatos de preview/teste (gerados via headless)
 _*preview*

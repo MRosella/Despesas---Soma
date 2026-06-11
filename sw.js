@@ -1,7 +1,7 @@
 /* Service Worker — cache do app para funcionar offline.
    Estratégia: network-first (online sempre pega a versão nova; cache é
    só fallback offline). Isso evita o app ficar "preso" numa versão antiga. */
-const CACHE = 'despesas-soma-v23';
+const CACHE = 'despesas-soma-v24';
 const ASSETS = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const ASSETS = [
   './lib/html2canvas.min.js',
   './lib/jspdf.umd.min.js',
   './template.xlsx',
+  './template-santander.xlsx',
   './assets/soma-logo.png',
   './manifest.webmanifest',
   './icons/icon-192.png',
