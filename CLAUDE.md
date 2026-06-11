@@ -116,9 +116,18 @@ descartados (`driveDismissed`); `driveKnown`/`driveDismissed` = união (evita re
   arquivo sem leitura da IA = **`NF {DD.MM.AAAA}`** (`receiptFileName`/`ddmmaaaa`), extensão por tipo.
 - **Formato exclusivo do Cartão Santander** (`buildSantanderXlsx`/`buildSantanderPrint`, asset
   `template-santander.xlsx`): acionado ao exportar **só** a seção `alelo` (Excel/PDF "Prestação de
-  Contas"). Layout próprio (E4=Nome, E6=Período, E7=Data Entrega, E8/J=Total; tabela linhas 17.. e
-  total na 35, expande se >18). Reembolso e "ambos" seguem `buildXlsx`/`buildPrint`.
-- **Varredura do Drive** (`scanDriveForReceipts`, botão `#gd-scan`): escopo agora é
+  Contas"). Excel: E4=**Nome FIXO** (`SANTANDER_NOME`), E5=**Cargo FIXO** (`SANTANDER_CARGO`),
+  E6=Período(`referente`), E7=Data Entrega, E8/J=Total; tabela linhas 17.. (total na 35, expande se
+  >18). Colunas: B=DATA, **C:F=ESTABELECIMENTO**, G:I=DESCRIÇÃO, J=VALOR, **K=JUSTIFICATIVA**. PDF
+  (`buildSantanderPrint`) é **réplica visual do modelo** (barra vermelha `#C00000`+logo, info à esq.,
+  declaração à dir., checklist, cabeçalho vermelho, total cinza `#D8D8D8`) e sai em **paisagem**
+  (`generatePdfBlob(...,santander)`). Reembolso/"ambos" seguem `buildXlsx`/`buildPrint` (retrato).
+- **Campos só do cartão (`alelo`):** `entry.estabelecimento` (IA capta + manual) e
+  `entry.justificativa` (manual) — campos `#m-estabelecimento`/`#m-justificativa` no modal, visíveis
+  só p/ `alelo` (`toggleCartaoFields`); alimentam C e K do Excel/PDF. OCR (`ocrReceipt`) retorna
+  `establishment`; `fillFromOcr` preenche se visível. Reembolso não tem os campos.
+- **Varredura do Drive** (`scanDriveForReceipts`, botão **`#gd-scan-main` na tela de Lançamentos**,
+  abaixo de "Dados do Reembolso"): escopo agora é
   `drive.file` **+ `drive.readonly`** (lê arquivos subidos manualmente → exige reconsentir 1x).
   `gdListReceipts(tabela)` lista recursivo a raiz da tabela; ids desconhecidos (`knownDriveIds`)
   → OCR. Sucesso (data+total) vira lançamento com `foto={id,name}` (sem reupload); falha vira

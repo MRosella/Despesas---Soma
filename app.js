@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v25';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v26';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -451,6 +451,9 @@ function openModal(tabela, id, prefill) {
   $('m-descricao').value = entry.descricao || '';
   $('m-categoria').value = entry.categoria || '';
   $('m-valor').value = entry.valor ? formatMoneyInput(entry.valor) : '';
+  if ($('m-estabelecimento')) $('m-estabelecimento').value = entry.estabelecimento || '';
+  if ($('m-justificativa')) $('m-justificativa').value = entry.justificativa || '';
+  toggleCartaoFields(tabela);
   updateCatHint();
 
   resetModalPhoto(isEdit ? (entry.foto || null) : null);
@@ -461,6 +464,13 @@ function openModal(tabela, id, prefill) {
 }
 
 function closeModal() { $('modal').classList.remove('open'); linkedPendingId = null; }
+
+/* Estabelecimento e Justificativa só aparecem no cartão Santander (tabela `alelo`) */
+function toggleCartaoFields(tabela) {
+  const show = tabela === 'alelo' ? '' : 'none';
+  if ($('m-estabelecimento-field')) $('m-estabelecimento-field').style.display = show;
+  if ($('m-justificativa-field')) $('m-justificativa-field').style.display = show;
+}
 
 /* ---- comprovante no modal ---- */
 let modalPhoto = { mode: 'keep', existing: null, blob: null, dataUrl: null, w: 0, h: 0 };
@@ -599,13 +609,22 @@ async function saveEntry() {
   const dup = state[tabela].some((x) => x.id !== id && x.data === data && x.categoria === categoria && Math.round((x.valor || 0) * 100) === cents);
   if (dup && !confirm('Já existe um lançamento com a mesma data, categoria e valor. Adicionar mesmo assim?')) return;
 
+  // campos extras só do cartão Santander (tabela `alelo`)
+  const cartao = tabela === 'alelo';
+  const estabelecimento = cartao ? ($('m-estabelecimento').value || '').trim() : '';
+  const justificativa = cartao ? ($('m-justificativa').value || '').trim() : '';
+
   const now = Date.now();
   let entry;
   if (id) {
     entry = state[tabela].find((x) => x.id === id);
-    if (entry) Object.assign(entry, { data, descricao, categoria, valor, updatedAt: now });
+    if (entry) {
+      Object.assign(entry, { data, descricao, categoria, valor, updatedAt: now });
+      if (cartao) { entry.estabelecimento = estabelecimento; entry.justificativa = justificativa; }
+    }
   } else {
     entry = { id: uid(), data, descricao, categoria, valor, updatedAt: now };
+    if (cartao) { entry.estabelecimento = estabelecimento; entry.justificativa = justificativa; }
     state[tabela].push(entry);
     lastAddedId = entry.id;
   }
@@ -867,10 +886,14 @@ function santanderFileBase(src) {
   return `Prestacao_Contas_Cartao_${nome}_${ref}`;
 }
 
+/* Nome e cargo FIXOS no Excel/PDF do cartão Santander (não vêm do campo "Funcionário"). */
+const SANTANDER_NOME = 'Murilo Rosella';
+const SANTANDER_CARGO = 'Piloto de Aeronaves';
+
 /* ---------------- Excel exclusivo do Cartão Santander (modelo "Despesas Cartão.xlsx") ----------------
-   Layout: info E4=Nome, E6=Período, E7=Data de Entrega (serial), E8=Total(=J{total}); tabela cabeçalho
-   linha 16, dados 17.. (capac. 18 → linhas 17-34), linha de total 35 (J=SUM). Colunas: B=DATA,
-   C:F=ESTABELECIMENTO, G:I=DESCRIÇÃO, J=VALOR, K=JUSTIFICATIVA. Os dados do cartão = tabela `alelo`. */
+   Layout: info E4=Nome(fixo), E5=Cargo(fixo), E6=Período, E7=Data de Entrega (serial), E8=Total(=J{total});
+   tabela cabeçalho linha 16, dados 17.. (capac. 18 → linhas 17-34), linha de total 35 (J=SUM). Colunas:
+   B=DATA, C:F=ESTABELECIMENTO, G:I=DESCRIÇÃO, J=VALOR, K=JUSTIFICATIVA. Os dados do cartão = tabela `alelo`. */
 async function buildSantanderXlsx(src) {
   const D = src || state;
   const buf = await fetch('template-santander.xlsx', { cache: 'no-store' }).then((r) => r.arrayBuffer());
@@ -967,7 +990,8 @@ async function buildSantanderXlsx(src) {
   }
 
   // ---- cabeçalho ----
-  setText('E4', D.funcionario);            // Nome
+  setText('E4', SANTANDER_NOME);           // Nome (fixo)
+  setText('E5', SANTANDER_CARGO);          // Cargo (fixo)
   setText('E6', D.referente);              // Período Prestação
   if (D.dataSolicitacao) setNum('E7', dateToSerial(D.dataSolicitacao));   // Data de Entrega (serial/data)
 
@@ -975,8 +999,10 @@ async function buildSantanderXlsx(src) {
   D.alelo.forEach((e, i) => {
     const r = 17 + i;
     setText('B' + r, fmtDateBR(e.data));   // DATA
-    setText('G' + r, e.descricao);         // DESCRIÇÃO DA DESPESA (C:F Estabelecimento e K Justificativa ficam em branco)
+    setText('C' + r, e.estabelecimento);   // ESTABELECIMENTO (C:F)
+    setText('G' + r, e.descricao);         // DESCRIÇÃO DA DESPESA (G:I)
     setNum('J' + r, e.valor);              // VALOR
+    setText('K' + r, e.justificativa);     // JUSTIFICATIVA | FINALIDADE
   });
 
   // ---- total ----
@@ -1138,60 +1164,74 @@ function buildPrint(src, sections) {
     </div>`;
 }
 
-/* PDF exclusivo do Cartão Santander — replica o conteúdo do modelo "Prestação de Contas". */
+/* PDF exclusivo do Cartão Santander — replica o VISUAL do modelo "Prestação de Contas"
+   (barra vermelha #C00000 + logo, info à esquerda, declaração à direita, checklist, tabela
+   com cabeçalho vermelho e total cinza #D8D8D8). Gerado em paisagem por generatePdfBlob. */
 function buildSantanderPrint(src) {
   const D = src || state;
   const list = D.alelo || [];
   const total = sumOf(list);
-  const minRows = 8;
+  const RED = '#C00000', GRAY = '#D8D8D8';
+  const bd = 'border:1px solid #000;', pad = 'padding:5px 7px;';
+  const th = bd + pad + 'color:#fff;background:' + RED + ';font-weight:bold;text-align:center;';
+  const lab = bd + pad + 'font-weight:bold;background:#fff;white-space:nowrap;';
+  const val = bd + pad + 'background:#fff;';
+  const tdTxt = bd + pad + 'word-break:break-word;';
+  const minRows = 12;
   let rows = '';
   const nrows = Math.max(list.length, minRows);
   for (let i = 0; i < nrows; i++) {
     const e = list[i];
     rows += `<tr>
-      <td class="c-data">${e ? fmtDateBR(e.data) : ''}</td>
-      <td></td>
-      <td>${e ? escapeHtml(e.descricao) : ''}</td>
-      <td class="c-val">${e ? formatMoney(e.valor) : ''}</td>
-      <td></td>
+      <td style="${bd}${pad}text-align:center;white-space:nowrap;">${e ? fmtDateBR(e.data) : ''}</td>
+      <td style="${tdTxt}">${e ? escapeHtml(e.estabelecimento || '') : ''}</td>
+      <td style="${tdTxt}">${e ? escapeHtml(e.descricao || '') : ''}</td>
+      <td style="${bd}${pad}text-align:right;white-space:nowrap;">${e ? formatMoney(e.valor) : ''}</td>
+      <td style="${tdTxt}">${e ? escapeHtml(e.justificativa || '') : ''}</td>
     </tr>`;
   }
   const root = $('print-root');
   root.innerHTML = `
-    <div class="p-top">
-      <div class="p-logo"><img src="assets/soma-logo.png" alt="Soma"></div>
-      <div class="p-title">PRESTAÇÃO DE CONTAS — CARTÃO DE CRÉDITO</div>
+  <div style="font-family:Calibri,'Segoe UI',Arial,sans-serif;color:#000;background:#fff;font-size:13px;">
+    <div style="background:${RED};color:#fff;display:flex;align-items:center;gap:14px;padding:9px 14px;">
+      <img src="assets/soma-logo.png" alt="Soma" style="height:44px;background:#fff;padding:3px 6px;border-radius:3px;">
+      <div style="font-weight:bold;font-size:21px;letter-spacing:.5px;">PRESTAÇÃO DE CONTAS - CARTÃO DE CRÉDITO</div>
     </div>
-    <table class="p-info">
-      <tr><td class="lab">Nome:</td><td class="val">${escapeHtml(D.funcionario)}</td>
-          <td class="lab">Data de Entrega:</td><td class="val">${fmtDateBR(D.dataSolicitacao)}</td></tr>
-      <tr><td class="lab">Período Prestação:</td><td class="val">${escapeHtml(D.referente)}</td>
-          <td class="lab">Total das Despesas:</td><td class="val">${formatMoney(total)}</td></tr>
-    </table>
-    <div class="p-obs" style="margin:8px 0">
-      <b>Anexar:</b> Comprovante do cartão de crédito (fatura) · Notas fiscais ou recibos de
-      todas as despesas · Relatório de viagem (se aplicável).
+    <div style="display:flex;gap:12px;margin-top:12px;align-items:stretch;">
+      <table style="border-collapse:collapse;width:46%;font-size:14px;">
+        <tr><td style="${lab}width:38%;">Nome:</td><td style="${val}">${escapeHtml(SANTANDER_NOME)}</td></tr>
+        <tr><td style="${lab}">Cargo:</td><td style="${val}">${escapeHtml(SANTANDER_CARGO)}</td></tr>
+        <tr><td style="${lab}">Período Prestação:</td><td style="${val}">${escapeHtml(D.referente || '')}</td></tr>
+        <tr><td style="${lab}">Data de Entrega:</td><td style="${val}">${fmtDateBR(D.dataSolicitacao)}</td></tr>
+        <tr><td style="${lab}">Total da Despesas:</td><td style="${bd}${pad}background:${GRAY};font-weight:bold;">${formatMoney(total)}</td></tr>
+      </table>
+      <div style="flex:1;border:1px solid #000;padding:10px 12px;font-size:12.5px;line-height:1.45;">
+        Declaro que os valores acima referem-se a despesas realizadas exclusivamente para fins
+        profissionais, conforme as normas da empresa/instituição.<br><br>
+        Solicitar inclusão de CNPJ na emissão da nota fiscal.<br><br>
+        <b><u>Toda despesa sem o respectivo comprovante fiscal será considerada indevida, sujeita
+        à restituição por parte do colaborador.</u></b>
+      </div>
     </div>
-    <table class="p-tbl">
+    <div style="margin-top:10px;font-weight:bold;font-size:13px;">
+      Anexar: &#9744; Comprovante do cartão de crédito (fatura) &nbsp;&nbsp; &#9744; Notas fiscais ou recibos de todas as despesas &nbsp;&nbsp; &#9744; Relatório de viagem (se aplicável)
+    </div>
+    <table style="border-collapse:collapse;width:100%;margin-top:10px;font-size:12.5px;table-layout:fixed;">
+      <colgroup><col style="width:9%"><col style="width:22%"><col style="width:27%"><col style="width:11%"><col style="width:31%"></colgroup>
       <thead><tr>
-        <th class="c-data">DATA</th><th>ESTABELECIMENTO</th>
-        <th>DESCRIÇÃO DA DESPESA</th><th class="c-val">VALOR</th>
-        <th>JUSTIFICATIVA / FINALIDADE</th>
+        <th style="${th}">DATA</th><th style="${th}">ESTABELECIMENTO</th>
+        <th style="${th}">DESCRIÇÃO DA DESPESA</th><th style="${th}">VALOR</th>
+        <th style="${th}">JUSTIFICATIVA / FINALIDADE</th>
       </tr></thead>
       <tbody>${rows}
-        <tr class="p-subtotal">
-          <td colspan="3" class="sub-lbl">TOTAL DAS DESPESAS:</td>
-          <td class="sub-val">${formatMoney(total)}</td>
-          <td></td>
+        <tr>
+          <td colspan="3" style="${bd}${pad}background:${GRAY};font-weight:bold;text-align:right;">TOTAL DAS DESPESAS:</td>
+          <td style="${bd}${pad}background:${GRAY};font-weight:bold;text-align:right;white-space:nowrap;">${formatMoney(total)}</td>
+          <td style="${bd}${pad}background:${GRAY};"></td>
         </tr>
       </tbody>
     </table>
-    <div class="p-obs">
-      Declaro que os valores acima referem-se a despesas realizadas exclusivamente para fins
-      profissionais, conforme as normas da empresa/instituição. Solicitar inclusão de CNPJ na
-      emissão da nota fiscal. <b>Toda despesa sem o respectivo comprovante fiscal será
-      considerada indevida, sujeita à restituição por parte do colaborador.</b>
-    </div>`;
+  </div>`;
 }
 
 async function exportPDF(src, sections) {
@@ -1218,18 +1258,20 @@ async function generatePdfBlob(src, sections, santander) {
   else buildPrint(src || state, sections);
   const root = $('print-root');
   const prevStyle = root.getAttribute('style') || '';
-  // torna o layout capturável fora da tela
-  root.style.cssText = 'display:block;position:fixed;left:-10000px;top:0;width:800px;background:#f8f4f2;padding:24px;';
+  // torna o layout capturável fora da tela (cartão Santander = fundo branco + mais largo p/ paisagem)
+  const bg = santander ? '#ffffff' : '#f8f4f2';
+  const w = santander ? 1120 : 800;
+  root.style.cssText = 'display:block;position:fixed;left:-10000px;top:0;width:' + w + 'px;background:' + bg + ';padding:24px;';
 
   // espera o logo carregar para não sair em branco
-  const img = root.querySelector('.p-logo img');
+  const img = root.querySelector('img');
   if (img && !img.complete) await new Promise((r) => { img.onload = img.onerror = r; });
 
   try {
-    const canvas = await html2canvas(root, { scale: 2, backgroundColor: '#f8f4f2', useCORS: true });
+    const canvas = await html2canvas(root, { scale: 2, backgroundColor: bg, useCORS: true });
     const imgData = canvas.toDataURL('image/jpeg', 0.96);
     const jsPDF = window.jspdf.jsPDF;
-    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: santander ? 'landscape' : 'portrait' });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
     const margin = 8;
@@ -1900,6 +1942,7 @@ async function ocrReceipt(blob, mime) {
     '- nfNumber: número da nota/cupom (apenas dígitos; null se não houver).',
     '- date: data de emissão no formato AAAA-MM-DD (null se ilegível).',
     '- city / uf: cidade e UF do estabelecimento emissor (ex.: "Porto Seguro", "BA").',
+    '- establishment: nome do estabelecimento/loja emissor (razão social ou nome fantasia; null se ilegível).',
     '- total: valor total pago, em reais, como número (ponto decimal).',
     '- category: escolha UMA destas categorias exatas: ' + cats.join(' | ') + '.',
     '  Refeições => a categoria de refeição correspondente; posto de combustível => Combustível;',
@@ -1917,6 +1960,7 @@ async function ocrReceipt(blob, mime) {
           date: { type: 'STRING', nullable: true },
           city: { type: 'STRING', nullable: true },
           uf: { type: 'STRING', nullable: true },
+          establishment: { type: 'STRING', nullable: true },
           total: { type: 'NUMBER', nullable: true },
           category: { type: 'STRING', enum: cats, nullable: true }
         }
@@ -1936,6 +1980,7 @@ async function ocrReceipt(blob, mime) {
     dateISO: (data.date && /^\d{4}-\d{2}-\d{2}$/.test(data.date)) ? data.date : '',
     city: (data.city || '').trim(),
     uf: (data.uf || '').trim().toUpperCase(),
+    establishment: (data.establishment || '').trim(),
     total: (typeof data.total === 'number' && isFinite(data.total)) ? data.total : null,
     category: cats.indexOf(data.category) >= 0 ? data.category : ''
   };
@@ -1949,6 +1994,8 @@ function fillFromOcr(ocr) {
   if (ocr.category && !cEl.value) { cEl.value = ocr.category; updateCatHint(); }
   const descEl = $('m-descricao');
   if (!descEl.value.trim()) descEl.value = buildDescricao(ocr.category, ocr.city, ocr.uf);
+  const estEl = $('m-estabelecimento'), estField = $('m-estabelecimento-field');   // só preenche se visível (cartão) e vazio
+  if (estEl && estField && estField.style.display !== 'none' && ocr.establishment && !estEl.value.trim()) estEl.value = ocr.establishment;
   const vEl = $('m-valor');
   if (ocr.total != null && !vEl.value.trim()) vEl.value = formatMoneyInput(ocr.total);
 }
@@ -1956,7 +2003,7 @@ async function runReceiptOcr() {
   try {
     toast('Lendo comprovante…');
     const ocr = await ocrReceipt(modalPhoto.blob, modalPhoto.blob && modalPhoto.blob.type);
-    modalPhoto.ocr = { nfNumber: ocr.nfNumber, dateISO: ocr.dateISO, city: ocr.city, uf: ocr.uf };
+    modalPhoto.ocr = { nfNumber: ocr.nfNumber, dateISO: ocr.dateISO, city: ocr.city, uf: ocr.uf, establishment: ocr.establishment };
     fillFromOcr(ocr);
     toast('Comprovante lido — confira os campos.');
   } catch (e) { console.error(e); toast('Não consegui ler o comprovante: ' + e.message); }
@@ -2200,7 +2247,7 @@ async function scanDriveForReceipts() {
   if (!aiConfigured()) { toast('Configure a leitura por IA (Gemini) para reconhecer os comprovantes.'); return; }
   if (!navigator.onLine) { toast('Sem conexão com a internet.'); return; }
   scanningDrive = true;
-  const btn = $('gd-scan'); if (btn) { btn.disabled = true; }
+  const btn = $('gd-scan-main'); if (btn) { btn.disabled = true; }
   try {
     if (!gdConnected()) { try { await gdGetToken(true); } catch (e) { toast('Conecte o Google Drive (autorize o acesso de leitura).'); return; } }
     toast('Procurando comprovantes no Drive…');
@@ -2222,13 +2269,14 @@ async function scanDriveForReceipts() {
             categoria: ocr.category, valor: ocr.total, updatedAt: Date.now(),
             foto: { id: f.id, name: f.name }
           };
+          if (tabela === 'alelo') { entry.estabelecimento = ocr.establishment || ''; entry.justificativa = ''; }
           state[tabela].push(entry);
           state[tabela].sort((a, b) => (a.data || '').localeCompare(b.data || ''));
           novos++;
         } else {
           state.pending.push({
             fileId: f.id, name: f.name, tabela, mimeType: f.mimeType, createdTime: f.createdTime || '',
-            ocr: ocr ? { dateISO: ocr.dateISO, category: ocr.category, total: ocr.total, descricao: buildDescricao(ocr.category, ocr.city, ocr.uf) } : null
+            ocr: ocr ? { dateISO: ocr.dateISO, category: ocr.category, total: ocr.total, descricao: buildDescricao(ocr.category, ocr.city, ocr.uf), establishment: ocr.establishment || '' } : null
           });
           pend++;
         }
@@ -2256,7 +2304,8 @@ function openPendingEntry(p) {
     data: o.dateISO || todayISO(),
     descricao: o.descricao || '',
     categoria: o.category || '',
-    valor: (o.total != null ? o.total : '')
+    valor: (o.total != null ? o.total : ''),
+    estabelecimento: o.establishment || ''
   });
   // vincula o arquivo do Drive já existente (não reenvia ao salvar)
   modalPhoto = { mode: 'keep', existing: { id: p.fileId, name: p.name }, blob: null, dataUrl: null, w: 0, h: 0 };
@@ -2479,7 +2528,7 @@ function setupGDriveUI() {
       await flushGdDeletions(true);
     } catch (e) { console.error(e); setGdStatus('Erro: ' + e.message, 'err'); }
   });
-  if ($('gd-scan')) $('gd-scan').addEventListener('click', () => scanDriveForReceipts());
+  if ($('gd-scan-main')) $('gd-scan-main').addEventListener('click', () => scanDriveForReceipts());
   updateGdPending();
   $('gd-clear').addEventListener('click', () => {
     if (!confirm('Desconectar o Google Drive deste aparelho?')) return;

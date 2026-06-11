@@ -91,6 +91,8 @@
             <p class="hint" style="margin:6px 2px 0">Define a pasta no Google Drive onde <b>todos</b> os comprovantes deste relatório serão guardados (ex.: 2026/Julho), mesmo os de outro mês. Em branco, organiza pela data de cada lançamento.</p>
           </div>
           <p class="hint">Empresa: <b>Soma Urbanismo S/A</b> (fixo). Seus dados são salvos automaticamente neste celular.</p>
+          <button class="btn btn-ghost" id="gd-scan-main" type="button" style="width:100%; margin-top:4px"><span class="bic" data-icon="search" data-size="18"></span> Procurar comprovantes no Drive</button>
+          <p class="hint" style="margin:6px 2px 0">Reconhece comprovantes subidos manualmente à pasta do Drive e ainda sem lançamento (usa a IA).</p>
         </div>
       </section>
 
@@ -249,8 +251,7 @@
             <button class="btn btn-excel" id="gd-connect" type="button">Conectar Google</button>
           </div>
           <button class="btn btn-ghost" id="gd-flush" type="button" style="display:none; width:100%; margin-top:8px">Enviar comprovantes pendentes</button>
-          <button class="btn btn-ghost" id="gd-scan" type="button" style="width:100%; margin-top:8px">Procurar comprovantes no Drive</button>
-          <p class="hint" style="margin:6px 2px 0">Reconhece comprovantes que você subiu manualmente à pasta do Drive e ainda não têm lançamento. Pede permissão de <b>leitura</b> da pasta na 1ª vez. Usa a IA (Gemini) para ler cada arquivo.</p>
+          <p class="hint" style="margin:6px 2px 0">O botão <b>Procurar comprovantes no Drive</b> fica na tela de Lançamentos. Ele reconhece arquivos subidos manualmente à pasta (pede permissão de <b>leitura</b> na 1ª vez e usa a IA).</p>
           <p class="sync-status" id="gd-status">Não configurado.</p>
           <button class="btn btn-danger-text" id="gd-clear" type="button" style="padding:8px 0">Desconectar Google deste aparelho</button>
         </div>
@@ -337,6 +338,14 @@
       <div class="field">
         <label for="m-descricao">Descrição</label>
         <input type="text" id="m-descricao" placeholder="Ex.: Almoço com cliente" />
+      </div>
+      <div class="field" id="m-estabelecimento-field" style="display:none">
+        <label for="m-estabelecimento">Estabelecimento</label>
+        <input type="text" id="m-estabelecimento" placeholder="Nome da loja/estabelecimento" />
+      </div>
+      <div class="field" id="m-justificativa-field" style="display:none">
+        <label for="m-justificativa">Justificativa / Finalidade</label>
+        <input type="text" id="m-justificativa" placeholder="Finalidade desta despesa" />
       </div>
       <div class="field">
         <label for="m-categoria">Categoria</label>
