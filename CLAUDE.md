@@ -153,5 +153,11 @@ descartados (`driveDismissed`); `driveKnown`/`driveDismissed` = união (evita re
   `template.xlsx` sharedStrings); a chave de dados `alelo` é estrutural e **não muda**.
 - Categoria nova fora da validação do `template.xlsx` é gravada mesmo assim; o Excel
   pode avisar "valor fora da lista" — limitação conhecida.
-- `GEMINI_MODEL` (app.js:1620) é constante fácil de trocar se a família mudar.
+- `GEMINI_MODEL` (`gemini-2.5-flash`) é constante fácil de trocar se a família mudar.
+- **OCR com retentativa (v28):** `ocrReceipt` reenvia até 4x com backoff exponencial (jitter) em
+  erros **transitórios** (429 cota/limite, 500/502/503 sobrecarga, falha de rede), respeitando o
+  `retryDelay` do `RetryInfo` quando a API manda. Erro definitivo propaga a **mensagem real** do
+  Gemini, que aparece no log da varredura (`⚠ … pendente (falha na leitura: <msg>)`) e no toast da
+  reanálise — assim dá pra distinguir cota esgotada de comprovante ilegível. Bug corrigido junto:
+  `dateISO` vem como **string vazia** (não `null`), então os motivos usam `!ocr.dateISO`.
 - Renomear categoria **não** reescreve lançamentos antigos (texto livre na coluna).

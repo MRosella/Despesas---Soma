@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v27';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v28';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -1968,8 +1968,35 @@ async function ocrReceipt(blob, mime) {
     }
   };
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + encodeURIComponent(a.key);
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  if (!r.ok) { let m = 'HTTP ' + r.status; try { const j = await r.json(); if (j.error && j.error.message) m = j.error.message; } catch (e) {} throw new Error(m); }
+  // Retentativa com backoff: erros transitórios da IA (429 quota/limite, 500/503 sobrecarga,
+  // falha de rede) costumam passar na 2ª/3ª tentativa — sem isso, varrer vários comprovantes
+  // de uma vez falha "em série". Respeita o retryDelay sugerido pela API quando vier.
+  const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+  const backoff = (n) => Math.min(8000, 700 * Math.pow(2, n)) + Math.floor(Math.random() * 300);
+  const MAX_TRIES = 4;
+  let r = null;
+  for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
+    try {
+      r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    } catch (netErr) {   // sem resposta (rede caiu / timeout)
+      if (attempt < MAX_TRIES - 1) { await sleep(backoff(attempt)); continue; }
+      throw new Error('Falha de rede ao falar com a IA. Verifique a conexão.');
+    }
+    if (r.ok) break;
+    let m = 'HTTP ' + r.status, retryMs = 0;
+    try {
+      const j = await r.json();
+      if (j.error) {
+        if (j.error.message) m = j.error.message;
+        const d = (j.error.details || []).find((x) => /RetryInfo/i.test(x['@type'] || ''));
+        if (d && d.retryDelay) { const s = parseFloat(d.retryDelay); if (isFinite(s)) retryMs = Math.ceil(s * 1000); }
+      }
+    } catch (e) {}
+    const transient = r.status === 429 || r.status === 500 || r.status === 502 || r.status === 503;
+    if (transient && attempt < MAX_TRIES - 1) { await sleep(Math.max(retryMs, backoff(attempt))); continue; }
+    if (r.status === 429) throw new Error('Limite da IA atingido (cota/requisições). ' + m);
+    throw new Error(m);
+  }
   const j = await r.json();
   const c = j && j.candidates && j.candidates[0];
   const txt = c && c.content && c.content.parts && c.content.parts[0] && c.content.parts[0].text;
@@ -2315,9 +2342,9 @@ async function scanDriveForReceipts() {
         state.driveKnown[f.id] = 1;
         lidos++;
         scanProgress.status('Analisando ' + lidos + '/' + novosArq.length + ' — ' + LBL[tabela] + '…');
-        let ocr = null, falhou = false;
+        let ocr = null, falhou = false, errMsg = '';
         try { const blob = await gdDownloadBlob(f.id); ocr = await ocrReceipt(blob, f.mimeType); }
-        catch (e) { console.error('OCR/scan falhou', e); falhou = true; }
+        catch (e) { console.error('OCR/scan falhou', e); falhou = true; errMsg = e.message || String(e); }
         if (ocr && ocr.dateISO && ocr.total != null) {
           const entry = {
             id: uid(), data: ocr.dateISO, descricao: buildDescricao(ocr.category, ocr.city, ocr.uf),
@@ -2335,10 +2362,10 @@ async function scanDriveForReceipts() {
             ocr: ocr ? { dateISO: ocr.dateISO, category: ocr.category, total: ocr.total, descricao: buildDescricao(ocr.category, ocr.city, ocr.uf), establishment: ocr.establishment || '' } : null
           });
           pend++;
-          const motivo = falhou ? 'falha na leitura'
+          const motivo = falhou ? ('falha na leitura: ' + escapeHtml(errMsg))
             : (!ocr ? 'não reconhecido'
-            : (ocr.dateISO == null && ocr.total == null ? 'sem data e valor'
-            : (ocr.dateISO == null ? 'sem data' : 'sem valor')));
+            : (!ocr.dateISO && ocr.total == null ? 'sem data e valor'
+            : (!ocr.dateISO ? 'sem data' : 'sem valor')));
           scanProgress.log('⚠ <b>' + escapeHtml(f.name) + '</b> → pendente (' + motivo + ').', 'pend');
         }
       }
@@ -2426,7 +2453,7 @@ async function retryPendingOcr(fileId, btn) {
   try {
     let ocr = null;
     try { const blob = await gdDownloadBlob(fileId); ocr = await ocrReceipt(blob, p.mimeType); }
-    catch (e) { console.error('Reanálise falhou', e); toast('Falha ao ler o comprovante. Tente novamente.'); return; }
+    catch (e) { console.error('Reanálise falhou', e); toast('Falha ao ler: ' + (e.message || 'tente de novo') + '.'); return; }
     if (ocr && ocr.dateISO && ocr.total != null) {
       const entry = {
         id: uid(), data: ocr.dateISO, descricao: buildDescricao(ocr.category, ocr.city, ocr.uf),
@@ -2442,7 +2469,7 @@ async function retryPendingOcr(fileId, btn) {
     } else {
       p.ocr = ocr ? { dateISO: ocr.dateISO, category: ocr.category, total: ocr.total, descricao: buildDescricao(ocr.category, ocr.city, ocr.uf), establishment: ocr.establishment || '' } : null;
       touchDoc(); saveState(); renderPending();
-      const motivo = !ocr ? 'não reconhecido' : (ocr.dateISO == null && ocr.total == null ? 'sem data e valor' : (ocr.dateISO == null ? 'sem data' : 'sem valor'));
+      const motivo = !ocr ? 'não reconhecido' : (!ocr.dateISO && ocr.total == null ? 'sem data e valor' : (!ocr.dateISO ? 'sem data' : 'sem valor'));
       toast('Ainda não consegui ler tudo (' + motivo + '). Preencha à mão.');
     }
   } finally {
