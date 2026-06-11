@@ -48,13 +48,14 @@ https://mrosella.github.io/Despesas---Soma/
 | `populateCategorySelects` | ~1507 | popula `#m-categoria` (chamado no `init`; já não há mais filtros) |
 | **Editor de categorias (UI)** | ~1516–1590 | `getCatDraft`, `renderCatEditor`, `saveCatEditor`, `setupCatUI` |
 | **OCR / Gemini** | 1619–1735 | `AI_KEY`, `GEMINI_MODEL`, `loadAi/saveAi`, `aiConfigured`, `buildDescricao`, `ocrReceipt`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI` |
-| **Google Drive** | ~1690–2010 | `loadGd/saveGd`, `gdGetToken`, `gdEnsureFolder`, **subpastas Ano/Mês** (`MESES`, `gdFindOrCreateChild`, `gdEnsureMonthFolder`), `gdUpload(blob,name,dateISO)`, **conexão ao abrir** (`gdConnectFlow`, `gdSilentReconnect`, `showDriveConnectNotice`, `maybePromptDrive`), miniaturas (`saveThumb`), IndexedDB (`idbPut/Get/Del`: `p_`=pendentes, `thumb_`=miniaturas locais), `compressImage`, `flushPendingPhotos` |
+| **Google Drive** | ~1690–2090 | `loadGd/saveGd`, `gdGetToken`, `gdEnsureFolder`, **subpastas Ano/Mês** (`MESES`, `gdFindOrCreateChild`, `gdEnsureMonthFolder`), `reportFolderDateISO` (mês de referência → pasta única), `gdUpload(blob,name,dateISO)`, **exclusão** (`gdDeleteFile`, fila `loadGdDel/queueGdDelete/flushGdDeletions`, `purgeEntryPhoto`), **conexão ao abrir** (`gdConnectFlow`, `gdSilentReconnect`, `showDriveConnectNotice`, `maybePromptDrive`, `countPendingDrive`), miniaturas (`saveThumb`), IndexedDB (`idbPut/Get/Del`: `p_`=pendentes, `thumb_`=miniaturas locais), `compressImage`, `flushPendingPhotos` |
 | Tema | 2002–2032 | `applyTheme`, `toggleTheme`, `setupTheme` |
 | Init / bootstrap | 2033–2210 | `bindField`, `newMonth`, `init` (registra todos os `setup*`), SW, conectividade |
 
 ## Forma do estado (`emptyState`, app.js:51)
 ```
 { funcionario, dataSolicitacao, referente,
+  reportMonth,                       // 'YYYY-MM' (perfil): pasta única dos comprovantes no Drive; vazio = por data do lançamento
   bank:{nome,cpf,banco,agencia,conta,pix},
   reembolso:[], alelo:[],            // lançamentos (duas tabelas)
   history:[], histTomb:{},           // meses arquivados + lápides
@@ -68,7 +69,8 @@ para perfil/banco/**config**. Lápides garantem que deleções propaguem.
 
 ## Chaves de localStorage
 `despesas-soma-v1` (estado) · `-sync-v1` (GitHub) · `-gdrive-v1` (Drive) ·
-`-ai-v1` (Gemini) · `-lock-v1` (bio/PIN) · `-theme-v1` · `-lastsync-v1` · `-dirty-v1`.
+`-gddel-v1` (fila de exclusões no Drive) · `-ai-v1` (Gemini) · `-lock-v1` (bio/PIN) ·
+`-theme-v1` · `-lastsync-v1` · `-dirty-v1`.
 
 ## Verificação (esta máquina)
 - **Sem Node, sem python; preview MCP trava aqui.** Não conte com eles.
@@ -90,11 +92,19 @@ para perfil/banco/**config**. Lápides garantem que deleções propaguem.
 - `index.html` `#m-categoria` é **populado por JS** (`populateCategorySelects`, chamado no
   `init`) a partir de `getCategorias()` — não recriar `<option>` fixos. (A busca/filtros foi
   removida; o rótulo da 2ª tabela é "Despesas Cartão Santander - Soma".)
-- **Comprovantes no Drive vão para subpastas `{Ano}/{Mês}`** (pela data do lançamento),
-  dentro da pasta raiz compartilhada; resolvidas por nome (idempotente entre aparelhos).
+- **Comprovantes no Drive vão para subpastas `{Ano}/{Mês}`** dentro da pasta raiz compartilhada;
+  resolvidas por nome (idempotente entre aparelhos). O mês é o **`reportMonth`** (campo "Mês de
+  referência", `reportFolderDateISO`) — **todo** o relatório aberto cai na MESMA pasta, mesmo
+  comprovantes de outra data. Se `reportMonth` vazio, cai na pasta da **data do lançamento**
+  (comportamento antigo). Botão 🗑️ (`newMonth`) arquiva e **zera** `reportMonth`.
+- **Excluir lançamento apaga o comprovante no Drive** (`deleteEntry`→`purgeEntryPhoto`): se
+  conectado, `gdDeleteFile` na hora; senão entra na fila `-gddel-v1` e é propagado por
+  `flushGdDeletions` ao reconectar. Limpa também `thumb_<id>` e o pendente `p_<id>`. Escopo
+  `drive.file` só apaga o que o app criou.
 - **Conexão do Drive ao abrir:** token OAuth vive só em memória (~1h) → ao abrir/voltar ao
-  foco, `maybePromptDrive` tenta reconexão silenciosa e, se falhar, mostra popup `gd-connect-notice`
-  ("Conectar agora" = `gdConnectFlow`). Sequenciado após o desbloqueio (chamado em `hideLock`).
+  foco, `maybePromptDrive` tenta reconexão silenciosa (sem UI) e **só** mostra o popup
+  `gd-connect-notice` se `countPendingDrive() > 0` (fotos a enviar ou exclusões a propagar) —
+  sem pendência **não incomoda**. Sequenciado após o desbloqueio (chamado em `hideLock`).
 - **Miniaturas** dos comprovantes são **locais** (IndexedDB `thumb_<id>`, não sincronizam).
   Lista exibe **mais recente no topo** (estado/Excel/PDF seguem cronológicos). Há botão
   "Copiar dados bancários" (`copyBankData`) e aviso de duplicado (mesma data+categoria+valor) no `saveEntry`.

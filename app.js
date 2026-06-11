@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v21';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v22';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -53,6 +53,7 @@ function emptyState() {
     funcionario: '',
     dataSolicitacao: '',
     referente: '',
+    reportMonth: '',                      // mês de referência (YYYY-MM): pasta única dos comprovantes no Drive
     bank: { nome: '', cpf: '', banco: '', agencia: '', conta: '', pix: '' },
     reembolso: [],
     alelo: [],
@@ -195,6 +196,7 @@ function render() {
   $('funcionario').value = state.funcionario;
   $('dataSolicitacao').value = state.dataSolicitacao;
   $('referente').value = state.referente;
+  if ($('reportMonth')) $('reportMonth').value = state.reportMonth || '';
   $('bk-nome').value = state.bank.nome;
   $('bk-cpf').value = state.bank.cpf;
   $('bk-banco').value = state.bank.banco;
@@ -299,6 +301,7 @@ function reopenHistory(id) {
   state.funcionario = h.funcionario || state.funcionario;
   state.dataSolicitacao = h.dataSolicitacao || '';
   state.referente = h.referente || state.referente;
+  state.reportMonth = h.reportMonth || '';
   state.bank = Object.assign(emptyState().bank, h.bank || {});
   // novos ids p/ não colidir com o snapshot nem com lápides antigas
   state.reembolso = (h.reembolso || []).map((e) => Object.assign({}, e, { id: uid(), updatedAt: now }));
@@ -481,7 +484,7 @@ async function applyModalPhoto(entry) {
   if (gdConfigured() && gdConnected()) {
     try {
       toast('Enviando comprovante ao Drive…');
-      const fid = await gdUpload(modalPhoto.blob, name, entry.data);
+      const fid = await gdUpload(modalPhoto.blob, name, reportFolderDateISO() || entry.data);
       entry.foto = { id: fid, name, w: modalPhoto.w, h: modalPhoto.h };
       return;
     } catch (e) { console.error(e); }
@@ -580,11 +583,17 @@ async function saveEntry() {
   setTimeout(() => { lastAddedId = null; }, 900);
 }
 
-function deleteEntry() {
+async function deleteEntry() {
   const tabela = $('m-tabela').value;
   const id = $('m-id').value;
   if (!id) return;
-  if (!confirm('Excluir este lançamento?')) return;
+  const entry = state[tabela].find((e) => e.id === id);
+  const temFoto = !!(entry && entry.foto);
+  const msg = temFoto
+    ? 'Excluir este lançamento? O comprovante anexado também será removido do Google Drive.'
+    : 'Excluir este lançamento?';
+  if (!confirm(msg)) return;
+  if (entry) { try { await purgeEntryPhoto(entry); } catch (e) { console.error(e); } }   // apaga foto no Drive/fila/miniatura
   state[tabela] = state[tabela].filter((e) => e.id !== id);
   state.tomb[tabela][id] = Date.now();   // lápide p/ propagar a deleção na sincronização
   touchDoc();
@@ -1150,6 +1159,7 @@ function currentDoc() {
     funcionario: state.funcionario,
     dataSolicitacao: state.dataSolicitacao,
     referente: state.referente,
+    reportMonth: state.reportMonth || '',
     bank: Object.assign({}, state.bank),
     reembolso: state.reembolso.map((e) => Object.assign({}, e)),
     alelo: state.alelo.map((e) => Object.assign({}, e)),
@@ -1171,6 +1181,7 @@ function applyDoc(doc) {
   state.funcionario = doc.funcionario || '';
   state.dataSolicitacao = doc.dataSolicitacao || '';
   state.referente = doc.referente || '';
+  state.reportMonth = doc.reportMonth || '';
   state.bank = Object.assign(base.bank, doc.bank || {});
   state.reembolso = doc.reembolso || [];
   state.alelo = doc.alelo || [];
@@ -1239,6 +1250,7 @@ function mergeDocs(a, b) {
     funcionario: p.funcionario || '',
     dataSolicitacao: p.dataSolicitacao || '',
     referente: p.referente || '',
+    reportMonth: p.reportMonth || '',
     bank: Object.assign({}, p.bank || {}),
     config: normalizeCatConfig(p.config),
     tomb: { reembolso: {}, alelo: {} }
@@ -1708,6 +1720,7 @@ function setupAiUI() {
    Comprovantes no Google Drive (escopo drive.file) + fila offline
    ============================================================ */
 const GDRIVE_KEY = 'despesas-soma-gdrive-v1';
+const GDDEL_KEY = 'despesas-soma-gddel-v1';   // fila de fileIds a excluir no Drive (retry ao reconectar)
 const GD_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const GD_FOLDER_NAME = 'Comprovantes - Despesas Soma';
 let gdAccess = { token: '', exp: 0 };
@@ -1850,6 +1863,52 @@ async function gdDownloadBlob(fileId) {
   return await r.blob();
 }
 
+/* mês de referência do relatório → pasta única no Drive (vazio = organiza por data do lançamento) */
+function reportFolderDateISO() { return state.reportMonth ? state.reportMonth + '-01' : null; }
+
+/* ---- exclusão de comprovantes no Drive (com fila p/ retry offline) ---- */
+function loadGdDel() { try { const a = JSON.parse(localStorage.getItem(GDDEL_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function saveGdDel(a) { try { localStorage.setItem(GDDEL_KEY, JSON.stringify(a)); } catch (e) {} }
+function queueGdDelete(id) { if (!id) return; const a = loadGdDel(); if (!a.includes(id)) { a.push(id); saveGdDel(a); } }
+function unqueueGdDelete(id) { saveGdDel(loadGdDel().filter((x) => x !== id)); }
+
+async function gdDeleteFile(fileId) {
+  const t = await gdGetToken(false);
+  const r = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId, { method: 'DELETE', headers: { Authorization: 'Bearer ' + t } });
+  if (!r.ok && r.status !== 404 && r.status !== 403) throw new Error('Excluir Drive ' + r.status);   // 404/403 = já removido/sem acesso → tratar como ok
+  return true;
+}
+
+async function flushGdDeletions(report) {
+  const fila = loadGdDel();
+  if (!fila.length) return { sent: 0, failed: 0 };
+  if (!gdConfigured() || !gdConnected()) return { sent: 0, failed: 0 };
+  let sent = 0, failed = 0;
+  for (const id of fila) {
+    try { await gdDeleteFile(id); unqueueGdDelete(id); sent++; }
+    catch (err) { console.error('Falha ao excluir no Drive', err); failed++; }
+  }
+  if (report && sent) toast(sent + ' comprovante(s) removido(s) do Drive.');
+  updateGdPending();
+  return { sent, failed };
+}
+
+/* remove vínculos da foto: miniatura local, pendente offline e arquivo no Drive (ou enfileira) */
+async function purgeEntryPhoto(entry) {
+  if (!entry) return;
+  idbDel('thumb_' + entry.id).catch(() => {});
+  const foto = entry.foto;
+  if (!foto) return;
+  if (foto.pending) { idbDel('p_' + foto.pending).catch(() => {}); return; }
+  if (foto.id) {
+    if (gdConnected()) {
+      try { await gdDeleteFile(foto.id); return; }
+      catch (e) { console.error(e); }   // falhou → cai na fila
+    }
+    queueGdDelete(foto.id);
+  }
+}
+
 /* ---- IndexedDB (fila de fotos pendentes / offline) ---- */
 let _idb = null;
 function idb() {
@@ -1917,11 +1976,17 @@ function countPendingPhotos() {
   for (const t of ['reembolso', 'alelo']) for (const e of state[t]) if (e.foto && e.foto.pending) n++;
   return n;
 }
+/* pendências do Drive = fotos a enviar + exclusões a propagar (gate do pop-up) */
+function countPendingDrive() { return countPendingPhotos() + loadGdDel().length; }
 function updateGdPending() {
   const b = $('gd-flush'); if (!b) return;
-  const n = countPendingPhotos();
-  if (n > 0 && gdConfigured()) { b.style.display = ''; b.textContent = 'Enviar ' + n + ' comprovante(s) pendente(s)'; }
-  else b.style.display = 'none';
+  const env = countPendingPhotos(), del = loadGdDel().length;
+  if ((env > 0 || del > 0) && gdConfigured()) {
+    b.style.display = '';
+    b.textContent = del > 0
+      ? 'Sincronizar Drive (' + env + ' envio(s), ' + del + ' exclusão(ões))'
+      : 'Enviar ' + env + ' comprovante(s) pendente(s)';
+  } else b.style.display = 'none';
 }
 
 async function flushPendingPhotos(report) {
@@ -1933,7 +1998,7 @@ async function flushPendingPhotos(report) {
         try {
           const rec = await idbGet('p_' + e.foto.pending);
           if (!rec) { e.foto = null; continue; }
-          const id = await gdUpload(rec.blob, rec.name, e.data || rec.data);
+          const id = await gdUpload(rec.blob, rec.name, reportFolderDateISO() || e.data || rec.data);
           await idbDel('p_' + e.foto.pending);
           e.foto = { id, name: rec.name, w: e.foto.w, h: e.foto.h };
           e.updatedAt = Date.now();
@@ -1983,6 +2048,7 @@ function setupGDriveUI() {
       await gdGetToken(true);
       await gdEnsureFolder();
       await flushPendingPhotos(true);
+      await flushGdDeletions(true);
     } catch (e) { console.error(e); setGdStatus('Erro: ' + e.message, 'err'); }
   });
   updateGdPending();
@@ -2013,6 +2079,7 @@ async function gdConnectFlow() {
     await gdEnsureFolder();
     setGdStatus('Conectado como ' + email + ' ✓', 'ok');
     await flushPendingPhotos(true);
+    await flushGdDeletions(true);
     return true;
   } catch (e) { console.error(e); setGdStatus('Erro: ' + e.message, 'err'); return false; }
 }
@@ -2028,13 +2095,14 @@ async function gdSilentReconnect() {
     await gdEnsureFolder();
     refreshGdStatus();
     await flushPendingPhotos(false);
+    await flushGdDeletions(false);
     return true;
   } catch (e) { return false; }
 }
 
 function showDriveConnectNotice() {
   if ($('gd-connect-notice')) return;
-  const pend = countPendingPhotos();
+  const pend = countPendingDrive();
   const div = document.createElement('div');
   div.id = 'gd-connect-notice';
   div.className = 'offline-notice';
@@ -2060,8 +2128,9 @@ function showDriveConnectNotice() {
 
 async function maybePromptDrive() {
   if (!gdConfigured() || !navigator.onLine || gdConnected()) return;
-  const ok = await gdSilentReconnect();
-  if (!ok && !gdConnected()) showDriveConnectNotice();
+  const ok = await gdSilentReconnect();                  // sem UI; já envia/expurga pendentes se a sessão valer
+  if (ok) return;
+  if (countPendingDrive() > 0) showDriveConnectNotice();  // só incomoda se há comprovante a enviar/excluir
 }
 
 /* ---------------- Modo escuro ---------------- */
@@ -2118,6 +2187,7 @@ function newMonth() {
       funcionario: state.funcionario,
       dataSolicitacao: state.dataSolicitacao,
       referente: state.referente,
+      reportMonth: state.reportMonth || '',
       bank: Object.assign({}, state.bank),
       reembolso: state.reembolso.map((e) => Object.assign({}, e)),
       alelo: state.alelo.map((e) => Object.assign({}, e))
@@ -2128,6 +2198,7 @@ function newMonth() {
     state[t] = [];
   }
   state.dataSolicitacao = '';
+  state.reportMonth = '';
   touchProfile();
   saveState();
   render();
@@ -2161,6 +2232,7 @@ function init() {
   bindField('funcionario', null, (v) => state.funcionario = v);
   bindField('dataSolicitacao', null, (v) => state.dataSolicitacao = v);
   bindField('referente', null, (v) => state.referente = v);
+  if ($('reportMonth')) bindField('reportMonth', null, (v) => state.reportMonth = v);
   bindField('bk-nome', null, (v) => state.bank.nome = v);
   bindField('bk-cpf', null, (v) => state.bank.cpf = v);
   bindField('bk-banco', null, (v) => state.bank.banco = v);
@@ -2221,6 +2293,7 @@ function init() {
       syncNow(true);
     }
     flushPendingPhotos();
+    flushGdDeletions(false);
   });
 
   // ao voltar para o app (reabrir/trazer ao foco), sincroniza para pegar a
