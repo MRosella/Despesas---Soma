@@ -3,6 +3,19 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v32
+- **`drive.js` dividido** em `idb.js` (storage/IndexedDB), `drive-core.js` (auth/pastas/upload/
+  exclusão/conexão) e `drive-scan.js` (varredura/pendentes/`scanProgress`) — nenhum arquivo > ~370
+  linhas.
+- **Cache de OCR por hash:** `ocrReceipt` virou wrapper com cache (`ocrcache_<hash>` no IndexedDB,
+  `blobSha256`); a chamada à rede é `ocrReceiptRaw`. Reanalisar o mesmo comprovante não regasta o
+  Gemini.
+- **Progresso visual no arquivamento:** `archiveMonthToDrive` usa o overlay `scanProgress`
+  (generalizado p/ `open(title, icon)`) com etapas zip/Excel/PDF.
+- **Diagnóstico:** `catch (e) {}` vazios de I/O (localStorage/Drive) agora dão `console.warn`.
+- **Pré-visualização do Período Prestação** no chooser de export (só-cartão), via `#exp-periodo`.
+- **Testes versionados:** `tests/integrity.html` e `tests/logic.html` (rodam headless).
+
 ## v31
 - **Modularização:** `app.js` (3.156 linhas) dividido em `js/*.js` por área (`core`, `render`,
   `modal`, `excel`, `pdf`, `sync`, `lock`, `ui`, `ocr`, `drive`, `main`), carregados como scripts

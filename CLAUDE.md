@@ -21,8 +21,10 @@ https://mrosella.github.io/Despesas---Soma/
 | `js/sync.js` | sync GitHub privado (`ghGetFile`/`ghPutFile`, `currentDoc`/`applyDoc`/`mergeDocs`, `syncNow`, `setupSyncUI`) |
 | `js/lock.js` | bloqueio bio/PIN (`enableBio`/`unlockBio`/`setPin`/`showLock`) + backup (`exportBackup`/`importBackupFile`/`setupBackupUI`) |
 | `js/ui.js` | navegação (`showView`/`setupNav`), `populateCategorySelects`, editor de categorias (`renderCatEditor`/`saveCatEditor`/`setupCatUI`) |
-| `js/ocr.js` | Gemini (`AI_KEY`, `GEMINI_MODEL`, `ocrReceipt`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI`) |
-| `js/drive.js` | Google Drive completo (`gd*`, varredura `scanDriveForReceipts`/pendentes, exclusão+fila, IndexedDB `p_`/`thumb_`, `compressImage`, `getPhotoBlob`, `flushPendingPhotos`, `setupGDriveUI`) |
+| `js/ocr.js` | Gemini (`AI_KEY`, `GEMINI_MODEL`, `ocrReceipt` = wrapper com **cache por hash**, `ocrReceiptRaw` = chamada à rede, `blobSha256`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI`) |
+| `js/idb.js` | IndexedDB (`idb`/`idbPut`/`idbGet`/`idbDel`), `compressImage`, `blobToDataUrl`, `saveThumb`, `getPhotoBlob` (camada de storage local) |
+| `js/drive-core.js` | Drive: auth/token (`gdGetToken`, `GD_SCOPE`), pastas/upload (`gdEnsureFolder`/`gdEnsureMonthFolder`/`gdUpload`), exclusão+fila (`gdDeleteFile`/`flushGdDeletions`/`purgeEntryPhoto`), flush de pendentes, `setupGDriveUI`, conexão (`gdConnectFlow`/`maybePromptDrive`) |
+| `js/drive-scan.js` | Varredura (`scanDriveForReceipts`/`gdListReceipts`/`knownDriveIds`), overlay `scanProgress` (`open(title,icon)`/`status`/`log`/`done`/`close`), pendentes (`renderPending`/`openPendingEntry`/`dismissPending`/`retryPendingOcr`) |
 | `js/main.js` | tema, `bindField`, **fechamento por tabela** (`closeMonthFlow`/`closeTable`/`archiveMonthToDrive`/`chooseCloseTable`), `copyBankData`, `init` (registra todos os `setup*`), SW, conectividade — **carregado por último** |
 | `index.html` | 3 telas (`#view-lancamentos/-relatorios/-config`); carrega `lib/*` e depois `js/*` na ordem. |
 | `styles.css` | tema claro/escuro via variáveis. Reusar `.card/.field/.sync-status/.cat-row/.offline-notice`. |
@@ -71,13 +73,17 @@ exclusões) · `-ai-v1` (Gemini) · `-lock-v1` (bio/PIN) · `-theme-v1` · `-las
 Chrome em `C:\Program Files\Google\Chrome\Application\chrome.exe` com `--headless=new
 --allow-file-access-from-files --virtual-time-budget=4000 --dump-dom` num harness `.html`
 temporário (caminho Windows absoluto; em Git Bash `"$(pwd -W)/x.html"`). Grep é por linha → no
-harness escreva 1 resultado por linha (não cruze `<` ). Dois testes úteis (scripts **clássicos**
-carregam de `file://` — por isso não usamos ES modules):
-- **Integridade do split / sintaxe:** harness que inclui os 11 `js/*.js` na ordem + checa
-  `typeof <fn> === 'function'` p/ uma função de cada arquivo (um `SyntaxError`/redeclaração pula o
-  arquivo todo → a função some) e captura `window.onerror`.
-- **Lógica pura:** chamar funções (ex.: `computeSantanderPeriodo`, `validateBeforeExport`) com
-  fixtures e comparar. Limpar os harnesses (`rm`) depois.
+harness escreva 1 resultado por linha (não cruze `<` ). **Há dois harnesses FIXOS no repo** (não
+recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso não usamos ES modules):
+- **`tests/integrity.html`** — inclui todos os `js/*.js` na ordem e checa `typeof <fn> ===
+  'function'` p/ uma função de cada arquivo (um `SyntaxError`/redeclaração pula o arquivo todo → a
+  função some) + captura `window.onerror`. Pega quebras do split. Imprime `RESULT: PASS/FAIL`.
+- **`tests/logic.html`** — chama funções puras com fixtures (`computeSantanderPeriodo`,
+  `validateBeforeExport`, `mergeDocs`/`mergeTable` last-write-wins + lápides). `RESULT: PASS/FAIL`.
+- Rodar (em Git Bash): `"C:/Program Files/Google/Chrome/Application/chrome.exe" --headless=new
+  --allow-file-access-from-files --virtual-time-budget=4000 --dump-dom "$(pwd -W)/tests/logic.html"
+  | grep -oE 'RESULT:[^<]*'` (idem `integrity.html`). Ao adicionar função/arquivo, **atualize esses
+  harnesses**.
 - **OAuth/câmera/OCR/IndexedDB/PDF/Drive NÃO rodam headless** → validar no **site (HTTPS)** no
   dispositivo.
 
@@ -118,9 +124,10 @@ carregam de `file://` — por isso não usamos ES modules):
   tabela escolhida (a outra continua aberta). `closeTable` valida, arquiva um snapshot **só dessa
   tabela** (com `table:` marcado) no histórico e chama `archiveMonthToDrive`, que compacta os
   comprovantes num `.zip` (`fflate.zipSync`, nome `NFs - {Mês} {Ano}.zip`) e grava **.zip + Excel +
-  PDF** do mês na pasta do mês no Drive (**mantém** os comprovantes individuais). `reportMonth`/
-  `dataSolicitacao` só zeram quando **as duas** tabelas ficam vazias. `reopenHistory` restaura só a
-  tabela do snapshot (`h.table`).
+  PDF** do mês na pasta do mês no Drive (**mantém** os comprovantes individuais). Mostra progresso
+  por etapa reusando o overlay `scanProgress.open('Arquivando …','📦')` (de `drive-scan.js`).
+  `reportMonth`/`dataSolicitacao` só zeram quando **as duas** tabelas ficam vazias. `reopenHistory`
+  restaura só a tabela do snapshot (`h.table`).
 - **Varredura do Drive** (`scanDriveForReceipts`, botão `#gd-scan-main`): escopo `drive.file` +
   `drive.readonly`. `gdListReceipts(tabela)` recursivo; ids novos (`knownDriveIds`) → OCR. Sucesso
   (data+total) vira lançamento `foto={id,name}` (sem reupload); falha vira **pendente**
@@ -131,10 +138,13 @@ carregam de `file://` — por isso não usamos ES modules):
 - **Miniaturas** são **locais** (IndexedDB `thumb_<id>`, não sincronizam). Lista mostra mais recente
   no topo; estado/Excel/PDF seguem cronológicos. Aviso de duplicado (mesma data+categoria+valor) no
   `saveEntry`. A chave de dados `alelo` é estrutural e **não muda** (rótulo visível pode mudar).
-- **OCR com retentativa:** `ocrReceipt` reenvia até 4x com backoff em erros transitórios (429,
-  500/502/503, rede), respeitando `retryDelay`. Erro definitivo propaga a **mensagem real** do
-  Gemini (aparece no log da varredura e no toast). `ocr.dateISO` vem como string vazia (use
-  `!ocr.dateISO`). `GEMINI_MODEL` (`gemini-2.5-flash`) é fácil de trocar.
+- **OCR com cache + retentativa:** `ocrReceipt` é um **wrapper com cache por hash** (SHA-256 dos
+  bytes via `blobSha256`; chave `ocrcache_<hash>` no IndexedDB) — o MESMO comprovante não regasta o
+  Gemini (varredura repetida / "Analisar de novo" ficam grátis). Só cacheia resultado útil (com
+  `dateISO` ou `total`); erros não entram no cache. A chamada à rede é `ocrReceiptRaw`, que reenvia
+  até 4x com backoff em erros transitórios (429, 500/502/503, rede), respeitando `retryDelay`. Erro
+  definitivo propaga a **mensagem real** do Gemini (log da varredura + toast). `ocr.dateISO` vem
+  string vazia (use `!ocr.dateISO`). `GEMINI_MODEL` (`gemini-2.5-flash`) é fácil de trocar.
 - Categoria nova fora da validação do `template.xlsx` é gravada mesmo assim (Excel pode avisar
   "valor fora da lista"). Renomear categoria **não** reescreve lançamentos antigos.
 

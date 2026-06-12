@@ -456,6 +456,14 @@ function updateExportHint() {
   const h = $('exp-hint-santander'); if (!h) return;
   const only = $('exp-alelo').checked && !$('exp-reembolso').checked;
   h.style.display = only ? '' : 'none';
+  const p = $('exp-periodo');   // pré-visualização do Período Prestação (automático), só p/ cartão
+  if (p) {
+    if (only) {
+      const per = computeSantanderPeriodo(exportCtx.src || state);
+      p.innerHTML = per ? ('Período Prestação: <b>' + escapeHtml(per) + '</b>') : 'Período Prestação: <b>—</b> (sem lançamentos com data)';
+      p.style.display = '';
+    } else { p.style.display = 'none'; }
+  }
 }
 function closeExportModal() { $('export-modal').classList.remove('open'); }
 function confirmExport() {

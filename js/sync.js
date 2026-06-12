@@ -11,16 +11,16 @@ function loadSyncCfg() {
   try { return Object.assign({ repo: '', token: '' }, JSON.parse(localStorage.getItem(SYNC_KEY) || '{}')); }
   catch (e) { return { repo: '', token: '' }; }
 }
-function saveSyncCfg(cfg) { try { localStorage.setItem(SYNC_KEY, JSON.stringify(cfg)); } catch (e) {} }
+function saveSyncCfg(cfg) { try { localStorage.setItem(SYNC_KEY, JSON.stringify(cfg)); } catch (e) { console.warn('saveSyncCfg falhou', e); } }
 function isSyncConfigured() { const c = loadSyncCfg(); return !!(c.repo && c.token); }
 
 // "sujo" = há alterações locais ainda não enviadas ao servidor (ex.: feitas offline)
 const DIRTY_KEY = 'despesas-soma-dirty-v1';
-function setDirty(v) { try { v ? localStorage.setItem(DIRTY_KEY, '1') : localStorage.removeItem(DIRTY_KEY); } catch (e) {} updateSyncIndicator(); }
+function setDirty(v) { try { v ? localStorage.setItem(DIRTY_KEY, '1') : localStorage.removeItem(DIRTY_KEY); } catch (e) { console.warn('setDirty falhou', e); } updateSyncIndicator(); }
 function isDirty() { try { return localStorage.getItem(DIRTY_KEY) === '1'; } catch (e) { return false; } }
 
 // horário da última sincronização bem-sucedida (para o rodapé)
-function setLastSync(ts) { try { localStorage.setItem(LASTSYNC_KEY, String(ts)); } catch (e) {} }
+function setLastSync(ts) { try { localStorage.setItem(LASTSYNC_KEY, String(ts)); } catch (e) { console.warn('setLastSync falhou', e); } }
 function getLastSync() { try { return localStorage.getItem(LASTSYNC_KEY); } catch (e) { return null; } }
 
 function updateFooter() {
@@ -348,7 +348,7 @@ function setupSyncUI() {
 
   $('sy-clear').addEventListener('click', () => {
     if (!confirm('Apagar o token e o repositório salvos neste aparelho?\n(Os lançamentos locais permanecem.)')) return;
-    try { localStorage.removeItem(SYNC_KEY); } catch (e) {}
+    try { localStorage.removeItem(SYNC_KEY); } catch (e) { console.warn('remover SYNC_KEY falhou', e); }
     $('sy-repo').value = ''; $('sy-token').value = '';
     setSyncStatus('Desconectado deste aparelho.', '');
     updateSyncIndicator();

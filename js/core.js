@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v31';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v32';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -107,7 +107,7 @@ function loadState() {
 }
 
 function saveState() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { console.warn('saveState falhou (localStorage cheio/indisponível)', e); }
   if (!applyingRemote) { setDirty(true); scheduleSync(); }
 }
 

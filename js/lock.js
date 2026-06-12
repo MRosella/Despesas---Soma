@@ -3,7 +3,7 @@
    Bloqueio do app (biometria via WebAuthn / PIN) — config local
    ============================================================ */
 function loadLock() { try { return JSON.parse(localStorage.getItem(LOCK_KEY) || '{}'); } catch (e) { return {}; } }
-function saveLock(l) { try { localStorage.setItem(LOCK_KEY, JSON.stringify(l)); } catch (e) {} }
+function saveLock(l) { try { localStorage.setItem(LOCK_KEY, JSON.stringify(l)); } catch (e) { console.warn('saveLock falhou', e); } }
 function lockEnabled() { const l = loadLock(); return !!(l.bio || l.pin); }
 
 function randBytes(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return a; }

@@ -15,7 +15,7 @@ function applyTheme() {
 }
 function toggleTheme() {
   const next = currentTheme() === 'dark' ? 'light' : 'dark';
-  try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+  try { localStorage.setItem(THEME_KEY, next); } catch (e) { console.warn('salvar tema falhou', e); }
   applyTheme();
 }
 function setupTheme() {
@@ -114,7 +114,7 @@ async function closeTable(tabela) {
 async function archiveMonthToDrive(tabela, snapshot) {
   if (!gdConfigured()) { toast('Drive não configurado — arquivado só no histórico.'); return; }
   if (!gdConnected()) {
-    try { await gdGetToken(true); } catch (e) {}
+    try { await gdGetToken(true); } catch (e) { console.warn('conexão ao Drive no arquivamento falhou', e); }
     if (!gdConnected()) {
       if (!confirm('Não foi possível conectar ao Google Drive. Concluir o fechamento sem gravar os arquivos do mês no Drive?')) throw new Error('cancelado');
       return;
@@ -128,42 +128,55 @@ async function archiveMonthToDrive(tabela, snapshot) {
   const ano = m ? m[1] : '';
   const baseNome = (mesNome && ano) ? mesNome + ' ' + ano : monthLabelFor(snapshot);
 
+  const LBL = TABLE_LABELS[tabela] || tabela;
+  scanProgress.open('Arquivando ' + LBL, '📦');
   try {
     // 1) zip dos comprovantes
-    toast('Compactando comprovantes…');
+    scanProgress.status('Compactando comprovantes…');
     const files = {};
+    let faltou = 0;
     for (const e of list) {
       if (!e.foto) continue;
       let blob = null;
-      try { blob = await getPhotoBlob(e.foto); } catch (er) { console.error(er); }
-      if (!blob) continue;
+      try { blob = await getPhotoBlob(e.foto); } catch (er) { console.warn('comprovante indisponivel no arquivamento', er); }
+      if (!blob) { faltou++; continue; }
       const base = (e.foto.name || ('Comprovante_' + (e.data || todayISO()))).replace(/[\\/:*?"<>|]/g, '_');
       let nome = base, k = 1;
       while (files[nome]) { const i = base.lastIndexOf('.'); nome = i > 0 ? base.slice(0, i) + '_' + k + base.slice(i) : base + '_' + k; k++; }
       files[nome] = new Uint8Array(await blob.arrayBuffer());
     }
-    if (Object.keys(files).length) {
+    const nZip = Object.keys(files).length;
+    if (nZip) {
+      scanProgress.log('Compactando ' + nZip + ' comprovante(s)…', 'info');
       const zipBytes = fflate.zipSync(files);
       await gdUpload(new Blob([zipBytes], { type: 'application/zip' }), 'NFs - ' + baseNome + '.zip', dateISO, tabela);
+      scanProgress.log('✓ NFs - ' + escapeHtml(baseNome) + '.zip enviado', 'ok');
+    } else {
+      scanProgress.log('Sem comprovantes para compactar.', 'info');
     }
+    if (faltou) scanProgress.log('⚠ ' + faltou + ' comprovante(s) não baixados (ficaram de fora do zip).', 'warn');
 
     // 2) Excel do mês
-    toast('Gravando Excel do mês…');
+    scanProgress.status('Gerando Excel…');
     const xlsxBytes = tabela === 'alelo' ? await buildSantanderXlsx(snapshot) : await buildXlsx(snapshot);
     const xlsxBlob = new Blob([xlsxBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const xlsxName = (tabela === 'alelo' ? santanderFileBase(snapshot) : reportFileBase(snapshot)) + '.xlsx';
     await gdUpload(xlsxBlob, xlsxName, dateISO, tabela);
+    scanProgress.log('✓ Excel enviado', 'ok');
 
     // 3) PDF do mês (com comprovantes anexados)
-    toast('Gravando PDF do mês…');
+    scanProgress.status('Gerando PDF…');
     const pdfBlob = await generatePdfBlob(snapshot, { reembolso: tabela === 'reembolso', alelo: tabela === 'alelo' }, tabela === 'alelo');
     const pdfName = (tabela === 'alelo' ? santanderFileBase(snapshot) : reportFileBase(snapshot)) + '.pdf';
     await gdUpload(pdfBlob, pdfName, dateISO, tabela);
+    scanProgress.log('✓ PDF enviado', 'ok');
 
-    toast('Arquivos do mês gravados no Drive.');
+    scanProgress.done('Arquivo do mês gravado no Drive.');
   } catch (e) {
-    if (e && e.message === 'cancelado') throw e;
+    if (e && e.message === 'cancelado') { scanProgress.close(); throw e; }
     console.error('Falha ao arquivar no Drive', e);
+    scanProgress.log('⚠ Erro: ' + escapeHtml(e.message || String(e)), 'err');
+    scanProgress.done('Falha ao gravar no Drive.');
     if (!confirm('Erro ao gravar no Drive: ' + (e.message || e) + '\nConcluir o fechamento mesmo assim?')) throw new Error('cancelado');
   }
 }

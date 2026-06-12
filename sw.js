@@ -1,7 +1,7 @@
 /* Service Worker — cache do app para funcionar offline.
    Estratégia: network-first (online sempre pega a versão nova; cache é
    só fallback offline). Isso evita o app ficar "preso" numa versão antiga. */
-const CACHE = 'despesas-soma-v31';
+const CACHE = 'despesas-soma-v32';
 const ASSETS = [
   './',
   './index.html',
@@ -15,7 +15,9 @@ const ASSETS = [
   './js/lock.js',
   './js/ui.js',
   './js/ocr.js',
-  './js/drive.js',
+  './js/idb.js',
+  './js/drive-core.js',
+  './js/drive-scan.js',
   './js/main.js',
   './lib/fflate.min.js',
   './lib/html2canvas.min.js',

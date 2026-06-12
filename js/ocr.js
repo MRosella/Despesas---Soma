@@ -5,7 +5,7 @@
 const AI_KEY = 'despesas-soma-ai-v1';
 const GEMINI_MODEL = 'gemini-2.5-flash';   // visão + JSON estruturado, barato
 function loadAi() { try { return Object.assign({ key: '', enabled: true }, JSON.parse(localStorage.getItem(AI_KEY) || '{}')); } catch (e) { return { key: '', enabled: true }; } }
-function saveAi(c) { try { localStorage.setItem(AI_KEY, JSON.stringify(c)); } catch (e) {} }
+function saveAi(c) { try { localStorage.setItem(AI_KEY, JSON.stringify(c)); } catch (e) { console.warn('saveAi falhou', e); } }
 function aiConfigured() { const a = loadAi(); return !!a.key && a.enabled !== false; }
 
 /* descrição padronizada: "Despesa de {Grupo} durante viagem a {Cidade}/{UF}" */
@@ -16,7 +16,31 @@ function buildDescricao(category, city, uf) {
   return local ? `${head} durante viagem a ${local}` : `${head} durante viagem`;
 }
 
+/* SHA-256 (hex) dos bytes do arquivo — chave do cache de OCR. */
+async function blobSha256(blob) {
+  const buf = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/* OCR com cache local (IndexedDB) por hash do arquivo: o MESMO comprovante não regasta a API
+   Gemini (varredura repetida / "Analisar de novo" ficam grátis e instantâneos). Só cacheia
+   resultados úteis (com data ou total); erros transitórios/ilegíveis não entram no cache. */
 async function ocrReceipt(blob, mime) {
+  let hash = '';
+  try { hash = await blobSha256(blob); } catch (e) { console.warn('hash do comprovante falhou', e); }
+  if (hash) {
+    try { const hit = await idbGet('ocrcache_' + hash); if (hit && hit.ocr) return hit.ocr; }
+    catch (e) { console.warn('leitura do cache de OCR falhou', e); }
+  }
+  const ocr = await ocrReceiptRaw(blob, mime);
+  if (hash && ocr && (ocr.dateISO || ocr.total != null)) {
+    try { await idbPut('ocrcache_' + hash, { ocr, at: Date.now() }); }
+    catch (e) { console.warn('gravacao do cache de OCR falhou', e); }
+  }
+  return ocr;
+}
+
+async function ocrReceiptRaw(blob, mime) {
   const a = loadAi();
   if (!a.key) throw new Error('Chave do Gemini não configurada.');
   const b64 = String(await blobToDataUrl(blob)).split(',')[1];
