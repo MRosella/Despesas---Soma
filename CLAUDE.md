@@ -1,163 +1,145 @@
 # CLAUDE.md — Guia do projeto (leitura otimizada)
 
-> Objetivo deste arquivo: poupar tokens e tempo. **Não leia o `app.js` inteiro
-> (2.200+ linhas).** Use o mapa de funções abaixo e o tool **Grep** para abrir só
-> o trecho necessário (`Read` com `offset`/`limit`). Quase tudo está em `app.js`.
+> Objetivo: poupar tokens. A lógica foi dividida em **`js/*.js`** por área (cada arquivo é pequeno,
+> ~90–680 linhas — **pode ler o arquivo inteiro**). Para achar algo: **Grep pelo nome da função**
+> → abra o `js/` correspondente. **Não use números de linha** em referências (envelhecem a cada
+> commit); navegue por nome de função. Histórico versão-a-versão: ver `CHANGELOG.md`.
 
 ## O que é
-PWA (Progressive Web App) de **lançamentos de despesas** da **Soma Urbanismo S/A**.
-Vanilla JS, **sem build, sem Node/npm** na máquina (Windows 11, PowerShell).
-Gera Excel idêntico ao `template.xlsx` + PDF. Publicado em GitHub Pages:
+PWA de **lançamentos de despesas** da **Soma Urbanismo S/A**. Vanilla JS, **sem build, sem
+Node/npm** (Windows 11, PowerShell). Gera Excel idêntico ao `template.xlsx` + PDF. GitHub Pages:
 https://mrosella.github.io/Despesas---Soma/
 
 ## Arquivos
-| Arquivo | Linhas | Conteúdo |
-|---|---|---|
-| `app.js` | ~2210 | **Toda a lógica.** Ver mapa abaixo. |
-| `index.html` | ~407 | 3 telas: `#view-lancamentos`, `#view-relatorios`, `#view-config`. |
-| `styles.css` | ~503 | Tema claro/escuro via variáveis CSS. Reusar `.card/.field/.sync-status/.cat-row`. |
-| `sw.js` | ~60 | Service Worker network-first **real** (v29: `install` precacheia com `cache:'reload'`; `fetch` revalida com `cache:'no-cache'` — fura o `max-age=600` do Pages que prendia o PWA na versão antiga). `CACHE` na linha 4. |
-| `template.xlsx` | — | Modelo Excel preenchido por `buildXlsx`. Não editar à mão. |
-| `lib/` | — | fflate, html2canvas, jspdf (offline, já cacheados). |
+| Arquivo | Conteúdo |
+|---|---|
+| `js/core.js` | chaves localStorage + `APP_VERSION` (bump!), categorias/config (`getCatConfig`…), estado (`emptyState`/`loadState`/`saveState`/`touchDoc`/`touchProfile`, `let state`), utils (`parseMoney`/`formatMoney`/`todayISO`/`fmtDateBR`/`dateToSerial`/`uid`/`toast`/`sumOf`), ícones |
+| `js/render.js` | `render`, `renderList` (mais recente no topo), histórico (`renderReports`/`reopenHistory`/`deleteHistory`/`monthLabelFor`/`computeSantanderPeriodo`/`yearOf`), resumo por categoria, `limitExcedido`, `quickDelete`/`quickDuplicate`, `escapeHtml`, `hydrateThumbs` |
+| `js/modal.js` | modal (`openModal`/`saveEntry`/`deleteEntry`/`repeatLast`), `toggleCartaoFields`, foto+OCR hook (`renderModalPhoto`/`onPhotoSelected`/`applyModalPhoto`), máscaras, `updateCatHint` |
+| `js/excel.js` | `buildXlsx`, `buildSantanderXlsx`, `exportExcel`, `validateBeforeExport`, `filteredDoc`, `reportFileBase`/`santanderFileBase`, chooser de export, `SANTANDER_NOME/CARGO` |
+| `js/pdf.js` | `buildPrint`, `buildSantanderPrint`, `exportPDF`, `generatePdfBlob` (multipágina por linha), `shareOrDownload`/`downloadBlob` |
+| `js/sync.js` | sync GitHub privado (`ghGetFile`/`ghPutFile`, `currentDoc`/`applyDoc`/`mergeDocs`, `syncNow`, `setupSyncUI`) |
+| `js/lock.js` | bloqueio bio/PIN (`enableBio`/`unlockBio`/`setPin`/`showLock`) + backup (`exportBackup`/`importBackupFile`/`setupBackupUI`) |
+| `js/ui.js` | navegação (`showView`/`setupNav`), `populateCategorySelects`, editor de categorias (`renderCatEditor`/`saveCatEditor`/`setupCatUI`) |
+| `js/ocr.js` | Gemini (`AI_KEY`, `GEMINI_MODEL`, `ocrReceipt`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI`) |
+| `js/drive.js` | Google Drive completo (`gd*`, varredura `scanDriveForReceipts`/pendentes, exclusão+fila, IndexedDB `p_`/`thumb_`, `compressImage`, `getPhotoBlob`, `flushPendingPhotos`, `setupGDriveUI`) |
+| `js/main.js` | tema, `bindField`, **fechamento por tabela** (`closeMonthFlow`/`closeTable`/`archiveMonthToDrive`/`chooseCloseTable`), `copyBankData`, `init` (registra todos os `setup*`), SW, conectividade — **carregado por último** |
+| `index.html` | 3 telas (`#view-lancamentos/-relatorios/-config`); carrega `lib/*` e depois `js/*` na ordem. |
+| `styles.css` | tema claro/escuro via variáveis. Reusar `.card/.field/.sync-status/.cat-row/.offline-notice`. |
+| `sw.js` | SW network-first; `CACHE` na **linha 4** + lista `ASSETS` (inclui **cada** `js/*.js`). |
+| `template.xlsx`, `template-santander.xlsx` | modelos Excel (não editar à mão). |
+| `lib/` | fflate, html2canvas, jspdf (offline, já cacheados). |
 
 ## Regras de ouro (OBRIGATÓRIO)
 1. **Auto-publicar após qualquer mudança**, sem perguntar: bump de cache + commit + push.
-2. **Bump de cache em DOIS lugares que devem bater:** `APP_VERSION` em `app.js:12` e
-   `CACHE` em `sw.js:4` (ex.: `v19` → `v20`). Sem isso o PWA fica preso na versão antiga.
-3. **Sem segredos no repo (público).** Token GitHub, Client ID do Drive e chave Gemini
-   ficam **só no `localStorage` do aparelho**. Dados financeiros sincronizam por um
-   **repositório PRIVADO separado** (`dados.json`), nunca neste repo.
-4. **Sem dependências novas / sem passo de build.** Tudo client-side, carregado por `fetch`.
+2. **Bump de cache em DOIS lugares que batem:** `APP_VERSION` em `js/core.js` e `CACHE` em `sw.js`
+   (ex.: `v30`→`v31`). Sem isso o PWA fica preso na versão antiga.
+3. **Scripts clássicos, escopo global compartilhado:** todos os `js/*.js` dividem o mesmo escopo de
+   topo. Cada identificador `const/let/function` aparece **uma só vez** entre eles (redeclarar =
+   `SyntaxError` que pula o arquivo inteiro). Só `core.js` executa no topo (`loadState()`), por isso
+   carrega primeiro; o resto são funções (hoisted) e `init` roda no `DOMContentLoaded`. **Novo
+   arquivo `js/` → registrar em `index.html` E em `sw.js` ASSETS, na ordem.**
+4. **Sem segredos no repo (público).** Token GitHub, Client ID do Drive e chave Gemini só no
+   `localStorage` do aparelho. Dados financeiros sincronizam por um **repo PRIVADO separado**
+   (`dados.json`), nunca neste repo.
+5. **Sem dependências novas / sem passo de build.** Tudo client-side.
 
-## Mapa de `app.js` (offsets para `Read`)
-| Bloco | Linhas | Funções-chave |
-|---|---|---|
-| Constantes / chaves localStorage | 9–15 | `STORE_KEY`, `SYNC_KEY`, `APP_VERSION` (bump!) |
-| **Categorias/limites (config)** | 19–48 | `DEFAULT_CATEGORIAS`, `getCatConfig`, `getCategorias`, `catByName`, `limiteDaCategoria`, `grupoDaCategoria`, `limitsObsText` |
-| Estado / persistência | 51–105 | `emptyState`, `loadState`, `saveState`, `touchDoc/touchProfile` |
-| Utils (moeda, data, uid, toast) | 111–152 | `parseMoney`, `formatMoney`, `todayISO`, `fmtDateBR`, `dateToSerial` |
-| Ícones SVG | 155–192 | `ICONS`, `icon`, `setupIcons` |
-| Render telas/listas | 194–410 | `render`, `renderReports`, `renderList` (exibe **mais recente no topo**; `hydrateThumbs` = miniaturas), `limitExcedido`, `emptyStateEl` |
-| Modal de lançamento | 428–598 | `openModal`, `saveEntry`, `deleteEntry`, `updateCatHint`, máscaras |
-| **Foto/anexo + OCR hook** | 457–503 | `renderModalPhoto`, `onPhotoSelected` (dispara OCR), `applyModalPhoto` (nome do arquivo) |
-| Excel (XLSX) | 600–960 | `buildXlsx`, `buildSantanderXlsx` (formato exclusivo cartão), `exportExcel`, `filteredDoc`, `santanderFileBase` |
-| Compartilhar/baixar | 839–885 | `shareOrDownload`, `downloadBlob`, chooser de export |
-| PDF | 887–1200 | `buildPrint`, `buildSantanderPrint` (Prestação de Contas), `exportPDF`, `generatePdfBlob(src,sections,santander)` |
-| **Sync GitHub (privado)** | 1038–1360 | `ghGetFile/ghPutFile`, `currentDoc`, `applyDoc`, `mergeDocs`, `syncNow`, `setupSyncUI` |
-| Bloqueio (bio/PIN) | ~1340–1505 | `enableBio`, `unlockBio`, `setPin/checkPin`, `showLock` |
-| `populateCategorySelects` | ~1507 | popula `#m-categoria` (chamado no `init`; já não há mais filtros) |
-| **Editor de categorias (UI)** | ~1516–1590 | `getCatDraft`, `renderCatEditor`, `saveCatEditor`, `setupCatUI` |
-| **OCR / Gemini** | 1619–1735 | `AI_KEY`, `GEMINI_MODEL`, `loadAi/saveAi`, `aiConfigured`, `buildDescricao`, `ocrReceipt`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI` |
-| **Google Drive** | ~1900–2400 | `loadGd/saveGd`, `gdGetToken`, `GD_SCOPE` (drive.file **+ drive.readonly**), **raízes separadas** (`gdEnsureFolder(tabela)`, `GD_ROOT_NAMES`, `setDriveFolder`), **subpastas Ano/Mês** (`gdFindOrCreateChild`, `gdEnsureMonthFolder(dateISO,tabela)`), `gdUpload(blob,name,dateISO,tabela)`, **exclusão** (`gdDeleteFile`, fila `queueGdDelete/flushGdDeletions`, `purgeEntryPhoto`), **conexão ao abrir** (`gdConnectFlow`, `gdSilentReconnect`, `maybePromptDrive`, `countPendingDrive`), **varredura** (`gdListReceipts`, `scanDriveForReceipts`, `knownDriveIds`) + **pendentes** (`renderPending`, `openPendingEntry`, `dismissPending`, `linkedPendingId`), miniaturas (`saveThumb`), IndexedDB (`p_`/`thumb_`), `compressImage`, `flushPendingPhotos` |
-| Tema | 2002–2032 | `applyTheme`, `toggleTheme`, `setupTheme` |
-| Init / bootstrap | 2033–2210 | `bindField`, `newMonth`, `init` (registra todos os `setup*`), SW, conectividade |
-
-## Forma do estado (`emptyState`, app.js:51)
+## Forma do estado (`emptyState` em `js/core.js`)
 ```
 { funcionario, dataSolicitacao, referente,
   reportMonth,                       // 'YYYY-MM' (perfil): pasta única dos comprovantes no Drive; vazio = por data do lançamento
   bank:{nome,cpf,banco,agencia,conta,pix},
   reembolso:[], alelo:[],            // lançamentos (duas tabelas). entry.foto = {id|pending, name, w, h}
-  history:[], histTomb:{},           // meses arquivados + lápides
+  history:[], histTomb:{},           // meses arquivados (snapshot pode marcar `table:'reembolso'|'alelo'`) + lápides
   driveFolderId,                     // (legado) raiz única; migra p/ driveFolders.reembolso
   driveFolders:{reembolso,alelo},    // RAÍZES SEPARADAS no Drive (reembolso × cartão Santander)
-  pending:[], driveKnown:{}, driveDismissed:{},  // varredura do Drive (item v25): pendentes p/ revisar; ids já vistos; ids descartados
+  pending:[], driveKnown:{}, driveDismissed:{},  // varredura do Drive: pendentes p/ revisar; ids já vistos; ids descartados
   config:{ categorias:[{nome,limite,grupo}] },  // editável em Configurações
   tomb:{reembolso:{},alelo:{}},      // lápides de deleção (id->updatedAt)
   meta:{updatedAt, profileUpdatedAt} }
 ```
-Merge de sync: `meta.updatedAt` para tabelas; `profileUpdatedAt` (last-write-wins)
-para perfil/banco/**config**/`driveFolders`/`reportMonth`. Lápides garantem que deleções
-propaguem. `pending` = união por `fileId` **menos** os já virados lançamento (`foto.id`) ou
-descartados (`driveDismissed`); `driveKnown`/`driveDismissed` = união (evita reprocessar/ressuscitar).
+Merge de sync: `meta.updatedAt` p/ tabelas; `profileUpdatedAt` (last-write-wins) p/
+perfil/banco/**config**/`driveFolders`/`reportMonth`. Lápides propagam deleções. `pending` = união
+por `fileId` **menos** os já virados lançamento (`foto.id`) ou descartados; `driveKnown`/
+`driveDismissed` = união (evita reprocessar/ressuscitar).
 
 ## Chaves de localStorage
-`despesas-soma-v1` (estado) · `-sync-v1` (GitHub) · `-gdrive-v1` (Drive) ·
-`-gddel-v1` (fila de exclusões no Drive) · `-ai-v1` (Gemini) · `-lock-v1` (bio/PIN) ·
-`-theme-v1` · `-lastsync-v1` · `-dirty-v1`.
+`despesas-soma-v1` (estado) · `-sync-v1` (GitHub) · `-gdrive-v1` (Drive) · `-gddel-v1` (fila de
+exclusões) · `-ai-v1` (Gemini) · `-lock-v1` (bio/PIN) · `-theme-v1` · `-lastsync-v1` · `-dirty-v1`.
 
-## Verificação (esta máquina)
-- **Sem Node, sem python; preview MCP trava aqui.** Não conte com eles.
-- **Lógica pura (headless):** Chrome em
-  `C:\Program Files\Google\Chrome\Application\chrome.exe` com
-  `--headless=new --dump-dom`. Passar caminho Windows **absoluto** do arquivo
-  (em Git Bash: `"$(pwd -W)/arquivo.html"`). Harness de teste deve juntar
-  resultados com ` || ` (grep não cruza linhas) e usar try/catch.
-- **OAuth/câmera/OCR/IndexedDB e chamadas externas NÃO rodam headless** → validar
-  só no **site publicado (HTTPS)**, no dispositivo.
+## Verificação (esta máquina — sem Node/python; preview MCP trava)
+Chrome em `C:\Program Files\Google\Chrome\Application\chrome.exe` com `--headless=new
+--allow-file-access-from-files --virtual-time-budget=4000 --dump-dom` num harness `.html`
+temporário (caminho Windows absoluto; em Git Bash `"$(pwd -W)/x.html"`). Grep é por linha → no
+harness escreva 1 resultado por linha (não cruze `<` ). Dois testes úteis (scripts **clássicos**
+carregam de `file://` — por isso não usamos ES modules):
+- **Integridade do split / sintaxe:** harness que inclui os 11 `js/*.js` na ordem + checa
+  `typeof <fn> === 'function'` p/ uma função de cada arquivo (um `SyntaxError`/redeclaração pula o
+  arquivo todo → a função some) e captura `window.onerror`.
+- **Lógica pura:** chamar funções (ex.: `computeSantanderPeriodo`, `validateBeforeExport`) com
+  fixtures e comparar. Limpar os harnesses (`rm`) depois.
+- **OAuth/câmera/OCR/IndexedDB/PDF/Drive NÃO rodam headless** → validar no **site (HTTPS)** no
+  dispositivo.
+
+## Pontos de atenção (fatos de arquitetura)
+- `#m-categoria` é **populado por JS** (`populateCategorySelects`, no `init`) a partir de
+  `getCategorias()` — não criar `<option>` fixos. Rótulo da 2ª tabela: "Despesas Cartão Santander".
+- **DUAS raízes no Drive** (`gdEnsureFolder(tabela)`): `Comprovantes - Despesas Soma` (reembolso,
+  nome legado) e `Comprovantes Cartao Santander - Despesas Soma` (`alelo`).
+  `state.driveFolders={reembolso,alelo}` (sincronizado; `driveFolderId` legado migra p/ reembolso).
+  `gdUpload(blob,name,dateISO,tabela)`/`gdEnsureMonthFolder(dateISO,tabela)` recebem a tabela.
+- **Comprovantes vão p/ subpastas `{Ano}/{Mês}`** dentro da raiz **da tabela** (resolvidas por
+  nome, idempotente). O mês é o **`reportMonth`** (campo "Mês de referência", `reportFolderDateISO`)
+  — todo o relatório cai na MESMA pasta; vazio → pasta da **data do lançamento**.
+- **Excluir lançamento apaga o comprovante no Drive** — em `deleteEntry` (modal) **e**
+  `quickDelete` (lista), via `purgeEntryPhoto`. Conectado → `gdDeleteFile`; senão fila `-gddel-v1`
+  → `flushGdDeletions` ao reconectar. Limpa `thumb_<id>` e o pendente `p_<id>`.
+- **Importar arquivo (imagem OU PDF)** no modal além de "Tirar foto". `onPhotoSelected` detecta PDF
+  (`modalPhoto.kind='pdf'`, sem compressão/miniatura); `ocrReceipt(blob,mime)` manda imagem ou PDF.
+  Nome sem leitura da IA = `NF {DD.MM.AAAA}` (`receiptFileName`/`ddmmaaaa`).
+- **Formato exclusivo do Cartão Santander** (`buildSantanderXlsx`/`buildSantanderPrint`, asset
+  `template-santander.xlsx`): acionado ao exportar **só** `alelo`. Excel: E4=Nome FIXO
+  (`SANTANDER_NOME`), E5=Cargo FIXO (`SANTANDER_CARGO`), **E6=Período AUTOMÁTICO**
+  (`computeSantanderPeriodo`: do último lançamento do relatório Santander anterior no histórico até
+  o último do atual), **E7=Data de Entrega = data de geração** (`todayISO`), E8/J=Total; tabela
+  linhas 17.. (total na 35, expande se >18). Colunas: B=DATA, **C:F=ESTABELECIMENTO**, G:I=DESCRIÇÃO,
+  J=VALOR, **K=JUSTIFICATIVA**. PDF = réplica visual (barra `#C00000`+logo, total cinza `#D8D8D8`)
+  em **paisagem** (`generatePdfBlob(...,santander)`). Reembolso/"ambos" → `buildXlsx`/`buildPrint`
+  (retrato).
+- **PDF multipágina não corta linhas:** `generatePdfBlob` rasteriza com html2canvas e **fatia nas
+  fronteiras de fim de cada `<tr>`** (não em offsets fixos). Anexa os comprovantes como páginas
+  finais.
+- **Campos só do cartão (`alelo`):** `entry.estabelecimento` (IA+manual) e `entry.justificativa`
+  (manual), visíveis só p/ `alelo` (`toggleCartaoFields`); alimentam C e K. `ocrReceipt` retorna
+  `establishment`; `fillFromOcr` preenche se visível.
+- **Validação antes de exportar/arquivar** (`validateBeforeExport`): acusa lançamentos sem campos
+  (cartão: data/valor/estabelecimento/justificativa; reembolso: data/valor/categoria) com `confirm`.
+- **Fechamento POR TABELA** (botão 🗑️ → `closeMonthFlow` → `chooseCloseTable`): fecha **só** a
+  tabela escolhida (a outra continua aberta). `closeTable` valida, arquiva um snapshot **só dessa
+  tabela** (com `table:` marcado) no histórico e chama `archiveMonthToDrive`, que compacta os
+  comprovantes num `.zip` (`fflate.zipSync`, nome `NFs - {Mês} {Ano}.zip`) e grava **.zip + Excel +
+  PDF** do mês na pasta do mês no Drive (**mantém** os comprovantes individuais). `reportMonth`/
+  `dataSolicitacao` só zeram quando **as duas** tabelas ficam vazias. `reopenHistory` restaura só a
+  tabela do snapshot (`h.table`).
+- **Varredura do Drive** (`scanDriveForReceipts`, botão `#gd-scan-main`): escopo `drive.file` +
+  `drive.readonly`. `gdListReceipts(tabela)` recursivo; ids novos (`knownDriveIds`) → OCR. Sucesso
+  (data+total) vira lançamento `foto={id,name}` (sem reupload); falha vira **pendente**
+  (`renderPending`/`openPendingEntry`/`dismissPending`/`retryPendingOcr`). Overlay `scanProgress`
+  mostra cada arquivo ao vivo com o motivo.
+- **Conexão do Drive ao abrir:** token OAuth só em memória (~1h). `maybePromptDrive` (chamado em
+  `hideLock`) tenta reconexão silenciosa e só mostra o popup se `countPendingDrive() > 0`.
+- **Miniaturas** são **locais** (IndexedDB `thumb_<id>`, não sincronizam). Lista mostra mais recente
+  no topo; estado/Excel/PDF seguem cronológicos. Aviso de duplicado (mesma data+categoria+valor) no
+  `saveEntry`. A chave de dados `alelo` é estrutural e **não muda** (rótulo visível pode mudar).
+- **OCR com retentativa:** `ocrReceipt` reenvia até 4x com backoff em erros transitórios (429,
+  500/502/503, rede), respeitando `retryDelay`. Erro definitivo propaga a **mensagem real** do
+  Gemini (aparece no log da varredura e no toast). `ocr.dateISO` vem como string vazia (use
+  `!ocr.dateISO`). `GEMINI_MODEL` (`gemini-2.5-flash`) é fácil de trocar.
+- Categoria nova fora da validação do `template.xlsx` é gravada mesmo assim (Excel pode avisar
+  "valor fora da lista"). Renomear categoria **não** reescreve lançamentos antigos.
 
 ## Fluxo de trabalho típico (ao editar)
-1. Editar `app.js`/`index.html`/`styles.css`.
-2. Bump `APP_VERSION` (app.js:12) **e** `CACHE` (sw.js:4) juntos.
-3. Commit + push (mensagens de commit sem acentos, em pt-BR curto).
-4. Pages publica em ~1 min; testar no celular.
-
-## Pontos de atenção
-- `index.html` `#m-categoria` é **populado por JS** (`populateCategorySelects`, chamado no
-  `init`) a partir de `getCategorias()` — não recriar `<option>` fixos. (A busca/filtros foi
-  removida; o rótulo da 2ª tabela é "Despesas Cartão Santander - Soma".)
-- **DUAS raízes separadas no Drive** (`gdEnsureFolder(tabela)`): `Comprovantes - Despesas Soma`
-  (reembolso, = nome legado, reaproveita a pasta antiga) e `Comprovantes Cartao Santander -
-  Despesas Soma` (cartão/`alelo`). `state.driveFolders={reembolso,alelo}` (sincronizado;
-  `driveFolderId` legado migra p/ reembolso). `gdUpload(blob,name,dateISO,tabela)` e
-  `gdEnsureMonthFolder(dateISO,tabela)` recebem a tabela.
-- **Comprovantes no Drive vão para subpastas `{Ano}/{Mês}`** dentro da raiz **da tabela**;
-  resolvidas por nome (idempotente entre aparelhos). O mês é o **`reportMonth`** (campo "Mês de
-  referência", `reportFolderDateISO`) — **todo** o relatório aberto cai na MESMA pasta, mesmo
-  comprovantes de outra data. Se `reportMonth` vazio, cai na pasta da **data do lançamento**.
-  Botão 🗑️ (`newMonth`) arquiva e **zera** `reportMonth`.
-- **Excluir lançamento apaga o comprovante no Drive** — em **ambos** os caminhos: `deleteEntry`
-  (modal) **e** `quickDelete` (botão 🗑️ da lista) chamam `purgeEntryPhoto`. Conectado →
-  `gdDeleteFile` na hora; senão entra na fila `-gddel-v1` e propaga por `flushGdDeletions` ao
-  reconectar. Limpa `thumb_<id>` e o pendente `p_<id>`.
-- **Importar arquivo (imagem OU PDF)** no modal: botão "Importar arquivo" (`#m-foto-import`, sem
-  `capture`) além de "Tirar foto". `onPhotoSelected` detecta PDF (`modalPhoto.kind='pdf'`, sem
-  compressão/miniatura); `ocrReceipt(blob,mime)` manda imagem **ou** PDF ao Gemini. Nome do
-  arquivo sem leitura da IA = **`NF {DD.MM.AAAA}`** (`receiptFileName`/`ddmmaaaa`), extensão por tipo.
-- **Formato exclusivo do Cartão Santander** (`buildSantanderXlsx`/`buildSantanderPrint`, asset
-  `template-santander.xlsx`): acionado ao exportar **só** a seção `alelo` (Excel/PDF "Prestação de
-  Contas"). Excel: E4=**Nome FIXO** (`SANTANDER_NOME`), E5=**Cargo FIXO** (`SANTANDER_CARGO`),
-  E6=Período(`referente`), E7=Data Entrega, E8/J=Total; tabela linhas 17.. (total na 35, expande se
-  >18). Colunas: B=DATA, **C:F=ESTABELECIMENTO**, G:I=DESCRIÇÃO, J=VALOR, **K=JUSTIFICATIVA**. PDF
-  (`buildSantanderPrint`) é **réplica visual do modelo** (barra vermelha `#C00000`+logo, info à esq.,
-  declaração à dir., checklist, cabeçalho vermelho, total cinza `#D8D8D8`) e sai em **paisagem**
-  (`generatePdfBlob(...,santander)`). Reembolso/"ambos" seguem `buildXlsx`/`buildPrint` (retrato).
-- **Campos só do cartão (`alelo`):** `entry.estabelecimento` (IA capta + manual) e
-  `entry.justificativa` (manual) — campos `#m-estabelecimento`/`#m-justificativa` no modal, visíveis
-  só p/ `alelo` (`toggleCartaoFields`); alimentam C e K do Excel/PDF. OCR (`ocrReceipt`) retorna
-  `establishment`; `fillFromOcr` preenche se visível. Reembolso não tem os campos.
-- **Varredura do Drive** (`scanDriveForReceipts`, botão **`#gd-scan-main` na tela de Lançamentos**,
-  abaixo de "Dados do Reembolso"): escopo agora é
-  `drive.file` **+ `drive.readonly`** (lê arquivos subidos manualmente → exige reconsentir 1x).
-  `gdListReceipts(tabela)` lista recursivo a raiz da tabela; ids desconhecidos (`knownDriveIds`)
-  → OCR. Sucesso (data+total) vira lançamento com `foto={id,name}` (sem reupload); falha vira
-  **pendente** (`state.pending`) revisável no card "Lançamentos pendentes (Drive)" em
-  `#view-lancamentos` (`renderPending`/`openPendingEntry`/`dismissPending`). `openPendingEntry`
-  abre o modal pré-preenchido e vincula o arquivo existente (`applyModalPhoto` no modo `keep` seta
-  `entry.foto` se for lançamento novo). Custo Gemini → só no botão manual.
-  **Modal de progresso (v27):** `scanProgress` (objeto: `open/status/log/done/close`, overlay
-  `#scan-progress` reusando `.offline-notice`/`.scan-*` no CSS) mostra ao vivo cada arquivo —
-  ✓ lançado / ⚠ pendente (com **motivo**: sem data, sem valor, falha na leitura, não reconhecido)
-  / já conhecido / erro de pasta — e o resumo final. Resolve "cliquei e não aconteceu nada".
-  **Botão "Analisar de novo" (v27)** em cada pendente (`retryPendingOcr(fileId,btn)`): rebaixa o
-  arquivo do Drive e reroda `ocrReceipt`; se vier data+total, vira lançamento e some da lista;
-  senão atualiza `p.ocr` e avisa o motivo.
-- **Conexão do Drive ao abrir:** token OAuth vive só em memória (~1h) → ao abrir/voltar ao
-  foco, `maybePromptDrive` tenta reconexão silenciosa (sem UI) e **só** mostra o popup
-  `gd-connect-notice` se `countPendingDrive() > 0` (fotos a enviar ou exclusões a propagar) —
-  sem pendência **não incomoda**. Sequenciado após o desbloqueio (chamado em `hideLock`).
-- **Miniaturas** dos comprovantes são **locais** (IndexedDB `thumb_<id>`, não sincronizam).
-  Lista exibe **mais recente no topo** (estado/Excel/PDF seguem cronológicos). Há botão
-  "Copiar dados bancários" (`copyBankData`) e aviso de duplicado (mesma data+categoria+valor) no `saveEntry`.
-  Renomear "Alelo"→"Santander - Soma" foi só rótulo visível (tela/PDF/Excel via
-  `template.xlsx` sharedStrings); a chave de dados `alelo` é estrutural e **não muda**.
-- Categoria nova fora da validação do `template.xlsx` é gravada mesmo assim; o Excel
-  pode avisar "valor fora da lista" — limitação conhecida.
-- `GEMINI_MODEL` (`gemini-2.5-flash`) é constante fácil de trocar se a família mudar.
-- **OCR com retentativa (v28):** `ocrReceipt` reenvia até 4x com backoff exponencial (jitter) em
-  erros **transitórios** (429 cota/limite, 500/502/503 sobrecarga, falha de rede), respeitando o
-  `retryDelay` do `RetryInfo` quando a API manda. Erro definitivo propaga a **mensagem real** do
-  Gemini, que aparece no log da varredura (`⚠ … pendente (falha na leitura: <msg>)`) e no toast da
-  reanálise — assim dá pra distinguir cota esgotada de comprovante ilegível. Bug corrigido junto:
-  `dateISO` vem como **string vazia** (não `null`), então os motivos usam `!ocr.dateISO`.
-- Renomear categoria **não** reescreve lançamentos antigos (texto livre na coluna).
+1. Grep o nome da função → editar o `js/*.js` certo.
+2. Bump `APP_VERSION` (`js/core.js`) **e** `CACHE` (`sw.js`) juntos.
+3. Verificar (headless, acima) quando aplicável.
+4. Commit + push (mensagens sem acentos, pt-BR curto). Pages publica em ~1 min; testar no celular.

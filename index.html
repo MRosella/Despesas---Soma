@@ -414,6 +414,18 @@
   <script src="lib/fflate.min.js"></script>
   <script src="lib/html2canvas.min.js"></script>
   <script src="lib/jspdf.umd.min.js"></script>
-  <script src="app.js"></script>
+  <!-- app.js foi dividido em módulos por área (ver CLAUDE.md). Scripts clássicos: compartilham
+       o escopo global, então a ordem importa só para core.js (executa loadState no topo). -->
+  <script src="js/core.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/modal.js"></script>
+  <script src="js/excel.js"></script>
+  <script src="js/pdf.js"></script>
+  <script src="js/sync.js"></script>
+  <script src="js/lock.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/ocr.js"></script>
+  <script src="js/drive.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>
