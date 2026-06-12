@@ -88,7 +88,7 @@ async function closeTable(tabela) {
     funcionario: state.funcionario,
     dataSolicitacao: state.dataSolicitacao,
     referente: state.referente,
-    reportMonth: state.reportMonth || '',
+    reportMonth: (state.reportMonths || {})[tabela] || '',
     bank: Object.assign({}, state.bank),
     reembolso: tabela === 'reembolso' ? state.reembolso.map((e) => Object.assign({}, e)) : [],
     alelo: tabela === 'alelo' ? state.alelo.map((e) => Object.assign({}, e)) : []
@@ -102,7 +102,8 @@ async function closeTable(tabela) {
   state.history.unshift(snapshot);
   for (const e of state[tabela]) state.tomb[tabela][e.id] = now;   // lápides p/ a sincronização
   state[tabela] = [];
-  if (!state.reembolso.length && !state.alelo.length) { state.reportMonth = ''; state.dataSolicitacao = ''; }
+  state.reportMonths[tabela] = '';   // o mês de referência daquela tabela zera ao fechá-la
+  if (tabela === 'reembolso') state.dataSolicitacao = '';
   touchProfile(); touchDoc();
   saveState();
   render();
@@ -122,7 +123,7 @@ async function archiveMonthToDrive(tabela, snapshot) {
   }
   const list = snapshot[tabela] || [];
   const maxData = (l) => l.map((e) => e && e.data).filter(Boolean).sort().pop() || '';
-  const dateISO = reportFolderDateISO() || maxData(list) || todayISO();
+  const dateISO = reportFolderDateISO(tabela) || maxData(list) || todayISO();
   const m = /^(\d{4})-(\d{2})/.exec(dateISO);
   const mesNome = m ? MESES[parseInt(m[2], 10) - 1] : '';
   const ano = m ? m[1] : '';
@@ -208,7 +209,8 @@ function init() {
   bindField('funcionario', null, (v) => state.funcionario = v);
   bindField('dataSolicitacao', null, (v) => state.dataSolicitacao = v);
   bindField('referente', null, (v) => state.referente = v);
-  if ($('reportMonth')) bindField('reportMonth', null, (v) => state.reportMonth = v);
+  if ($('reportMonth-reembolso')) bindField('reportMonth-reembolso', null, (v) => state.reportMonths.reembolso = v);
+  if ($('reportMonth-alelo')) bindField('reportMonth-alelo', null, (v) => state.reportMonths.alelo = v);
   bindField('bk-nome', null, (v) => state.bank.nome = v);
   bindField('bk-cpf', null, (v) => state.bank.cpf = v);
   bindField('bk-banco', null, (v) => state.bank.banco = v);
@@ -249,6 +251,7 @@ function init() {
   setupIcons();
   populateCategorySelects();
   setupNav();
+  setupReportTabs();
   setupTheme();
   setupServiceWorker();
   setupConnectivity();

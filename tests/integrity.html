@@ -21,13 +21,13 @@
 <script>
 var checks = {
   'core':       ['formatMoney','loadState','uid','getCatConfig','sumOf'],
-  'render':     ['render','computeSantanderPeriodo','renderList','reopenHistory','monthLabelFor'],
+  'render':     ['render','computeSantanderPeriodo','renderList','reopenHistory','monthLabelFor','renderCatSummary'],
   'modal':      ['openModal','saveEntry','deleteEntry','onPhotoSelected','toggleCartaoFields'],
   'excel':      ['buildXlsx','buildSantanderXlsx','validateBeforeExport','exportExcel','updateExportHint'],
   'pdf':        ['generatePdfBlob','buildSantanderPrint','exportPDF','buildPrint'],
   'sync':       ['syncNow','mergeDocs','mergeTable','mergeHistory','setupSyncUI'],
   'lock':       ['showLock','enableBio','setPin','setupBackupUI'],
-  'ui':         ['setupNav','setupCatUI','populateCategorySelects','renderCatEditor'],
+  'ui':         ['setupNav','setupCatUI','populateCategorySelects','renderCatEditor','setupReportTabs','showReportTab'],
   'ocr':        ['ocrReceipt','ocrReceiptRaw','blobSha256','fillFromOcr','setupAiUI'],
   'idb':        ['idbGet','idbPut','getPhotoBlob','compressImage','saveThumb'],
   'drive-core': ['gdUpload','gdEnsureFolder','purgeEntryPhoto','flushPendingPhotos','setupGDriveUI'],

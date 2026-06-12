@@ -157,7 +157,7 @@ async function gdDownloadBlob(fileId) {
 }
 
 /* mês de referência do relatório → pasta única no Drive (vazio = organiza por data do lançamento) */
-function reportFolderDateISO() { return state.reportMonth ? state.reportMonth + '-01' : null; }
+function reportFolderDateISO(tabela) { const m = (state.reportMonths || {})[tabela]; return m ? m + '-01' : null; }
 
 /* ---- exclusão de comprovantes no Drive (com fila p/ retry offline) ---- */
 function loadGdDel() { try { const a = JSON.parse(localStorage.getItem(GDDEL_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
@@ -230,7 +230,7 @@ async function flushPendingPhotos(report) {
         try {
           const rec = await idbGet('p_' + e.foto.pending);
           if (!rec) { e.foto = null; continue; }
-          const id = await gdUpload(rec.blob, rec.name, reportFolderDateISO() || e.data || rec.data, tabela);
+          const id = await gdUpload(rec.blob, rec.name, reportFolderDateISO(tabela) || e.data || rec.data, tabela);
           await idbDel('p_' + e.foto.pending);
           e.foto = { id, name: rec.name, w: e.foto.w, h: e.foto.h };
           e.updatedAt = Date.now();

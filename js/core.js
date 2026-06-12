@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v32';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v33';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -53,7 +53,7 @@ function emptyState() {
     funcionario: '',
     dataSolicitacao: '',
     referente: '',
-    reportMonth: '',                      // mês de referência (YYYY-MM): pasta única dos comprovantes no Drive
+    reportMonths: { reembolso: '', alelo: '' },  // mês de referência (YYYY-MM) por relatório: pasta dos comprovantes no Drive
     bank: { nome: '', cpf: '', banco: '', agencia: '', conta: '', pix: '' },
     reembolso: [],
     alelo: [],
@@ -91,6 +91,12 @@ function loadState() {
     st.driveFolderId = st.driveFolderId || '';
     st.driveFolders = Object.assign({ reembolso: '', alelo: '' }, st.driveFolders || {});
     if (!st.driveFolders.reembolso && st.driveFolderId) st.driveFolders.reembolso = st.driveFolderId;   // migração: raiz legada vira a de reembolso
+    st.reportMonths = Object.assign({ reembolso: '', alelo: '' }, st.reportMonths || {});
+    if (typeof s.reportMonth === 'string' && s.reportMonth) {   // migração: mês único legado → ambos os relatórios
+      if (!st.reportMonths.reembolso) st.reportMonths.reembolso = s.reportMonth;
+      if (!st.reportMonths.alelo) st.reportMonths.alelo = s.reportMonth;
+    }
+    delete st.reportMonth;
     st.pending = Array.isArray(st.pending) ? st.pending : [];
     st.driveKnown = st.driveKnown || {};
     st.driveDismissed = st.driveDismissed || {};

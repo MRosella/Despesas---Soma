@@ -63,117 +63,147 @@
           <ul class="pending-list" id="pending-list"></ul>
         </div>
       </section>
-      <!-- Dados do reembolso -->
-      <section class="card">
-        <div class="card-head"><h2>Dados do Reembolso</h2></div>
+      <!-- Ação global: varre as DUAS raízes do Drive -->
+      <section class="card global-scan">
         <div class="card-body">
-          <div class="field">
-            <label for="funcionario">Funcionário</label>
-            <input type="text" id="funcionario" placeholder="Seu nome completo" autocomplete="name" />
-          </div>
-          <div class="row2">
-            <div class="field">
-              <label for="dataSolicitacao">Data da Solicitação</label>
-              <input type="date" id="dataSolicitacao" />
-            </div>
-            <div class="field">
-              <label for="referente">Reembolso Referente à</label>
-              <select id="referente">
-                <option value="">—</option>
-                <option>Cursos e Treinamentos</option>
-                <option>Demandas operacionais</option>
-              </select>
-            </div>
-          </div>
-          <div class="field">
-            <label for="reportMonth">Mês de referência</label>
-            <input type="month" id="reportMonth" />
-            <p class="hint" style="margin:6px 2px 0">Define a pasta no Google Drive onde <b>todos</b> os comprovantes deste relatório serão guardados (ex.: 2026/Julho), mesmo os de outro mês. Em branco, organiza pela data de cada lançamento.</p>
-          </div>
-          <p class="hint">Empresa: <b>Soma Urbanismo S/A</b> (fixo). Seus dados são salvos automaticamente neste celular.</p>
-          <button class="btn btn-ghost" id="gd-scan-main" type="button" style="width:100%; margin-top:4px"><span class="bic" data-icon="search" data-size="18"></span> Procurar comprovantes no Drive</button>
-          <p class="hint" style="margin:6px 2px 0">Reconhece comprovantes subidos manualmente à pasta do Drive e ainda sem lançamento (usa a IA).</p>
+          <button class="btn btn-ghost" id="gd-scan-main" type="button" style="width:100%"><span class="bic" data-icon="search" data-size="18"></span> Procurar comprovantes no Drive</button>
+          <p class="hint" style="margin:6px 2px 0">Reconhece comprovantes subidos manualmente às pastas do Drive e ainda sem lançamento (usa a IA). Varre os dois relatórios.</p>
         </div>
       </section>
 
-      <!-- Tabela 1: Reembolso -->
-      <section class="card">
-        <div class="card-head">
-          <h2>Despesas para Reembolso</h2>
-          <span class="sum" id="sum-reembolso">R$ 0,00</span>
-        </div>
-        <ul class="entries" id="list-reembolso"></ul>
-        <div class="add-row">
-          <button class="add-btn" data-add="reembolso"><span class="bic" data-icon="plus" data-size="18"></span> Adicionar</button>
-          <button class="add-btn repeat" data-repeat="reembolso"><span class="bic" data-icon="repeat" data-size="18"></span> Repetir último</button>
-        </div>
-      </section>
+      <!-- Seletor de relatório (abas) -->
+      <div class="report-tabs" role="tablist" aria-label="Relatório">
+        <button class="rtab active" id="rtab-reembolso" data-tab="reembolso" role="tab" aria-selected="true">Reembolso</button>
+        <button class="rtab" id="rtab-alelo" data-tab="alelo" role="tab" aria-selected="false">Cartão Santander</button>
+      </div>
 
-      <!-- Tabela 2: Alelo -->
-      <section class="card">
-        <div class="card-head">
-          <h2>Despesas Cartão Santander - Soma</h2>
-          <span class="sum" id="sum-alelo">R$ 0,00</span>
-        </div>
-        <ul class="entries" id="list-alelo"></ul>
-        <div class="add-row">
-          <button class="add-btn" data-add="alelo"><span class="bic" data-icon="plus" data-size="18"></span> Adicionar</button>
-          <button class="add-btn repeat" data-repeat="alelo"><span class="bic" data-icon="repeat" data-size="18"></span> Repetir último</button>
-        </div>
-      </section>
-
-      <!-- Resumo por categoria (apenas no app; não vai para Excel/PDF) -->
-      <section class="card cat-summary-card" id="cat-summary-card" style="display:none">
-        <div class="card-body">
-          <div class="cat-summary-title">Resumo por categoria</div>
-          <div class="cat-summary" id="cat-summary"></div>
-        </div>
-      </section>
-
-      <!-- Total -->
-      <section class="card total-card">
-        <div class="card-body">
-          <span class="lbl">TOTAL DOS GASTOS</span>
-          <span class="val" id="total-geral">R$ 0,00</span>
-        </div>
-      </section>
-
-      <!-- Dados bancários -->
-      <details class="card" id="bank-card">
-        <summary>Dados Bancários (Se Aplicável) <span class="chev">▾</span></summary>
-        <div class="card-body">
-          <div class="field">
-            <label for="bk-nome">Nome</label>
-            <input type="text" id="bk-nome" autocomplete="name" />
-          </div>
-          <div class="row2">
+      <!-- ===== Painel: REEMBOLSO ===== -->
+      <div class="report-panel active" id="tab-reembolso" data-panel="reembolso" role="tabpanel">
+        <section class="card">
+          <div class="card-head"><h2>Dados do Reembolso</h2></div>
+          <div class="card-body">
             <div class="field">
-              <label for="bk-cpf">CPF</label>
-              <input type="text" id="bk-cpf" inputmode="numeric" />
+              <label for="funcionario">Funcionário</label>
+              <input type="text" id="funcionario" placeholder="Seu nome completo" autocomplete="name" />
+            </div>
+            <div class="row2">
+              <div class="field">
+                <label for="dataSolicitacao">Data da Solicitação</label>
+                <input type="date" id="dataSolicitacao" />
+              </div>
+              <div class="field">
+                <label for="referente">Reembolso Referente à</label>
+                <select id="referente">
+                  <option value="">—</option>
+                  <option>Cursos e Treinamentos</option>
+                  <option>Demandas operacionais</option>
+                </select>
+              </div>
             </div>
             <div class="field">
-              <label for="bk-banco">Banco</label>
-              <input type="text" id="bk-banco" />
+              <label for="reportMonth-reembolso">Mês de referência</label>
+              <input type="month" id="reportMonth-reembolso" />
+              <p class="hint" style="margin:6px 2px 0">Pasta no Google Drive onde <b>todos</b> os comprovantes deste relatório de Reembolso são guardados (ex.: 2026/Julho). Em branco, organiza pela data de cada lançamento.</p>
             </div>
+            <p class="hint">Empresa: <b>Soma Urbanismo S/A</b> (fixo). Seus dados são salvos automaticamente neste celular.</p>
           </div>
-          <div class="row2">
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <h2>Despesas para Reembolso</h2>
+            <span class="sum" id="sum-reembolso">R$ 0,00</span>
+          </div>
+          <ul class="entries" id="list-reembolso"></ul>
+          <div class="add-row">
+            <button class="add-btn" data-add="reembolso"><span class="bic" data-icon="plus" data-size="18"></span> Adicionar</button>
+            <button class="add-btn repeat" data-repeat="reembolso"><span class="bic" data-icon="repeat" data-size="18"></span> Repetir último</button>
+          </div>
+        </section>
+
+        <section class="card report-summary">
+          <div class="card-body">
+            <div class="rs-head"><span class="rs-title">Resumo por categoria</span><span class="rs-total">Total <b id="tot-reembolso">R$ 0,00</b></span></div>
+            <div class="cat-summary" id="cat-summary-reembolso"></div>
+          </div>
+        </section>
+
+        <details class="card" id="bank-card">
+          <summary>Dados Bancários (Se Aplicável) <span class="chev">▾</span></summary>
+          <div class="card-body">
             <div class="field">
-              <label for="bk-agencia">Agência</label>
-              <input type="text" id="bk-agencia" inputmode="numeric" />
+              <label for="bk-nome">Nome</label>
+              <input type="text" id="bk-nome" autocomplete="name" />
+            </div>
+            <div class="row2">
+              <div class="field">
+                <label for="bk-cpf">CPF</label>
+                <input type="text" id="bk-cpf" inputmode="numeric" />
+              </div>
+              <div class="field">
+                <label for="bk-banco">Banco</label>
+                <input type="text" id="bk-banco" />
+              </div>
+            </div>
+            <div class="row2">
+              <div class="field">
+                <label for="bk-agencia">Agência</label>
+                <input type="text" id="bk-agencia" inputmode="numeric" />
+              </div>
+              <div class="field">
+                <label for="bk-conta">Conta</label>
+                <input type="text" id="bk-conta" inputmode="numeric" />
+              </div>
             </div>
             <div class="field">
-              <label for="bk-conta">Conta</label>
-              <input type="text" id="bk-conta" inputmode="numeric" />
+              <label for="bk-pix">Chave Pix</label>
+              <input type="text" id="bk-pix" />
+            </div>
+            <button class="btn btn-excel" id="bk-copy" type="button">Copiar dados bancários</button>
+            <p class="hint">Preencha caso haja despesas reembolsáveis (recebimento via conta/Pix).</p>
+          </div>
+        </details>
+      </div>
+
+      <!-- ===== Painel: CARTÃO SANTANDER ===== -->
+      <div class="report-panel" id="tab-alelo" data-panel="alelo" role="tabpanel">
+        <section class="card santander">
+          <div class="card-head"><h2>Prestação de Contas — Cartão Santander</h2></div>
+          <div class="card-body">
+            <div class="ro-grid">
+              <div class="ro-field"><span class="ro-label">Nome</span><span class="ro-val" id="sant-nome">—</span></div>
+              <div class="ro-field"><span class="ro-label">Cargo</span><span class="ro-val" id="sant-cargo">—</span></div>
+              <div class="ro-field"><span class="ro-label">Período Prestação</span><span class="ro-val" id="sant-periodo">—</span></div>
+              <div class="ro-field"><span class="ro-label">Data de Entrega</span><span class="ro-val" id="sant-entrega">—</span></div>
+            </div>
+            <p class="hint" style="margin:10px 2px 0">Nome e Cargo são fixos; Período Prestação e Data de Entrega são preenchidos automaticamente na planilha/PDF.</p>
+            <div class="field" style="margin-top:10px">
+              <label for="reportMonth-alelo">Mês de referência</label>
+              <input type="month" id="reportMonth-alelo" />
+              <p class="hint" style="margin:6px 2px 0">Pasta no Google Drive onde <b>todos</b> os comprovantes do Cartão Santander são guardados. Em branco, organiza pela data de cada lançamento.</p>
             </div>
           </div>
-          <div class="field">
-            <label for="bk-pix">Chave Pix</label>
-            <input type="text" id="bk-pix" />
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <h2>Despesas Cartão Santander - Soma</h2>
+            <span class="sum" id="sum-alelo">R$ 0,00</span>
           </div>
-          <button class="btn btn-excel" id="bk-copy" type="button">Copiar dados bancários</button>
-          <p class="hint">Preencha caso haja despesas reembolsáveis (recebimento via conta/Pix).</p>
-        </div>
-      </details>
+          <ul class="entries" id="list-alelo"></ul>
+          <div class="add-row">
+            <button class="add-btn" data-add="alelo"><span class="bic" data-icon="plus" data-size="18"></span> Adicionar</button>
+            <button class="add-btn repeat" data-repeat="alelo"><span class="bic" data-icon="repeat" data-size="18"></span> Repetir último</button>
+          </div>
+        </section>
+
+        <section class="card report-summary">
+          <div class="card-body">
+            <div class="rs-head"><span class="rs-title">Resumo por categoria</span><span class="rs-total">Total <b id="tot-alelo">R$ 0,00</b></span></div>
+            <div class="cat-summary" id="cat-summary-alelo"></div>
+          </div>
+        </section>
+      </div>
     </section>
 
     <!-- ===================== TELA: RELATÓRIOS MENSAIS ===================== -->

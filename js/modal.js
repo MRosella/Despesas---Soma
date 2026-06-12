@@ -94,7 +94,7 @@ async function applyModalPhoto(entry) {
   if (gdConfigured() && gdConnected()) {
     try {
       toast('Enviando comprovante ao Drive…');
-      const fid = await gdUpload(modalPhoto.blob, name, reportFolderDateISO() || entry.data, tabela);
+      const fid = await gdUpload(modalPhoto.blob, name, reportFolderDateISO(tabela) || entry.data, tabela);
       entry.foto = { id: fid, name, w: modalPhoto.w, h: modalPhoto.h };
       return;
     } catch (e) { console.error(e); }

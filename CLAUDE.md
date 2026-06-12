@@ -14,19 +14,19 @@ https://mrosella.github.io/Despesas---Soma/
 | Arquivo | Conteúdo |
 |---|---|
 | `js/core.js` | chaves localStorage + `APP_VERSION` (bump!), categorias/config (`getCatConfig`…), estado (`emptyState`/`loadState`/`saveState`/`touchDoc`/`touchProfile`, `let state`), utils (`parseMoney`/`formatMoney`/`todayISO`/`fmtDateBR`/`dateToSerial`/`uid`/`toast`/`sumOf`), ícones |
-| `js/render.js` | `render`, `renderList` (mais recente no topo), histórico (`renderReports`/`reopenHistory`/`deleteHistory`/`monthLabelFor`/`computeSantanderPeriodo`/`yearOf`), resumo por categoria, `limitExcedido`, `quickDelete`/`quickDuplicate`, `escapeHtml`, `hydrateThumbs` |
+| `js/render.js` | `render`, `renderList` (mais recente no topo), histórico (`renderReports`/`reopenHistory`/`deleteHistory`/`monthLabelFor`/`computeSantanderPeriodo`/`yearOf`), `renderCatSummary(tabela,boxId)` (resumo POR relatório), `limitExcedido`, `quickDelete`/`quickDuplicate`, `escapeHtml`, `hydrateThumbs` |
 | `js/modal.js` | modal (`openModal`/`saveEntry`/`deleteEntry`/`repeatLast`), `toggleCartaoFields`, foto+OCR hook (`renderModalPhoto`/`onPhotoSelected`/`applyModalPhoto`), máscaras, `updateCatHint` |
 | `js/excel.js` | `buildXlsx`, `buildSantanderXlsx`, `exportExcel`, `validateBeforeExport`, `filteredDoc`, `reportFileBase`/`santanderFileBase`, chooser de export, `SANTANDER_NOME/CARGO` |
 | `js/pdf.js` | `buildPrint`, `buildSantanderPrint`, `exportPDF`, `generatePdfBlob` (multipágina por linha), `shareOrDownload`/`downloadBlob` |
 | `js/sync.js` | sync GitHub privado (`ghGetFile`/`ghPutFile`, `currentDoc`/`applyDoc`/`mergeDocs`, `syncNow`, `setupSyncUI`) |
 | `js/lock.js` | bloqueio bio/PIN (`enableBio`/`unlockBio`/`setPin`/`showLock`) + backup (`exportBackup`/`importBackupFile`/`setupBackupUI`) |
-| `js/ui.js` | navegação (`showView`/`setupNav`), `populateCategorySelects`, editor de categorias (`renderCatEditor`/`saveCatEditor`/`setupCatUI`) |
+| `js/ui.js` | navegação (`showView`/`setupNav`), **abas dos relatórios** (`setupReportTabs`/`showReportTab`, lembra em `-tab-v1`), `populateCategorySelects`, editor de categorias (`renderCatEditor`/`saveCatEditor`/`setupCatUI`) |
 | `js/ocr.js` | Gemini (`AI_KEY`, `GEMINI_MODEL`, `ocrReceipt` = wrapper com **cache por hash**, `ocrReceiptRaw` = chamada à rede, `blobSha256`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI`) |
 | `js/idb.js` | IndexedDB (`idb`/`idbPut`/`idbGet`/`idbDel`), `compressImage`, `blobToDataUrl`, `saveThumb`, `getPhotoBlob` (camada de storage local) |
 | `js/drive-core.js` | Drive: auth/token (`gdGetToken`, `GD_SCOPE`), pastas/upload (`gdEnsureFolder`/`gdEnsureMonthFolder`/`gdUpload`), exclusão+fila (`gdDeleteFile`/`flushGdDeletions`/`purgeEntryPhoto`), flush de pendentes, `setupGDriveUI`, conexão (`gdConnectFlow`/`maybePromptDrive`) |
 | `js/drive-scan.js` | Varredura (`scanDriveForReceipts`/`gdListReceipts`/`knownDriveIds`), overlay `scanProgress` (`open(title,icon)`/`status`/`log`/`done`/`close`), pendentes (`renderPending`/`openPendingEntry`/`dismissPending`/`retryPendingOcr`) |
 | `js/main.js` | tema, `bindField`, **fechamento por tabela** (`closeMonthFlow`/`closeTable`/`archiveMonthToDrive`/`chooseCloseTable`), `copyBankData`, `init` (registra todos os `setup*`), SW, conectividade — **carregado por último** |
-| `index.html` | 3 telas (`#view-lancamentos/-relatorios/-config`); carrega `lib/*` e depois `js/*` na ordem. |
+| `index.html` | 3 telas (`#view-lancamentos/-relatorios/-config`); a de Lançamentos tem **abas** `#tab-reembolso`/`#tab-alelo` (`.report-panel`) + seletor `.rtab`, cada uma com seu cabeçalho/tabela/resumo; carrega `lib/*` e depois `js/*` na ordem. |
 | `styles.css` | tema claro/escuro via variáveis. Reusar `.card/.field/.sync-status/.cat-row/.offline-notice`. |
 | `sw.js` | SW network-first; `CACHE` na **linha 4** + lista `ASSETS` (inclui **cada** `js/*.js`). |
 | `template.xlsx`, `template-santander.xlsx` | modelos Excel (não editar à mão). |
@@ -48,8 +48,8 @@ https://mrosella.github.io/Despesas---Soma/
 
 ## Forma do estado (`emptyState` em `js/core.js`)
 ```
-{ funcionario, dataSolicitacao, referente,
-  reportMonth,                       // 'YYYY-MM' (perfil): pasta única dos comprovantes no Drive; vazio = por data do lançamento
+{ funcionario, dataSolicitacao, referente,   // perfil do RELATÓRIO DE REEMBOLSO (Santander tem Nome/Cargo fixos + Período/Data auto)
+  reportMonths:{reembolso,alelo},    // 'YYYY-MM' POR relatório: pasta dos comprovantes no Drive; vazio = por data do lançamento (legado reportMonth migra p/ ambos)
   bank:{nome,cpf,banco,agencia,conta,pix},
   reembolso:[], alelo:[],            // lançamentos (duas tabelas). entry.foto = {id|pending, name, w, h}
   history:[], histTomb:{},           // meses arquivados (snapshot pode marcar `table:'reembolso'|'alelo'`) + lápides
@@ -61,7 +61,7 @@ https://mrosella.github.io/Despesas---Soma/
   meta:{updatedAt, profileUpdatedAt} }
 ```
 Merge de sync: `meta.updatedAt` p/ tabelas; `profileUpdatedAt` (last-write-wins) p/
-perfil/banco/**config**/`driveFolders`/`reportMonth`. Lápides propagam deleções. `pending` = união
+perfil/banco/**config**/`driveFolders`/`reportMonths`. Lápides propagam deleções. `pending` = união
 por `fileId` **menos** os já virados lançamento (`foto.id`) ou descartados; `driveKnown`/
 `driveDismissed` = união (evita reprocessar/ressuscitar).
 
@@ -88,6 +88,16 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
   dispositivo.
 
 ## Pontos de atenção (fatos de arquitetura)
+- **Home em ABAS por relatório** (`setupReportTabs`): painéis `#tab-reembolso`/`#tab-alelo`
+  (`.report-panel.active`), seletor `.rtab`. Itens **globais** ficam acima das abas: card de
+  pendentes do Drive e o botão `#gd-scan-main` (varre as DUAS raízes). Cada aba tem **cabeçalho
+  próprio**, sua tabela, seu **resumo por categoria** (`renderCatSummary(tabela,boxId)` → `#cat-summary-{reembolso|alelo}`)
+  e seu **total** (`#sum-*`/`#tot-*`). **Cabeçalho Reembolso**: `#funcionario`/`#dataSolicitacao`/
+  `#referente`/`#reportMonth-reembolso` + Dados Bancários (`#bank-card`, só reembolso). **Cabeçalho
+  Santander**: Nome/Cargo **fixos** (read-only, de `SANTANDER_NOME`/`SANTANDER_CARGO`), Período e
+  Data de Entrega **automáticos** (read-only, `#sant-periodo`/`#sant-entrega`), `#reportMonth-alelo`.
+  `excel.js`/`pdf.js` **não mudaram** (já liam esses campos). **Mês de referência é por relatório**
+  (`state.reportMonths[tabela]`, `reportFolderDateISO(tabela)`); zera só ao fechar aquela tabela.
 - `#m-categoria` é **populado por JS** (`populateCategorySelects`, no `init`) a partir de
   `getCategorias()` — não criar `<option>` fixos. Rótulo da 2ª tabela: "Despesas Cartão Santander".
 - **DUAS raízes no Drive** (`gdEnsureFolder(tabela)`): `Comprovantes - Despesas Soma` (reembolso,

@@ -122,7 +122,7 @@ function currentDoc() {
     funcionario: state.funcionario,
     dataSolicitacao: state.dataSolicitacao,
     referente: state.referente,
-    reportMonth: state.reportMonth || '',
+    reportMonths: Object.assign({ reembolso: '', alelo: '' }, state.reportMonths || {}),
     bank: Object.assign({}, state.bank),
     reembolso: state.reembolso.map((e) => Object.assign({}, e)),
     alelo: state.alelo.map((e) => Object.assign({}, e)),
@@ -148,7 +148,11 @@ function applyDoc(doc) {
   state.funcionario = doc.funcionario || '';
   state.dataSolicitacao = doc.dataSolicitacao || '';
   state.referente = doc.referente || '';
-  state.reportMonth = doc.reportMonth || '';
+  state.reportMonths = Object.assign({ reembolso: '', alelo: '' }, doc.reportMonths || {});
+  if (typeof doc.reportMonth === 'string' && doc.reportMonth) {   // doc legado com mês único
+    if (!state.reportMonths.reembolso) state.reportMonths.reembolso = doc.reportMonth;
+    if (!state.reportMonths.alelo) state.reportMonths.alelo = doc.reportMonth;
+  }
   state.bank = Object.assign(base.bank, doc.bank || {});
   state.reembolso = doc.reembolso || [];
   state.alelo = doc.alelo || [];
@@ -222,7 +226,7 @@ function mergeDocs(a, b) {
     funcionario: p.funcionario || '',
     dataSolicitacao: p.dataSolicitacao || '',
     referente: p.referente || '',
-    reportMonth: p.reportMonth || '',
+    reportMonths: Object.assign({ reembolso: '', alelo: '' }, p.reportMonths || (p.reportMonth ? { reembolso: p.reportMonth, alelo: p.reportMonth } : {})),
     bank: Object.assign({}, p.bank || {}),
     config: normalizeCatConfig(p.config),
     tomb: { reembolso: {}, alelo: {} }

@@ -39,16 +39,17 @@ try {
     'false');
 
   // mergeDocs: perfil last-write-wins (profileUpdatedAt) + tabela por maior updatedAt
-  function doc(profTs, func, reemb, tombReemb){
+  function doc(profTs, func, reemb, tombReemb, reportMonths){
     return { meta:{profileUpdatedAt:profTs, updatedAt:profTs}, funcionario:func, dataSolicitacao:'', referente:'',
-      reportMonth:'', bank:{}, config:{categorias:[]}, reembolso:reemb||[], alelo:[],
+      reportMonths:reportMonths||{reembolso:'',alelo:''}, bank:{}, config:{categorias:[]}, reembolso:reemb||[], alelo:[],
       tomb:{reembolso:tombReemb||{}, alelo:{}}, history:[], histTomb:{}, driveFolders:{}, driveKnown:{}, driveDismissed:{}, pending:[] };
   }
-  var a = doc(100, 'A', [{id:'x',data:'2026-01-01',valor:10,updatedAt:50}]);
-  var b = doc(200, 'B', [{id:'x',data:'2026-01-01',valor:99,updatedAt:80}]);
+  var a = doc(100, 'A', [{id:'x',data:'2026-01-01',valor:10,updatedAt:50}], {}, {reembolso:'2026-05',alelo:'2026-05'});
+  var b = doc(200, 'B', [{id:'x',data:'2026-01-01',valor:99,updatedAt:80}], {}, {reembolso:'2026-06',alelo:'2026-07'});
   var m = mergeDocs(a, b);
   chk('merge_perfil_lww', m.funcionario, 'B');                 // 200 > 100
   chk('merge_tabela_maior_updatedAt', m.reembolso[0].valor, 99); // 80 > 50
+  chk('merge_reportMonths_lww', m.reportMonths.reembolso + '|' + m.reportMonths.alelo, '2026-06|2026-07'); // perfil mais novo (b) vence
 
   // tombstone remove o lançamento (timestamps reais: lápide é purgada se < agora-180d)
   var NOW = Date.now();

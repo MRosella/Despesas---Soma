@@ -3,6 +3,17 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v33
+- **Dois relatórios independentes + home em abas:** a tela de Lançamentos virou um seletor
+  `[Reembolso | Cartão Santander]` (`setupReportTabs`/`showReportTab`, lembra a aba em `-tab-v1`).
+  Cada aba tem **cabeçalho próprio** (Reembolso: funcionário/data/referente/mês + banco; Santander:
+  Nome/Cargo fixos + Período/Data de Entrega automáticos), sua tabela, seu **resumo por categoria**
+  (`renderCatSummary(tabela,boxId)`) e seu **total**. Removido o resumo/total combinados.
+- **Mês de referência por relatório:** `state.reportMonth` (único) → `state.reportMonths{reembolso,
+  alelo}` (migra o legado p/ ambos); `reportFolderDateISO(tabela)`; sync/fechamento/reabertura por
+  tabela. `excel.js`/`pdf.js` inalterados.
+- Botão "Procurar comprovantes no Drive" agora é global (acima das abas; varre as duas raízes).
+
 ## v32
 - **`drive.js` dividido** em `idb.js` (storage/IndexedDB), `drive-core.js` (auth/pastas/upload/
   exclusão/conexão) e `drive-scan.js` (varredura/pendentes/`scanProgress`) — nenhum arquivo > ~370

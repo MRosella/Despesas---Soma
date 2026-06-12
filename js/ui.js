@@ -24,6 +24,25 @@ function setupNav() {
   showView('lancamentos');
 }
 
+/* ---------------- Abas dos relatórios (Reembolso | Cartão Santander) ---------------- */
+const REPORT_TAB_KEY = 'despesas-soma-tab-v1';
+function showReportTab(tab) {
+  if (tab !== 'reembolso' && tab !== 'alelo') tab = 'reembolso';
+  document.querySelectorAll('.report-panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === tab));
+  document.querySelectorAll('.rtab').forEach((b) => {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  try { localStorage.setItem(REPORT_TAB_KEY, tab); } catch (e) { console.warn('salvar aba ativa falhou', e); }
+}
+function setupReportTabs() {
+  document.querySelectorAll('.rtab').forEach((b) => b.addEventListener('click', () => showReportTab(b.dataset.tab)));
+  let saved = 'reembolso';
+  try { saved = localStorage.getItem(REPORT_TAB_KEY) || 'reembolso'; } catch (e) {}
+  showReportTab(saved);
+}
+
 /* Preenche os <select> de categoria (modal e filtro) a partir da config.
    Preserva a seleção atual quando a categoria ainda existir. */
 function populateCategorySelects() {

@@ -4,7 +4,9 @@ function render() {
   $('funcionario').value = state.funcionario;
   $('dataSolicitacao').value = state.dataSolicitacao;
   $('referente').value = state.referente;
-  if ($('reportMonth')) $('reportMonth').value = state.reportMonth || '';
+  const rm = state.reportMonths || {};
+  if ($('reportMonth-reembolso')) $('reportMonth-reembolso').value = rm.reembolso || '';
+  if ($('reportMonth-alelo')) $('reportMonth-alelo').value = rm.alelo || '';
   $('bk-nome').value = state.bank.nome;
   $('bk-cpf').value = state.bank.cpf;
   $('bk-banco').value = state.bank.banco;
@@ -12,15 +14,22 @@ function render() {
   $('bk-conta').value = state.bank.conta;
   $('bk-pix').value = state.bank.pix;
 
+  // cabeçalho do Cartão Santander: tudo fixo/automático (read-only)
+  if ($('sant-nome') && typeof SANTANDER_NOME === 'string') $('sant-nome').textContent = SANTANDER_NOME;
+  if ($('sant-cargo') && typeof SANTANDER_CARGO === 'string') $('sant-cargo').textContent = SANTANDER_CARGO;
+  if ($('sant-periodo')) $('sant-periodo').textContent = computeSantanderPeriodo(state) || '—';
+  if ($('sant-entrega')) $('sant-entrega').textContent = fmtDateBR(todayISO());
+
   renderList('reembolso', $('list-reembolso'));
   renderList('alelo', $('list-alelo'));
 
   const s1 = sumOf(state.reembolso), s2 = sumOf(state.alelo);
-  $('sum-reembolso').textContent = formatMoney(s1);
-  $('sum-alelo').textContent = formatMoney(s2);
-  $('total-geral').textContent = formatMoney(s1 + s2);
+  const setMoney = (id, v) => { const el = $(id); if (el) el.textContent = formatMoney(v); };
+  setMoney('sum-reembolso', s1); setMoney('tot-reembolso', s1);
+  setMoney('sum-alelo', s2); setMoney('tot-alelo', s2);
 
-  renderCatSummary();
+  renderCatSummary('reembolso', 'cat-summary-reembolso');
+  renderCatSummary('alelo', 'cat-summary-alelo');
   renderReports();
   if (typeof renderPending === 'function') renderPending();
   if (typeof updateGdPending === 'function') updateGdPending();
@@ -135,7 +144,8 @@ function reopenHistory(id) {
   state.funcionario = h.funcionario || state.funcionario;
   state.dataSolicitacao = h.dataSolicitacao || '';
   state.referente = h.referente || state.referente;
-  state.reportMonth = h.reportMonth || '';
+  if (!state.reportMonths) state.reportMonths = { reembolso: '', alelo: '' };
+  for (const t of tabs) state.reportMonths[t] = h.reportMonth || '';   // restaura o mês só da(s) tabela(s) reaberta(s)
   state.bank = Object.assign(emptyState().bank, h.bank || {});
   touchProfile(); touchDoc();
   saveState(); render();
@@ -152,19 +162,17 @@ function deleteHistory(id) {
   toast('Mês removido do histórico.');
 }
 
-/* Resumo por categoria — SOMENTE para visualização no app (não vai p/ Excel/PDF) */
-function renderCatSummary() {
-  const card = $('cat-summary-card'); const box = $('cat-summary');
-  if (!card || !box) return;
-  const all = state.reembolso.concat(state.alelo);
-  if (!all.length) { card.style.display = 'none'; box.innerHTML = ''; return; }
+/* Resumo por categoria de UMA tabela — SOMENTE para visualização no app (não vai p/ Excel/PDF) */
+function renderCatSummary(tabela, boxId) {
+  const box = $(boxId); if (!box) return;
+  const list = state[tabela] || [];
+  if (!list.length) { box.innerHTML = '<span class="cat-empty">Sem lançamentos.</span>'; return; }
   const map = {};
-  for (const e of all) { const c = e.categoria || '—'; map[c] = (map[c] || 0) + (e.valor || 0); }
+  for (const e of list) { const c = e.categoria || '—'; map[c] = (map[c] || 0) + (e.valor || 0); }
   const arr = Object.keys(map).map((c) => [c, map[c]]).sort((a, b) => b[1] - a[1]);
   box.innerHTML = arr.map(([cat, val]) =>
     `<span class="cat-chip"><span class="cc-name">${escapeHtml(cat)}</span><span class="cc-val">${formatMoney(val)}</span></span>`
   ).join('');
-  card.style.display = '';
 }
 
 function emptyStateEl() {

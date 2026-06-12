@@ -303,11 +303,43 @@ body.locked { overflow: hidden; }
 .sync-ind.spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ---------- Total card ---------- */
+/* ---------- Total card (legado; não usado nas abas) ---------- */
 .total-card { background: linear-gradient(135deg, #4e3f39, #382d28); color: #fff; }
 .total-card .card-body { display: flex; align-items: center; justify-content: space-between; }
 .total-card .lbl { font-size: .85rem; opacity: .9; }
 .total-card .val { font-size: 1.5rem; font-weight: 800; }
+
+/* ---------- Abas dos relatórios (Reembolso | Cartão Santander) ---------- */
+.global-scan .card-body { padding: 12px 16px; }
+.report-tabs {
+  display: flex; gap: 6px; background: var(--card); border-radius: 14px;
+  padding: 6px; margin: 0 0 14px; box-shadow: var(--shadow);
+}
+.rtab {
+  flex: 1; border: none; background: transparent; color: var(--brown);
+  font-size: .95rem; font-weight: 700; padding: 11px 8px; border-radius: 10px;
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.rtab:active { transform: translateY(1px); }
+.rtab.active { background: linear-gradient(135deg, var(--red), var(--red-dark)); color: #fff; }
+#rtab-alelo.active { background: linear-gradient(135deg, #C00000, #8f0000); }
+.report-panel { display: none; }
+.report-panel.active { display: block; }
+
+/* faixa de resumo por relatório */
+.report-summary .card-body { padding: 12px 16px; }
+.rs-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
+.rs-title { font-size: .8rem; font-weight: 700; color: var(--brown); }
+.rs-total { font-size: .85rem; color: var(--muted); white-space: nowrap; }
+.rs-total b { font-size: 1.1rem; color: var(--text); margin-left: 4px; }
+.cat-empty { font-size: .82rem; color: var(--muted); }
+
+/* cabeçalho read-only do Cartão Santander */
+.card.santander .card-head { background: linear-gradient(135deg, #C00000, #8f0000); }
+.ro-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.ro-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ro-label { font-size: .72rem; color: var(--muted); font-weight: 600; }
+.ro-val { font-size: .95rem; font-weight: 700; color: var(--text); word-break: break-word; }
 
 /* ---------- Bottom action bar ---------- */
 .action-bar {
