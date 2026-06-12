@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v29';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v30';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -243,6 +243,25 @@ function monthLabelFor(src) {
   return new Date().toLocaleDateString('pt-BR');
 }
 
+/* "Período Prestação" automático do Cartão Santander: vai do último lançamento do
+   relatório Santander anterior (snapshot mais recente do histórico com `alelo`) até o
+   último lançamento do relatório atual. Sem histórico, usa o 1º lançamento atual. */
+function computeSantanderPeriodo(src) {
+  const D = src || state;
+  const maxData = (list) => (list || []).map((e) => e && e.data).filter(Boolean).sort().pop() || '';
+  const minData = (list) => (list || []).map((e) => e && e.data).filter(Boolean).sort().shift() || '';
+  const end = maxData(D.alelo);
+  let start = '';
+  for (const h of (D.history || [])) {   // history vem do mais novo p/ o mais antigo
+    if (h && (h.alelo || []).length) { start = maxData(h.alelo); break; }
+  }
+  if (!start) start = minData(D.alelo);
+  if (!start && !end) return '';
+  if (!start) start = end;
+  if (!end) return fmtDateBR(start);
+  return fmtDateBR(start) + ' a ' + fmtDateBR(end);
+}
+
 function yearOf(h) {
   let iso = h.dataSolicitacao;
   if (!iso) {
@@ -303,19 +322,22 @@ function renderReports() {
 
 function reopenHistory(id) {
   const h = state.history.find((x) => x.id === id); if (!h) return;
-  if (state.reembolso.length || state.alelo.length) {
+  // snapshot por tabela (item v30) reabre só a tabela dele; sem marca, reabre as duas (legado)
+  const tabs = h.table ? [h.table] : ['reembolso', 'alelo'];
+  if (tabs.some((t) => state[t].length)) {
     if (!confirm('Reabrir este mês vai SUBSTITUIR os lançamentos atuais (que não foram arquivados). Continuar?')) return;
   }
   const now = Date.now();
-  for (const t of ['reembolso', 'alelo']) { for (const e of state[t]) state.tomb[t][e.id] = now; }
+  for (const t of tabs) {
+    for (const e of state[t]) state.tomb[t][e.id] = now;
+    // novos ids p/ não colidir com o snapshot nem com lápides antigas
+    state[t] = (h[t] || []).map((e) => Object.assign({}, e, { id: uid(), updatedAt: now }));
+  }
   state.funcionario = h.funcionario || state.funcionario;
   state.dataSolicitacao = h.dataSolicitacao || '';
   state.referente = h.referente || state.referente;
   state.reportMonth = h.reportMonth || '';
   state.bank = Object.assign(emptyState().bank, h.bank || {});
-  // novos ids p/ não colidir com o snapshot nem com lápides antigas
-  state.reembolso = (h.reembolso || []).map((e) => Object.assign({}, e, { id: uid(), updatedAt: now }));
-  state.alelo = (h.alelo || []).map((e) => Object.assign({}, e, { id: uid(), updatedAt: now }));
   touchProfile(); touchDoc();
   saveState(); render();
   showView('lancamentos');
@@ -992,8 +1014,8 @@ async function buildSantanderXlsx(src) {
   // ---- cabeçalho ----
   setText('E4', SANTANDER_NOME);           // Nome (fixo)
   setText('E5', SANTANDER_CARGO);          // Cargo (fixo)
-  setText('E6', D.referente);              // Período Prestação
-  if (D.dataSolicitacao) setNum('E7', dateToSerial(D.dataSolicitacao));   // Data de Entrega (serial/data)
+  setText('E6', computeSantanderPeriodo(D));   // Período Prestação (automático)
+  setNum('E7', dateToSerial(todayISO()));      // Data de Entrega = data de geração (serial/data)
 
   // ---- lançamentos (tabela `alelo`) ----
   D.alelo.forEach((e, i) => {
@@ -1026,11 +1048,36 @@ async function buildSantanderXlsx(src) {
   return fflate.zipSync(files);
 }
 
+/* Confere lançamentos incompletos antes de exportar/arquivar. Retorna true p/ prosseguir. */
+function validateBeforeExport(D, sections) {
+  const issues = [];
+  const tag = (e) => fmtDateBR(e.data) || '(sem data)';
+  if (sections.reembolso) for (const e of (D.reembolso || [])) {
+    const miss = [];
+    if (!e.data) miss.push('data');
+    if (!e.valor) miss.push('valor');
+    if (!e.categoria) miss.push('categoria');
+    if (miss.length) issues.push('Reembolso ' + tag(e) + ': sem ' + miss.join(', '));
+  }
+  if (sections.alelo) for (const e of (D.alelo || [])) {
+    const miss = [];
+    if (!e.data) miss.push('data');
+    if (!e.valor) miss.push('valor');
+    if (!e.estabelecimento) miss.push('estabelecimento');
+    if (!e.justificativa) miss.push('justificativa');
+    if (miss.length) issues.push('Cartão ' + tag(e) + ': sem ' + miss.join(', '));
+  }
+  if (!issues.length) return true;
+  const list = issues.slice(0, 12).join('\n') + (issues.length > 12 ? '\n…e mais ' + (issues.length - 12) : '');
+  return confirm('Alguns lançamentos estão incompletos:\n\n' + list + '\n\nExportar mesmo assim?');
+}
+
 async function exportExcel(src, sections) {
   const inc = sections || { reembolso: true, alelo: true };
   const base = src || state;
   const has = (inc.reembolso && base.reembolso.length) || (inc.alelo && base.alelo.length);
   if (!has) { toast('Nada para exportar com a seleção.'); return; }
+  if (!validateBeforeExport(base, inc)) return;
   const santander = !!inc.alelo && !inc.reembolso;   // só cartão → formato exclusivo (Prestação de Contas)
   try {
     toast('Gerando Excel…');
@@ -1201,8 +1248,8 @@ function buildSantanderPrint(src) {
       <table style="border-collapse:collapse;width:46%;font-size:14px;">
         <tr><td style="${lab}width:38%;">Nome:</td><td style="${val}">${escapeHtml(SANTANDER_NOME)}</td></tr>
         <tr><td style="${lab}">Cargo:</td><td style="${val}">${escapeHtml(SANTANDER_CARGO)}</td></tr>
-        <tr><td style="${lab}">Período Prestação:</td><td style="${val}">${escapeHtml(D.referente || '')}</td></tr>
-        <tr><td style="${lab}">Data de Entrega:</td><td style="${val}">${fmtDateBR(D.dataSolicitacao)}</td></tr>
+        <tr><td style="${lab}">Período Prestação:</td><td style="${val}">${escapeHtml(computeSantanderPeriodo(D))}</td></tr>
+        <tr><td style="${lab}">Data de Entrega:</td><td style="${val}">${fmtDateBR(todayISO())}</td></tr>
         <tr><td style="${lab}">Total da Despesas:</td><td style="${bd}${pad}background:${GRAY};font-weight:bold;">${formatMoney(total)}</td></tr>
       </table>
       <div style="flex:1;border:1px solid #000;padding:10px 12px;font-size:12.5px;line-height:1.45;">
@@ -1239,6 +1286,7 @@ async function exportPDF(src, sections) {
   const D = src || state;
   const has = (inc.reembolso && D.reembolso.length) || (inc.alelo && D.alelo.length);
   if (!has) { toast('Nada para exportar com a seleção.'); return; }
+  if (!validateBeforeExport(D, inc)) return;
   const santander = !!inc.alelo && !inc.reembolso;   // só cartão → formato exclusivo
   try {
     toast('Gerando PDF…');
@@ -1269,25 +1317,47 @@ async function generatePdfBlob(src, sections, santander) {
 
   try {
     const canvas = await html2canvas(root, { scale: 2, backgroundColor: bg, useCORS: true });
-    const imgData = canvas.toDataURL('image/jpeg', 0.96);
+    // fronteiras seguras de quebra (fim de cada linha) p/ não cortar lançamentos entre páginas
+    const scaleY = canvas.height / root.scrollHeight;
+    const rootTop = root.getBoundingClientRect().top;
+    const breaks = [];
+    root.querySelectorAll('tr').forEach((tr) => {
+      const b = (tr.getBoundingClientRect().bottom - rootTop) * scaleY;
+      if (b > 0 && b < canvas.height) breaks.push(b);
+    });
+    breaks.sort((a, b) => a - b);
+
     const jsPDF = window.jspdf.jsPDF;
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: santander ? 'landscape' : 'portrait' });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
     const margin = 8;
     const imgW = pageW - margin * 2;
-    const imgH = canvas.height * (imgW / canvas.width);
     const usableH = pageH - margin * 2;
+    const pxPerMm = canvas.width / imgW;
+    const pageMaxPx = usableH * pxPerMm;
 
-    let heightLeft = imgH;
-    let position = margin;
-    pdf.addImage(imgData, 'JPEG', margin, position, imgW, imgH);
-    heightLeft -= usableH;
-    while (heightLeft > 0) {
-      position = margin - (imgH - heightLeft);
-      pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', margin, position, imgW, imgH);
-      heightLeft -= usableH;
+    let startPx = 0, first = true;
+    while (startPx < canvas.height - 1) {
+      let endPx = startPx + pageMaxPx;
+      if (endPx < canvas.height) {
+        let safe = 0;
+        for (const b of breaks) { if (b > startPx + 4 && b <= endPx) safe = b; }
+        if (safe) endPx = safe;           // quebra no fim de uma linha
+      } else {
+        endPx = canvas.height;
+      }
+      const sliceH = Math.round(endPx - startPx);
+      const tmp = document.createElement('canvas');
+      tmp.width = canvas.width; tmp.height = sliceH;
+      const ctx = tmp.getContext('2d');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, tmp.width, tmp.height);
+      ctx.drawImage(canvas, 0, startPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+      const sliceData = tmp.toDataURL('image/jpeg', 0.96);
+      if (!first) pdf.addPage();
+      pdf.addImage(sliceData, 'JPEG', margin, margin, imgW, sliceH / pxPerMm);
+      first = false;
+      startPx = endPx;
     }
 
     // anexa comprovantes (Drive ou fila local) como páginas finais
@@ -2783,38 +2853,135 @@ function bindField(id, getter, setter) {
   el.addEventListener('change', () => { setter(el.value); touchProfile(); saveState(); render(); });
 }
 
-function newMonth() {
-  const tem = state.reembolso.length || state.alelo.length;
-  const msg = tem
-    ? 'Arquivar o mês atual e começar um novo?\nOs lançamentos atuais vão para o Histórico (você pode reabrir/reexportar depois).'
-    : 'Iniciar um novo mês?';
-  if (!confirm(msg)) return;
-  const now = Date.now();
-  // arquiva snapshot do mês atual
-  if (tem) {
-    state.history.unshift({
-      id: uid(),
-      archivedAt: now,
-      label: monthLabelFor(state),
-      funcionario: state.funcionario,
-      dataSolicitacao: state.dataSolicitacao,
-      referente: state.referente,
-      reportMonth: state.reportMonth || '',
-      bank: Object.assign({}, state.bank),
-      reembolso: state.reembolso.map((e) => Object.assign({}, e)),
-      alelo: state.alelo.map((e) => Object.assign({}, e))
+const TABLE_LABELS = { reembolso: 'Reembolso', alelo: 'Cartão Santander' };
+
+/* Chooser: o usuário escolhe QUAL tabela fechar (a outra continua aberta). */
+function chooseCloseTable() {
+  return new Promise((resolve) => {
+    const nR = state.reembolso.length, nA = state.alelo.length;
+    const div = document.createElement('div');
+    div.className = 'offline-notice';
+    div.innerHTML = `
+      <div class="offline-card">
+        <div class="offline-icon">📦</div>
+        <h3>Fechar e arquivar mês</h3>
+        <p>Escolha a tabela a fechar. Os comprovantes dela no Drive serão compactados (.zip) e o
+        Excel + PDF do mês ficam guardados na pasta. A outra tabela continua aberta.</p>
+        <div class="notice-actions">
+          <button class="btn btn-excel" data-t="reembolso">Reembolso (${nR})</button>
+          <button class="btn btn-pdf" data-t="alelo">Cartão Santander (${nA})</button>
+          <button class="btn btn-ghost" data-t="">Cancelar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(div);
+    div.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-t]'); if (!b) return;
+      div.remove(); resolve(b.dataset.t || null);
     });
-  }
-  for (const t of ['reembolso', 'alelo']) {
-    for (const e of state[t]) state.tomb[t][e.id] = now;   // lápides p/ a sincronização
-    state[t] = [];
-  }
-  state.dataSolicitacao = '';
-  state.reportMonth = '';
-  touchProfile();
+  });
+}
+
+async function closeMonthFlow() {
+  const tabela = await chooseCloseTable();
+  if (!tabela) return;
+  await closeTable(tabela);
+}
+
+/* Fecha SOMENTE a tabela escolhida: arquiva snapshot, compacta os comprovantes no Drive,
+   guarda Excel + PDF do mês na pasta e limpa a tabela. A outra permanece aberta. */
+async function closeTable(tabela) {
+  if (!state[tabela].length) { toast('A tabela de ' + TABLE_LABELS[tabela] + ' está vazia.'); return; }
+  if (!confirm('Fechar e arquivar a tabela de ' + TABLE_LABELS[tabela] + '?\nOs lançamentos vão para o Histórico e os arquivos do mês são gravados no Drive.')) return;
+  if (!validateBeforeExport(state, { reembolso: tabela === 'reembolso', alelo: tabela === 'alelo' })) return;
+
+  const now = Date.now();
+  // snapshot só da tabela escolhida
+  const snapshot = {
+    id: uid(),
+    archivedAt: now,
+    table: tabela,
+    label: monthLabelFor(state) + ' · ' + TABLE_LABELS[tabela],
+    funcionario: state.funcionario,
+    dataSolicitacao: state.dataSolicitacao,
+    referente: state.referente,
+    reportMonth: state.reportMonth || '',
+    bank: Object.assign({}, state.bank),
+    reembolso: tabela === 'reembolso' ? state.reembolso.map((e) => Object.assign({}, e)) : [],
+    alelo: tabela === 'alelo' ? state.alelo.map((e) => Object.assign({}, e)) : []
+  };
+
+  // arquiva no Drive (zip + Excel + PDF) — best-effort
+  try { await archiveMonthToDrive(tabela, snapshot); }
+  catch (e) { if (e && e.message === 'cancelado') { toast('Fechamento cancelado.'); return; } throw e; }
+
+  // grava o snapshot e limpa só a tabela fechada
+  state.history.unshift(snapshot);
+  for (const e of state[tabela]) state.tomb[tabela][e.id] = now;   // lápides p/ a sincronização
+  state[tabela] = [];
+  if (!state.reembolso.length && !state.alelo.length) { state.reportMonth = ''; state.dataSolicitacao = ''; }
+  touchProfile(); touchDoc();
   saveState();
   render();
-  toast(tem ? 'Mês arquivado no histórico.' : 'Pronto para um novo mês.');
+  toast(TABLE_LABELS[tabela] + ': mês arquivado.');
+}
+
+/* Compacta os comprovantes da tabela num único .zip e grava .zip + Excel + PDF do mês
+   na pasta do mês no Drive. Mantém os comprovantes individuais. */
+async function archiveMonthToDrive(tabela, snapshot) {
+  if (!gdConfigured()) { toast('Drive não configurado — arquivado só no histórico.'); return; }
+  if (!gdConnected()) {
+    try { await gdGetToken(true); } catch (e) {}
+    if (!gdConnected()) {
+      if (!confirm('Não foi possível conectar ao Google Drive. Concluir o fechamento sem gravar os arquivos do mês no Drive?')) throw new Error('cancelado');
+      return;
+    }
+  }
+  const list = snapshot[tabela] || [];
+  const maxData = (l) => l.map((e) => e && e.data).filter(Boolean).sort().pop() || '';
+  const dateISO = reportFolderDateISO() || maxData(list) || todayISO();
+  const m = /^(\d{4})-(\d{2})/.exec(dateISO);
+  const mesNome = m ? MESES[parseInt(m[2], 10) - 1] : '';
+  const ano = m ? m[1] : '';
+  const baseNome = (mesNome && ano) ? mesNome + ' ' + ano : monthLabelFor(snapshot);
+
+  try {
+    // 1) zip dos comprovantes
+    toast('Compactando comprovantes…');
+    const files = {};
+    for (const e of list) {
+      if (!e.foto) continue;
+      let blob = null;
+      try { blob = await getPhotoBlob(e.foto); } catch (er) { console.error(er); }
+      if (!blob) continue;
+      const base = (e.foto.name || ('Comprovante_' + (e.data || todayISO()))).replace(/[\\/:*?"<>|]/g, '_');
+      let nome = base, k = 1;
+      while (files[nome]) { const i = base.lastIndexOf('.'); nome = i > 0 ? base.slice(0, i) + '_' + k + base.slice(i) : base + '_' + k; k++; }
+      files[nome] = new Uint8Array(await blob.arrayBuffer());
+    }
+    if (Object.keys(files).length) {
+      const zipBytes = fflate.zipSync(files);
+      await gdUpload(new Blob([zipBytes], { type: 'application/zip' }), 'NFs - ' + baseNome + '.zip', dateISO, tabela);
+    }
+
+    // 2) Excel do mês
+    toast('Gravando Excel do mês…');
+    const xlsxBytes = tabela === 'alelo' ? await buildSantanderXlsx(snapshot) : await buildXlsx(snapshot);
+    const xlsxBlob = new Blob([xlsxBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const xlsxName = (tabela === 'alelo' ? santanderFileBase(snapshot) : reportFileBase(snapshot)) + '.xlsx';
+    await gdUpload(xlsxBlob, xlsxName, dateISO, tabela);
+
+    // 3) PDF do mês (com comprovantes anexados)
+    toast('Gravando PDF do mês…');
+    const pdfBlob = await generatePdfBlob(snapshot, { reembolso: tabela === 'reembolso', alelo: tabela === 'alelo' }, tabela === 'alelo');
+    const pdfName = (tabela === 'alelo' ? santanderFileBase(snapshot) : reportFileBase(snapshot)) + '.pdf';
+    await gdUpload(pdfBlob, pdfName, dateISO, tabela);
+
+    toast('Arquivos do mês gravados no Drive.');
+  } catch (e) {
+    if (e && e.message === 'cancelado') throw e;
+    console.error('Falha ao arquivar no Drive', e);
+    if (!confirm('Erro ao gravar no Drive: ' + (e.message || e) + '\nConcluir o fechamento mesmo assim?')) throw new Error('cancelado');
+  }
 }
 
 /* copia os dados bancários formatados (p/ colar no e-mail de reembolso) */
@@ -2874,7 +3041,7 @@ function init() {
 
   $('btn-excel').addEventListener('click', () => openExportChooser('excel', state));
   $('btn-pdf').addEventListener('click', () => openExportChooser('pdf', state));
-  $('btn-new-month').addEventListener('click', newMonth);
+  $('btn-new-month').addEventListener('click', closeMonthFlow);
 
   $('exp-cancel').addEventListener('click', closeExportModal);
   $('exp-confirm').addEventListener('click', confirmExport);
