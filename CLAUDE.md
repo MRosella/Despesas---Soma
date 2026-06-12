@@ -66,8 +66,9 @@ por `fileId` **menos** os já virados lançamento (`foto.id`) ou descartados; `d
 `driveDismissed` = união (evita reprocessar/ressuscitar).
 
 ## Chaves de localStorage
-`despesas-soma-v1` (estado) · `-sync-v1` (GitHub) · `-gdrive-v1` (Drive) · `-gddel-v1` (fila de
-exclusões) · `-ai-v1` (Gemini) · `-lock-v1` (bio/PIN) · `-theme-v1` · `-lastsync-v1` · `-dirty-v1`.
+`despesas-soma-v1` (estado) · `-sync-v1` (GitHub) · `-gdrive-v1` (Drive config) · `-gdtok-v1` (token
+OAuth do Drive, LOCAL, persiste entre aberturas) · `-gddel-v1` (fila de exclusões) · `-ai-v1`
+(Gemini) · `-lock-v1` (bio/PIN) · `-theme-v1` · `-lastsync-v1` · `-dirty-v1` · `-tab-v1` (aba ativa).
 
 ## Verificação (esta máquina — sem Node/python; preview MCP trava)
 Chrome em `C:\Program Files\Google\Chrome\Application\chrome.exe` com `--headless=new
@@ -143,8 +144,15 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
   (data+total) vira lançamento `foto={id,name}` (sem reupload); falha vira **pendente**
   (`renderPending`/`openPendingEntry`/`dismissPending`/`retryPendingOcr`). Overlay `scanProgress`
   mostra cada arquivo ao vivo com o motivo.
-- **Conexão do Drive ao abrir:** token OAuth só em memória (~1h). `maybePromptDrive` (chamado em
-  `hideLock`) tenta reconexão silenciosa e só mostra o popup se `countPendingDrive() > 0`.
+- **Conexão do Drive ao abrir (token persistido):** o access token (~1h) é **persistido** em
+  `-gdtok-v1` (`saveGdAccess`/`loadGdAccess`, que descarta se expirou) e recarregado no topo de
+  `drive-core.js` (`let gdAccess = loadGdAccess()`) — reabrir o app dentro de ~1h fica conectado
+  **sem popup**. `scheduleGdRefresh` renova em silêncio ~2 min antes de expirar; `setupGDriveUI`
+  reagenda no startup e escuta `visibilitychange`/`online` p/ reconectar ao voltar o foco.
+  `maybePromptDrive` (chamado em `hideLock`) tenta reconexão silenciosa e só mostra o popup se
+  `countPendingDrive() > 0`. **Sem backend não há refresh token de longa duração** (precisaria de
+  client secret num servidor) — passada a sessão Google do navegador, o login volta a ser pedido.
+  `gd-clear` apaga `-gdtok-v1` e cancela o timer.
 - **Miniaturas** são **locais** (IndexedDB `thumb_<id>`, não sincronizam). Lista mostra mais recente
   no topo; estado/Excel/PDF seguem cronológicos. Aviso de duplicado (mesma data+categoria+valor) no
   `saveEntry`. A chave de dados `alelo` é estrutural e **não muda** (rótulo visível pode mudar).

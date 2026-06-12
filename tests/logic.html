@@ -57,6 +57,15 @@ try {
   var d = doc(NOW, 'C', [], {x: NOW});   // lápide mais nova que o updatedAt, dentro da janela
   var m2 = mergeDocs(c, d);
   chk('merge_tombstone_remove', m2.reembolso.length, 0);
+
+  // persistência do token do Drive: round-trip de token válido + rejeição de token expirado
+  gdAccess = { token: 'tok123', exp: Date.now() + 100000 };
+  saveGdAccess();
+  chk('gdtoken_roundtrip', loadGdAccess().token, 'tok123');
+  gdAccess = { token: 'tokOld', exp: Date.now() - 1000 };   // já expirado
+  saveGdAccess();
+  chk('gdtoken_expira', loadGdAccess().token, '');
+  try { localStorage.removeItem(GDTOK_KEY); } catch(e){}
 } catch(e){ fail++; out.push('THREW '+e.message); }
 
 out.push(fail ? 'RESULT: FAIL ('+fail+')' : 'RESULT: PASS');

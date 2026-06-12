@@ -4,14 +4,31 @@
    ============================================================ */
 const GDRIVE_KEY = 'despesas-soma-gdrive-v1';
 const GDDEL_KEY = 'despesas-soma-gddel-v1';   // fila de fileIds a excluir no Drive (retry ao reconectar)
+const GDTOK_KEY = 'despesas-soma-gdtok-v1';   // token OAuth (LOCAL; nunca sincroniza). Persistir evita reautenticar a cada reabertura dentro de ~1h. Apagado no "Desconectar".
 const GD_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly';   // drive.file p/ criar/apagar o que o app envia; drive.readonly p/ ler arquivos subidos manualmente (varredura)
 const GD_FOLDER_NAME = 'Comprovantes - Despesas Soma';                 // raiz do reembolso (= nome legado, mantém os antigos)
 const GD_FOLDER_SANTANDER = 'Comprovantes Cartao Santander - Despesas Soma';
 const GD_ROOT_NAMES = { reembolso: GD_FOLDER_NAME, alelo: GD_FOLDER_SANTANDER };
-let gdAccess = { token: '', exp: 0 };
 let gdTokenClient = null;
 let gdGisLoading = null;
 let gdPending = null;
+let gdRefreshTimer = null;
+
+/* token OAuth persistido no aparelho: lê e DESCARTA se já expirou */
+function loadGdAccess() {
+  try {
+    const a = JSON.parse(localStorage.getItem(GDTOK_KEY) || '{}');
+    if (a && a.token && a.exp && Date.now() < a.exp) return { token: a.token, exp: a.exp };
+  } catch (e) { console.warn('loadGdAccess falhou', e); }
+  return { token: '', exp: 0 };
+}
+function saveGdAccess() {
+  try {
+    if (gdAccess && gdAccess.token) localStorage.setItem(GDTOK_KEY, JSON.stringify(gdAccess));
+    else localStorage.removeItem(GDTOK_KEY);
+  } catch (e) { console.warn('saveGdAccess falhou', e); }
+}
+let gdAccess = loadGdAccess();   // reaproveita o token entre aberturas (sem popup se ainda válido)
 
 function loadGd() { try { return Object.assign({ clientId: '', folderId: '' }, JSON.parse(localStorage.getItem(GDRIVE_KEY) || '{}')); } catch (e) { return { clientId: '', folderId: '' }; } }
 function saveGd(c) { try { localStorage.setItem(GDRIVE_KEY, JSON.stringify(c)); } catch (e) { console.warn('saveGd falhou', e); } }
@@ -38,11 +55,25 @@ function gdInitClient(cfg) {
     callback: (resp) => {
       if (resp && resp.access_token) {
         gdAccess = { token: resp.access_token, exp: Date.now() + ((resp.expires_in || 3600) - 60) * 1000 };
+        saveGdAccess();          // persiste p/ reaproveitar entre aberturas
+        scheduleGdRefresh();     // renova em silêncio antes de expirar
         if (gdPending) gdPending.resolve(resp.access_token);
       } else if (gdPending) { gdPending.reject(new Error('Autorização não concedida.')); }
       gdPending = null;
     }
   });
+}
+
+/* Renovação silenciosa proativa: agenda um refresh ~2 min antes de expirar (enquanto o app
+   estiver aberto). Não incomoda o usuário — usa prompt:'' (sem UI) se a sessão Google valer. */
+function scheduleGdRefresh() {
+  if (gdRefreshTimer) { clearTimeout(gdRefreshTimer); gdRefreshTimer = null; }
+  if (!gdAccess.token || !gdAccess.exp) return;
+  const delay = Math.max(1000, gdAccess.exp - Date.now() - 120000);
+  gdRefreshTimer = setTimeout(() => {
+    gdRefreshTimer = null;
+    if (gdConfigured() && navigator.onLine) gdGetToken(false).catch((e) => console.warn('refresh silencioso do Drive falhou', e));
+  }, delay);
 }
 
 async function gdGetToken(interactive) {
@@ -261,10 +292,22 @@ async function viewPhoto(foto, entryId) {
   } catch (e) { console.error(e); toast('Erro ao abrir: ' + e.message); }
 }
 
+let gdVisHook = false;
 function setupGDriveUI() {
   const cfg = loadGd();
   if ($('gd-client')) $('gd-client').value = cfg.clientId || '';
   refreshGdStatus();
+  if (gdConnected()) scheduleGdRefresh();   // token persistido ainda válido → mantém renovando sozinho
+  // ao voltar o foco p/ o app (ou reconectar a internet), tenta reconexão silenciosa se o token estiver perto de vencer
+  if (!gdVisHook) {
+    gdVisHook = true;
+    const wake = () => {
+      if (!gdConfigured() || !navigator.onLine) return;
+      if (!gdAccess.token || Date.now() > gdAccess.exp - 120000) maybePromptDrive();
+    };
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wake(); });
+    window.addEventListener('online', wake);
+  }
   if (!$('gd-connect')) return;
   $('gd-client').addEventListener('change', () => {
     const c = loadGd(); c.clientId = ($('gd-client').value || '').trim();
@@ -288,7 +331,9 @@ function setupGDriveUI() {
   $('gd-clear').addEventListener('click', () => {
     if (!confirm('Desconectar o Google Drive deste aparelho?')) return;
     gdAccess = { token: '', exp: 0 };
-    const c = loadGd(); localStorage.removeItem(GDRIVE_KEY);
+    if (gdRefreshTimer) { clearTimeout(gdRefreshTimer); gdRefreshTimer = null; }
+    localStorage.removeItem(GDTOK_KEY);
+    localStorage.removeItem(GDRIVE_KEY);
     $('gd-client').value = '';
     refreshGdStatus();
     toast('Google Drive desconectado.');

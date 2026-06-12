@@ -3,6 +3,14 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v34
+- **Acesso ao Drive persiste entre aberturas:** o access token OAuth passa a ser salvo em
+  `-gdtok-v1` (`saveGdAccess`/`loadGdAccess`, descarta expirado) e recarregado no startup, então
+  reabrir o app dentro de ~1h fica conectado **sem reautenticar**. `scheduleGdRefresh` renova em
+  silêncio ~2 min antes de expirar; `setupGDriveUI` reagenda e escuta `visibilitychange`/`online`.
+  `gd-clear` apaga o token. Limite: sem backend não há refresh token de longa duração — quando a
+  sessão Google do navegador expira de fato, o login é pedido de novo (raro).
+
 ## v33
 - **Dois relatórios independentes + home em abas:** a tela de Lançamentos virou um seletor
   `[Reembolso | Cartão Santander]` (`setupReportTabs`/`showReportTab`, lembra a aba em `-tab-v1`).

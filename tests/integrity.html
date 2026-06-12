@@ -30,7 +30,7 @@ var checks = {
   'ui':         ['setupNav','setupCatUI','populateCategorySelects','renderCatEditor','setupReportTabs','showReportTab'],
   'ocr':        ['ocrReceipt','ocrReceiptRaw','blobSha256','fillFromOcr','setupAiUI'],
   'idb':        ['idbGet','idbPut','getPhotoBlob','compressImage','saveThumb'],
-  'drive-core': ['gdUpload','gdEnsureFolder','purgeEntryPhoto','flushPendingPhotos','setupGDriveUI'],
+  'drive-core': ['gdUpload','gdEnsureFolder','purgeEntryPhoto','flushPendingPhotos','setupGDriveUI','loadGdAccess','saveGdAccess','scheduleGdRefresh'],
   'drive-scan': ['scanDriveForReceipts','gdListReceipts','renderPending','retryPendingOcr','openPendingEntry'],
   'main':       ['init','closeMonthFlow','closeTable','archiveMonthToDrive','setupTheme','bindField']
 };
