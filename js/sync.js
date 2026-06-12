@@ -25,7 +25,7 @@ function getLastSync() { try { return localStorage.getItem(LASTSYNC_KEY); } catc
 
 function updateFooter() {
   const v = $('ft-version'); if (v) v.textContent = 'App ' + APP_VERSION;
-  const v2 = $('ft-version2'); if (v2) v2.textContent = 'Plane it • ' + APP_VERSION;
+  const v2 = $('ft-version2'); if (v2) v2.textContent = APP_VERSION;
   const ls = $('ft-lastsync'); if (!ls) return;
   const t = getLastSync();
   const txt = t ? new Date(Number(t)).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';

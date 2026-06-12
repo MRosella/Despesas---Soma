@@ -3,6 +3,10 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v35
+- Menu lateral: saudação "Olá, Murilo Rosella" (era "Soma Urbanismo"); rodapé sem "Plane it" (só a
+  versão).
+
 ## v34
 - **Acesso ao Drive persiste entre aberturas:** o access token OAuth passa a ser salvo em
   `-gdtok-v1` (`saveGdAccess`/`loadGdAccess`, descarta expirado) e recarregado no startup, então
