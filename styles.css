@@ -567,3 +567,9 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 #print-root table.p-bank { width: 100%; border-collapse: collapse; }
 #print-root table.p-bank td { border: 1px solid #4e3f39; padding: 5px 8px; }
 #print-root table.p-bank .lab { font-weight: 700; color: #4e3f39; white-space: nowrap; width: 14%; }
+#print-root .p-sign { display: flex; gap: 24px; margin-top: 22px; }
+#print-root .p-sign-box { flex: 1; text-align: center; }
+#print-root .p-sign-line { height: 34px; border-bottom: 1px solid #4e3f39; }
+#print-root .p-sign-name { margin-top: 6px; font-weight: 700; font-size: 11px; color: #4e3f39; }
+#print-root .p-sign-role { font-size: 9px; color: #6b5c54; }
+#print-root .p-sign-date { margin-top: 10px; text-align: center; font-size: 10px; color: #4e3f39; font-weight: 700; }

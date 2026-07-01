@@ -1,5 +1,25 @@
 'use strict';
 /* ---------------- Geração do PDF (impressão) ---------------- */
+const APROVADOR_NOME = 'Gustavo Barbeitos da Gama';
+const APROVADOR_CARGO = 'Presidente';
+
+function buildSignatureBlock() {
+  return `
+    <div class="p-sign">
+      <div class="p-sign-box">
+        <div class="p-sign-line"></div>
+        <div class="p-sign-name">${escapeHtml(SANTANDER_NOME)}</div>
+        <div class="p-sign-role">${escapeHtml(SANTANDER_CARGO)}</div>
+      </div>
+      <div class="p-sign-box">
+        <div class="p-sign-line"></div>
+        <div class="p-sign-name">${escapeHtml(APROVADOR_NOME)}</div>
+        <div class="p-sign-role">${escapeHtml(APROVADOR_CARGO)}</div>
+      </div>
+    </div>
+    <div class="p-sign-date">Data: ${fmtDateBR(todayISO())}</div>`;
+}
+
 function buildPrintTable(title, list, minRows) {
   let rows = '';
   const n = Math.max(list.length, minRows);
@@ -60,7 +80,8 @@ function buildPrint(src, sections) {
       <b>Observações:</b> ${limitsObsText()}
       Enviar junto a este relatório os cupons das despesas. Em caso de gasto reembolsável,
       informar os dados da conta bancária para o recebimento.
-    </div>`;
+    </div>
+    ${buildSignatureBlock()}`;
 }
 
 /* PDF exclusivo do Cartão Santander — replica o VISUAL do modelo "Prestação de Contas"
