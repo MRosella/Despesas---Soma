@@ -333,7 +333,7 @@ async function buildSantanderXlsx(src) {
   // ---- cabeçalho ----
   setText('E4', SANTANDER_NOME);           // Nome (fixo)
   setText('E5', SANTANDER_CARGO);          // Cargo (fixo)
-  setText('E6', computeSantanderPeriodo(D));   // Período Prestação (automático)
+  setText('E6', santanderPeriodoText(D));   // Período Prestação (escolhido pelo usuário; sem escolha, automático)
   setNum('E7', dateToSerial(todayISO()));      // Data de Entrega = data de geração (serial/data)
 
   // ---- lançamentos (tabela `alelo`) ----
@@ -459,10 +459,10 @@ function updateExportHint() {
   const h = $('exp-hint-santander'); if (!h) return;
   const only = $('exp-alelo').checked && !$('exp-reembolso').checked;
   h.style.display = only ? '' : 'none';
-  const p = $('exp-periodo');   // pré-visualização do Período Prestação (automático), só p/ cartão
+  const p = $('exp-periodo');   // pré-visualização do Período Prestação, só p/ cartão
   if (p) {
     if (only) {
-      const per = computeSantanderPeriodo(exportCtx.src || state);
+      const per = santanderPeriodoText(exportCtx.src || state);
       p.innerHTML = per ? ('Período Prestação: <b>' + escapeHtml(per) + '</b>') : 'Período Prestação: <b>—</b> (sem lançamentos com data)';
       p.style.display = '';
     } else { p.style.display = 'none'; }

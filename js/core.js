@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v37';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v38';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -54,6 +54,7 @@ function emptyState() {
     dataSolicitacao: '',
     referente: '',
     reportMonths: { reembolso: '', alelo: '' },  // mês de referência (YYYY-MM) por relatório: pasta dos comprovantes no Drive
+    santPeriodo: { start: '', end: '' },  // Período de Prestação do Cartão Santander (datas ISO escolhidas pelo usuário)
     bank: { nome: '', cpf: '', banco: '', agencia: '', conta: '', pix: '' },
     reembolso: [],
     alelo: [],
@@ -82,7 +83,8 @@ function loadState() {
     const st = Object.assign(base, s, {
       bank: Object.assign(base.bank, s.bank || {}),
       tomb: Object.assign(base.tomb, s.tomb || {}),
-      meta: Object.assign(base.meta, s.meta || {})
+      meta: Object.assign(base.meta, s.meta || {}),
+      santPeriodo: Object.assign(base.santPeriodo, s.santPeriodo || {})
     });
     st.tomb.reembolso = st.tomb.reembolso || {};
     st.tomb.alelo = st.tomb.alelo || {};

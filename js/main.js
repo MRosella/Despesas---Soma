@@ -89,6 +89,7 @@ async function closeTable(tabela) {
     dataSolicitacao: state.dataSolicitacao,
     referente: state.referente,
     reportMonth: (state.reportMonths || {})[tabela] || '',
+    santPeriodo: tabela === 'alelo' ? Object.assign({}, state.santPeriodo) : undefined,
     bank: Object.assign({}, state.bank),
     reembolso: tabela === 'reembolso' ? state.reembolso.map((e) => Object.assign({}, e)) : [],
     alelo: tabela === 'alelo' ? state.alelo.map((e) => Object.assign({}, e)) : []
@@ -104,6 +105,7 @@ async function closeTable(tabela) {
   state[tabela] = [];
   state.reportMonths[tabela] = '';   // o mês de referência daquela tabela zera ao fechá-la
   if (tabela === 'reembolso') state.dataSolicitacao = '';
+  if (tabela === 'alelo') state.santPeriodo = { start: '', end: '' };   // período de prestação zera ao fechar o Santander
   touchProfile(); touchDoc();
   saveState();
   render();
@@ -211,6 +213,8 @@ function init() {
   bindField('referente', null, (v) => state.referente = v);
   if ($('reportMonth-reembolso')) bindField('reportMonth-reembolso', null, (v) => state.reportMonths.reembolso = v);
   if ($('reportMonth-alelo')) bindField('reportMonth-alelo', null, (v) => state.reportMonths.alelo = v);
+  if ($('sant-periodo-inicio')) bindField('sant-periodo-inicio', null, (v) => state.santPeriodo.start = v);
+  if ($('sant-periodo-fim')) bindField('sant-periodo-fim', null, (v) => state.santPeriodo.end = v);
   bindField('bk-nome', null, (v) => state.bank.nome = v);
   bindField('bk-cpf', null, (v) => state.bank.cpf = v);
   bindField('bk-banco', null, (v) => state.bank.banco = v);

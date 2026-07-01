@@ -173,10 +173,19 @@
             <div class="ro-grid">
               <div class="ro-field"><span class="ro-label">Nome</span><span class="ro-val" id="sant-nome">—</span></div>
               <div class="ro-field"><span class="ro-label">Cargo</span><span class="ro-val" id="sant-cargo">—</span></div>
-              <div class="ro-field"><span class="ro-label">Período Prestação</span><span class="ro-val" id="sant-periodo">—</span></div>
               <div class="ro-field"><span class="ro-label">Data de Entrega</span><span class="ro-val" id="sant-entrega">—</span></div>
             </div>
-            <p class="hint" style="margin:10px 2px 0">Nome e Cargo são fixos; Período Prestação e Data de Entrega são preenchidos automaticamente na planilha/PDF.</p>
+            <div class="row2" style="margin-top:10px">
+              <div class="field">
+                <label for="sant-periodo-inicio">Período Prestação — início</label>
+                <input type="date" id="sant-periodo-inicio" />
+              </div>
+              <div class="field">
+                <label for="sant-periodo-fim">Período Prestação — fim</label>
+                <input type="date" id="sant-periodo-fim" />
+              </div>
+            </div>
+            <p class="hint" style="margin:10px 2px 0">Nome e Cargo são fixos; Data de Entrega é preenchida automaticamente. Escolha o início e o fim do Período de Prestação.</p>
             <div class="field" style="margin-top:10px">
               <label for="reportMonth-alelo">Mês de referência</label>
               <input type="month" id="reportMonth-alelo" />

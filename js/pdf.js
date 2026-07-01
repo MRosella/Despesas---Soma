@@ -121,7 +121,7 @@ function buildSantanderPrint(src) {
       <table style="border-collapse:collapse;width:46%;font-size:14px;">
         <tr><td style="${lab}width:38%;">Nome:</td><td style="${val}">${escapeHtml(SANTANDER_NOME)}</td></tr>
         <tr><td style="${lab}">Cargo:</td><td style="${val}">${escapeHtml(SANTANDER_CARGO)}</td></tr>
-        <tr><td style="${lab}">Período Prestação:</td><td style="${val}">${escapeHtml(computeSantanderPeriodo(D))}</td></tr>
+        <tr><td style="${lab}">Período Prestação:</td><td style="${val}">${escapeHtml(santanderPeriodoText(D))}</td></tr>
         <tr><td style="${lab}">Data de Entrega:</td><td style="${val}">${fmtDateBR(todayISO())}</td></tr>
         <tr><td style="${lab}">Total da Despesas:</td><td style="${bd}${pad}background:${GRAY};font-weight:bold;">${formatMoney(total)}</td></tr>
       </table>

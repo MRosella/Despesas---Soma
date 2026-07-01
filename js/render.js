@@ -17,7 +17,9 @@ function render() {
   // cabeçalho do Cartão Santander: tudo fixo/automático (read-only)
   if ($('sant-nome') && typeof SANTANDER_NOME === 'string') $('sant-nome').textContent = SANTANDER_NOME;
   if ($('sant-cargo') && typeof SANTANDER_CARGO === 'string') $('sant-cargo').textContent = SANTANDER_CARGO;
-  if ($('sant-periodo')) $('sant-periodo').textContent = computeSantanderPeriodo(state) || '—';
+  const sp = state.santPeriodo || {};
+  if ($('sant-periodo-inicio')) $('sant-periodo-inicio').value = sp.start || '';
+  if ($('sant-periodo-fim')) $('sant-periodo-fim').value = sp.end || '';
   if ($('sant-entrega')) $('sant-entrega').textContent = fmtDateBR(todayISO());
 
   renderList('reembolso', $('list-reembolso'));
@@ -51,9 +53,10 @@ function monthLabelFor(src) {
   return new Date().toLocaleDateString('pt-BR');
 }
 
-/* "Período Prestação" automático do Cartão Santander: vai do último lançamento do
-   relatório Santander anterior (snapshot mais recente do histórico com `alelo`) até o
-   último lançamento do relatório atual. Sem histórico, usa o 1º lançamento atual. */
+/* "Período Prestação" automático do Cartão Santander (fallback/sugestão, usado quando o
+   usuário ainda não escolheu as datas): vai do último lançamento do relatório Santander
+   anterior (snapshot mais recente do histórico com `alelo`) até o último lançamento do
+   relatório atual. Sem histórico, usa o 1º lançamento atual. */
 function computeSantanderPeriodo(src) {
   const D = src || state;
   const maxData = (list) => (list || []).map((e) => e && e.data).filter(Boolean).sort().pop() || '';
@@ -68,6 +71,16 @@ function computeSantanderPeriodo(src) {
   if (!start) start = end;
   if (!end) return fmtDateBR(start);
   return fmtDateBR(start) + ' a ' + fmtDateBR(end);
+}
+
+/* Texto final do Período Prestação usado no Excel/PDF: prioriza as datas escolhidas pelo
+   usuário (`state.santPeriodo`); sem escolha, cai no cálculo automático acima. */
+function santanderPeriodoText(src) {
+  const D = src || state;
+  const sp = D.santPeriodo || {};
+  if (sp.start && sp.end) return fmtDateBR(sp.start) + ' a ' + fmtDateBR(sp.end);
+  if (sp.start || sp.end) return fmtDateBR(sp.start || sp.end);
+  return computeSantanderPeriodo(D);
 }
 
 function yearOf(h) {
@@ -146,6 +159,7 @@ function reopenHistory(id) {
   state.referente = h.referente || state.referente;
   if (!state.reportMonths) state.reportMonths = { reembolso: '', alelo: '' };
   for (const t of tabs) state.reportMonths[t] = h.reportMonth || '';   // restaura o mês só da(s) tabela(s) reaberta(s)
+  if (tabs.includes('alelo')) state.santPeriodo = Object.assign({ start: '', end: '' }, h.santPeriodo || {});
   state.bank = Object.assign(emptyState().bank, h.bank || {});
   touchProfile(); touchDoc();
   saveState(); render();

@@ -14,7 +14,7 @@ https://mrosella.github.io/Despesas---Soma/
 | Arquivo | Conteúdo |
 |---|---|
 | `js/core.js` | chaves localStorage + `APP_VERSION` (bump!), categorias/config (`getCatConfig`…), estado (`emptyState`/`loadState`/`saveState`/`touchDoc`/`touchProfile`, `let state`), utils (`parseMoney`/`formatMoney`/`todayISO`/`fmtDateBR`/`dateToSerial`/`uid`/`toast`/`sumOf`), ícones |
-| `js/render.js` | `render`, `renderList` (mais recente no topo), histórico (`renderReports`/`reopenHistory`/`deleteHistory`/`monthLabelFor`/`computeSantanderPeriodo`/`yearOf`), `renderCatSummary(tabela,boxId)` (resumo POR relatório), `limitExcedido`, `quickDelete`/`quickDuplicate`, `escapeHtml`, `hydrateThumbs` |
+| `js/render.js` | `render`, `renderList` (mais recente no topo), histórico (`renderReports`/`reopenHistory`/`deleteHistory`/`monthLabelFor`/`santanderPeriodoText`/`computeSantanderPeriodo`/`yearOf`), `renderCatSummary(tabela,boxId)` (resumo POR relatório), `limitExcedido`, `quickDelete`/`quickDuplicate`, `escapeHtml`, `hydrateThumbs` |
 | `js/modal.js` | modal (`openModal`/`saveEntry`/`deleteEntry`/`repeatLast`), `toggleCartaoFields`, foto+OCR hook (`renderModalPhoto`/`onPhotoSelected`/`applyModalPhoto`), máscaras, `updateCatHint` |
 | `js/excel.js` | `buildXlsx`, `buildSantanderXlsx`, `exportExcel`, `validateBeforeExport`, `filteredDoc`, `reportFileBase`/`santanderFileBase`, chooser de export, `SANTANDER_NOME/CARGO` |
 | `js/pdf.js` | `buildPrint`, `buildSantanderPrint`, `exportPDF`, `generatePdfBlob` (multipágina por linha), `shareOrDownload`/`downloadBlob` |
@@ -95,9 +95,12 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
   próprio**, sua tabela, seu **resumo por categoria** (`renderCatSummary(tabela,boxId)` → `#cat-summary-{reembolso|alelo}`)
   e seu **total** (`#sum-*`/`#tot-*`). **Cabeçalho Reembolso**: `#funcionario`/`#dataSolicitacao`/
   `#referente`/`#reportMonth-reembolso` + Dados Bancários (`#bank-card`, só reembolso). **Cabeçalho
-  Santander**: Nome/Cargo **fixos** (read-only, de `SANTANDER_NOME`/`SANTANDER_CARGO`), Período e
-  Data de Entrega **automáticos** (read-only, `#sant-periodo`/`#sant-entrega`), `#reportMonth-alelo`.
-  `excel.js`/`pdf.js` **não mudaram** (já liam esses campos). **Mês de referência é por relatório**
+  Santander**: Nome/Cargo **fixos** (read-only, de `SANTANDER_NOME`/`SANTANDER_CARGO`),
+  **Período de Prestação escolhido pelo usuário** (`#sant-periodo-inicio`/`#sant-periodo-fim`,
+  datas ISO em `state.santPeriodo.start/end`), Data de Entrega **automática** (read-only,
+  `#sant-entrega`), `#reportMonth-alelo`. `excel.js`/`pdf.js` chamam `santanderPeriodoText(D)`
+  (`js/render.js`): usa as datas escolhidas quando preenchidas; sem escolha, cai no cálculo
+  automático antigo (`computeSantanderPeriodo`, mantido só como fallback). **Mês de referência é por relatório**
   (`state.reportMonths[tabela]`, `reportFolderDateISO(tabela)`); zera só ao fechar aquela tabela.
 - `#m-categoria` é **populado por JS** (`populateCategorySelects`, no `init`) a partir de
   `getCategorias()` — não criar `<option>` fixos. Rótulo da 2ª tabela: "Despesas Cartão Santander".
@@ -116,8 +119,10 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
   Nome sem leitura da IA = `NF {DD.MM.AAAA}` (`receiptFileName`/`ddmmaaaa`).
 - **Formato exclusivo do Cartão Santander** (`buildSantanderXlsx`/`buildSantanderPrint`, asset
   `template-santander.xlsx`): acionado ao exportar **só** `alelo`. Excel: E4=Nome FIXO
-  (`SANTANDER_NOME`), E5=Cargo FIXO (`SANTANDER_CARGO`), **E6=Período AUTOMÁTICO**
-  (`computeSantanderPeriodo`: do último lançamento do relatório Santander anterior no histórico até
+  (`SANTANDER_NOME`), E5=Cargo FIXO (`SANTANDER_CARGO`), **E6=Período de Prestação ESCOLHIDO PELO
+  USUÁRIO** (`santanderPeriodoText`, campos `#sant-periodo-inicio`/`#sant-periodo-fim` →
+  `state.santPeriodo.start/end`; sem escolha, cai no cálculo automático antigo
+  `computeSantanderPeriodo` — do último lançamento do relatório Santander anterior no histórico até
   o último do atual), **E7=Data de Entrega = data de geração** (`todayISO`), E8/J=Total; tabela
   linhas 17.. (total na 35, expande se >18). Colunas: B=DATA, **C:F=ESTABELECIMENTO**, G:I=DESCRIÇÃO,
   J=VALOR, **K=JUSTIFICATIVA**. PDF = réplica visual (barra `#C00000`+logo, total cinza `#D8D8D8`)

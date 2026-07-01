@@ -123,6 +123,7 @@ function currentDoc() {
     dataSolicitacao: state.dataSolicitacao,
     referente: state.referente,
     reportMonths: Object.assign({ reembolso: '', alelo: '' }, state.reportMonths || {}),
+    santPeriodo: Object.assign({ start: '', end: '' }, state.santPeriodo || {}),
     bank: Object.assign({}, state.bank),
     reembolso: state.reembolso.map((e) => Object.assign({}, e)),
     alelo: state.alelo.map((e) => Object.assign({}, e)),
@@ -153,6 +154,7 @@ function applyDoc(doc) {
     if (!state.reportMonths.reembolso) state.reportMonths.reembolso = doc.reportMonth;
     if (!state.reportMonths.alelo) state.reportMonths.alelo = doc.reportMonth;
   }
+  state.santPeriodo = Object.assign({ start: '', end: '' }, doc.santPeriodo || {});
   state.bank = Object.assign(base.bank, doc.bank || {});
   state.reembolso = doc.reembolso || [];
   state.alelo = doc.alelo || [];
@@ -227,6 +229,7 @@ function mergeDocs(a, b) {
     dataSolicitacao: p.dataSolicitacao || '',
     referente: p.referente || '',
     reportMonths: Object.assign({ reembolso: '', alelo: '' }, p.reportMonths || (p.reportMonth ? { reembolso: p.reportMonth, alelo: p.reportMonth } : {})),
+    santPeriodo: Object.assign({ start: '', end: '' }, p.santPeriodo || {}),
     bank: Object.assign({}, p.bank || {}),
     config: normalizeCatConfig(p.config),
     tomb: { reembolso: {}, alelo: {} }

@@ -3,6 +3,14 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v38
+- **Período de Prestação (Cartão Santander) agora é escolhido pelo usuário:** dois campos de data
+  (`#sant-periodo-inicio`/`#sant-periodo-fim`, `state.santPeriodo.start/end`) substituem o cálculo
+  automático no cabeçalho da aba Santander. `santanderPeriodoText` usa as datas escolhidas quando
+  preenchidas; sem escolha, cai no cálculo automático antigo (`computeSantanderPeriodo`, mantido
+  como fallback). Zera ao fechar a tabela `alelo`; snapshot do histórico guarda o período usado e
+  `reopenHistory` restaura. Sincroniza como campo de perfil (`profileUpdatedAt`, last-write-wins).
+
 ## v35
 - Menu lateral: saudação "Olá, Murilo Rosella" (era "Soma Urbanismo"); rodapé sem "Plane it" (só a
   versão).
