@@ -449,6 +449,9 @@ function openExportChooser(kind, src) {
   $('exp-c-alelo').textContent = nA + ' lançamento(s) · ' + formatMoney(sumOf(D.alelo || []));
   $('exp-reembolso').checked = nR > 0;
   $('exp-alelo').checked = nA > 0;
+  const anexosRow = $('exp-anexos-row');
+  if (anexosRow) { anexosRow.style.display = kind === 'pdf' ? '' : 'none'; }
+  const anexosChk = $('exp-anexos'); if (anexosChk) anexosChk.checked = true;
   updateExportHint();
   $('export-modal').classList.add('open');
 }
@@ -471,6 +474,10 @@ function confirmExport() {
   if (!sections.reembolso && !sections.alelo) { toast('Selecione ao menos uma seção.'); return; }
   closeExportModal();
   if (exportCtx.kind === 'excel') exportExcel(exportCtx.src, sections);
-  else exportPDF(exportCtx.src, sections);
+  else {
+    const anexosChk = $('exp-anexos');
+    const includeAttachments = !anexosChk || anexosChk.checked;
+    exportPDF(exportCtx.src, sections, includeAttachments);
+  }
 }
 

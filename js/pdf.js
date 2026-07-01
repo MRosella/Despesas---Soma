@@ -133,7 +133,7 @@ function buildSantanderPrint(src) {
   </div>`;
 }
 
-async function exportPDF(src, sections) {
+async function exportPDF(src, sections, includeAttachments) {
   const inc = sections || { reembolso: true, alelo: true };
   const D = src || state;
   const has = (inc.reembolso && D.reembolso.length) || (inc.alelo && D.alelo.length);
@@ -142,7 +142,7 @@ async function exportPDF(src, sections) {
   const santander = !!inc.alelo && !inc.reembolso;   // só cartão → formato exclusivo
   try {
     toast('Gerando PDF…');
-    const blob = await generatePdfBlob(D, inc, santander);
+    const blob = await generatePdfBlob(D, inc, santander, includeAttachments !== false);
     const fname = (santander ? santanderFileBase(D) : reportFileBase(D)) + '.pdf';
     await shareOrDownload(blob, fname, santander ? 'Prestação de Contas - Cartão Santander' : 'Relatório de Despesas (PDF)');
   } catch (e) {
@@ -153,7 +153,8 @@ async function exportPDF(src, sections) {
 
 /* Gera um PDF de verdade (arquivo) a partir do mesmo layout do relatório,
    capturado com html2canvas e montado com jsPDF (A4 retrato, multipágina). */
-async function generatePdfBlob(src, sections, santander) {
+async function generatePdfBlob(src, sections, santander, includeAttachments) {
+  if (includeAttachments === undefined) includeAttachments = true;
   if (santander) buildSantanderPrint(src || state);
   else buildPrint(src || state, sections);
   const root = $('print-root');
@@ -216,8 +217,10 @@ async function generatePdfBlob(src, sections, santander) {
     const inc = sections || { reembolso: true, alelo: true };
     const D = src || state;
     const fotos = [];
-    if (inc.reembolso) fotos.push(...(D.reembolso || []));
-    if (inc.alelo) fotos.push(...(D.alelo || []));
+    if (includeAttachments) {
+      if (inc.reembolso) fotos.push(...(D.reembolso || []));
+      if (inc.alelo) fotos.push(...(D.alelo || []));
+    }
     for (const e of fotos) {
       if (!e.foto) continue;
       if (e.foto.id && !gdConnected()) continue;   // evita pedir login no meio da exportação
