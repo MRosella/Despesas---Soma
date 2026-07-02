@@ -10,30 +10,37 @@ const GD_FOLDER_NAME = 'Comprovantes - Despesas Soma';                 // raiz d
 const GD_FOLDER_SANTANDER = 'Comprovantes Cartao Santander - Despesas Soma';
 const GD_ROOT_NAMES = { reembolso: GD_FOLDER_NAME, alelo: GD_FOLDER_SANTANDER };
 let gdTokenClient = null;
+let gdCodeClient = null;
 let gdGisLoading = null;
 let gdPending = null;
 let gdRefreshTimer = null;
 
-/* token OAuth persistido no aparelho: lê e DESCARTA se já expirou */
+/* token OAuth persistido no aparelho: lê o access token (descarta se já expirou) e o refresh
+   token (esse não expira por tempo — só se revogado). Com refresh token, a sessão do Drive fica
+   valendo indefinidamente, sem popup, via o Worker (renovador). */
 function loadGdAccess() {
   try {
     const a = JSON.parse(localStorage.getItem(GDTOK_KEY) || '{}');
-    if (a && a.token && a.exp && Date.now() < a.exp) return { token: a.token, exp: a.exp };
+    const refresh = a && a.refresh ? a.refresh : '';
+    if (a && a.token && a.exp && Date.now() < a.exp) return { token: a.token, exp: a.exp, refresh };
+    return { token: '', exp: 0, refresh };
   } catch (e) { console.warn('loadGdAccess falhou', e); }
-  return { token: '', exp: 0 };
+  return { token: '', exp: 0, refresh: '' };
 }
 function saveGdAccess() {
   try {
-    if (gdAccess && gdAccess.token) localStorage.setItem(GDTOK_KEY, JSON.stringify(gdAccess));
+    if (gdAccess && (gdAccess.token || gdAccess.refresh)) localStorage.setItem(GDTOK_KEY, JSON.stringify(gdAccess));
     else localStorage.removeItem(GDTOK_KEY);
   } catch (e) { console.warn('saveGdAccess falhou', e); }
 }
 let gdAccess = loadGdAccess();   // reaproveita o token entre aberturas (sem popup se ainda válido)
 
-function loadGd() { try { return Object.assign({ clientId: '', folderId: '' }, JSON.parse(localStorage.getItem(GDRIVE_KEY) || '{}')); } catch (e) { return { clientId: '', folderId: '' }; } }
+function loadGd() { try { return Object.assign({ clientId: '', folderId: '', workerUrl: '' }, JSON.parse(localStorage.getItem(GDRIVE_KEY) || '{}')); } catch (e) { return { clientId: '', folderId: '', workerUrl: '' }; } }
 function saveGd(c) { try { localStorage.setItem(GDRIVE_KEY, JSON.stringify(c)); } catch (e) { console.warn('saveGd falhou', e); } }
 function gdConfigured() { return !!loadGd().clientId; }
 function gdConnected() { return !!gdAccess.token && Date.now() < gdAccess.exp; }
+function gdWorkerUrl() { return (loadGd().workerUrl || '').trim().replace(/\/+$/, ''); }
+function gdHasRefresh() { return !!gdAccess.refresh; }
 
 function gdLoadGis() {
   if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
@@ -54,7 +61,7 @@ function gdInitClient(cfg) {
     scope: GD_SCOPE,
     callback: (resp) => {
       if (resp && resp.access_token) {
-        gdAccess = { token: resp.access_token, exp: Date.now() + ((resp.expires_in || 3600) - 60) * 1000 };
+        gdAccess = { token: resp.access_token, exp: Date.now() + ((resp.expires_in || 3600) - 60) * 1000, refresh: gdAccess.refresh || '' };
         saveGdAccess();          // persiste p/ reaproveitar entre aberturas
         scheduleGdRefresh();     // renova em silêncio antes de expirar
         if (gdPending) gdPending.resolve(resp.access_token);
@@ -64,11 +71,59 @@ function gdInitClient(cfg) {
   });
 }
 
+/* Fluxo "code" (com Worker configurado): a troca do código por access+refresh token acontece no
+   Worker (só ele conhece o client_secret). Só precisa de popup na 1ª conexão (ou se o refresh
+   token for revogado) — depois disso, gdRefreshAccessToken renova sozinho, sem popup, para sempre. */
+function gdInitCodeClient(cfg) {
+  gdCodeClient = google.accounts.oauth2.initCodeClient({
+    client_id: cfg.clientId,
+    scope: GD_SCOPE,
+    ux_mode: 'popup',
+    callback: async (resp) => {
+      if (!(resp && resp.code)) { if (gdPending) gdPending.reject(new Error('Autorização não concedida.')); gdPending = null; return; }
+      try {
+        const tok = await gdWorkerExchange(resp.code);
+        if (gdPending) gdPending.resolve(tok);
+      } catch (e) { if (gdPending) gdPending.reject(e); }
+      gdPending = null;
+    },
+    error_callback: () => { if (gdPending) gdPending.reject(new Error('Autorização cancelada.')); gdPending = null; }
+  });
+}
+
+async function gdWorkerCall(path, body) {
+  const base = gdWorkerUrl();
+  if (!base) throw new Error('Configure a URL do renovador (Worker).');
+  const r = await fetch(base + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('Worker ' + r.status));
+  return j;
+}
+
+/* troca o código de autorização por access+refresh token (1ª vez / reconsentimento) */
+async function gdWorkerExchange(code) {
+  const j = await gdWorkerCall('/exchange', { code, redirect_uri: window.location.origin });
+  gdAccess = { token: j.access_token, exp: Date.now() + ((j.expires_in || 3600) - 60) * 1000, refresh: j.refresh_token || gdAccess.refresh || '' };
+  saveGdAccess();
+  scheduleGdRefresh();
+  return gdAccess.token;
+}
+
+/* renova o access token a partir do refresh token — sem popup, funciona mesmo após dias/semanas */
+async function gdRefreshAccessToken() {
+  const j = await gdWorkerCall('/refresh', { refresh_token: gdAccess.refresh });
+  gdAccess = { token: j.access_token, exp: Date.now() + ((j.expires_in || 3600) - 60) * 1000, refresh: gdAccess.refresh };
+  saveGdAccess();
+  scheduleGdRefresh();
+  return gdAccess.token;
+}
+
 /* Renovação silenciosa proativa: agenda um refresh ~2 min antes de expirar (enquanto o app
-   estiver aberto). Não incomoda o usuário — usa prompt:'' (sem UI) se a sessão Google valer. */
+   estiver aberto). Com refresh token (Worker), renova via rede, sem depender de sessão do
+   navegador. Sem Worker, cai no antigo prompt:'' (só funciona com a sessão do Google valendo). */
 function scheduleGdRefresh() {
   if (gdRefreshTimer) { clearTimeout(gdRefreshTimer); gdRefreshTimer = null; }
-  if (!gdAccess.token || !gdAccess.exp) return;
+  if (!gdAccess.exp) return;
   const delay = Math.max(1000, gdAccess.exp - Date.now() - 120000);
   gdRefreshTimer = setTimeout(() => {
     gdRefreshTimer = null;
@@ -81,7 +136,22 @@ async function gdGetToken(interactive) {
   const cfg = loadGd();
   if (!cfg.clientId) throw new Error('Configure o Client ID do Google.');
   if (!navigator.onLine) throw new Error('Sem conexão com a internet.');
+  const worker = gdWorkerUrl();
+  // tem refresh token (Worker) → renova por rede, sem popup, mesmo que a sessão do navegador tenha caído
+  if (worker && gdHasRefresh()) {
+    try { return await gdRefreshAccessToken(); }
+    catch (e) { console.warn('refresh token falhou (revogado?)', e); gdAccess.refresh = ''; saveGdAccess(); if (!interactive) throw e; }
+  }
   await gdLoadGis();
+  if (worker) {
+    if (!interactive) throw new Error('Sessão expirada. Toque em "Conectar Google".');
+    if (!gdCodeClient) gdInitCodeClient(cfg);
+    return new Promise((resolve, reject) => {
+      gdPending = { resolve, reject };
+      try { gdCodeClient.requestCode(); }
+      catch (e) { gdPending = null; reject(e); }
+    });
+  }
   if (!gdTokenClient) gdInitClient(cfg);
   return new Promise((resolve, reject) => {
     gdPending = { resolve, reject };
@@ -296,6 +366,7 @@ let gdVisHook = false;
 function setupGDriveUI() {
   const cfg = loadGd();
   if ($('gd-client')) $('gd-client').value = cfg.clientId || '';
+  if ($('gd-worker')) $('gd-worker').value = cfg.workerUrl || '';
   refreshGdStatus();
   if (gdConnected()) scheduleGdRefresh();   // token persistido ainda válido → mantém renovando sozinho
   // ao voltar o foco p/ o app (ou reconectar a internet), tenta reconexão silenciosa se o token estiver perto de vencer
@@ -314,6 +385,10 @@ function setupGDriveUI() {
     if (c.clientId !== loadGd().clientId) c.folderId = '';   // troca de projeto reseta pasta
     saveGd(c); refreshGdStatus();
   });
+  if ($('gd-worker')) $('gd-worker').addEventListener('change', () => {
+    const c = loadGd(); c.workerUrl = ($('gd-worker').value || '').trim();
+    saveGd(c); refreshGdStatus();
+  });
   $('gd-connect').addEventListener('click', () => gdConnectFlow());
   $('gd-flush').addEventListener('click', async () => {
     const c = loadGd();
@@ -330,11 +405,12 @@ function setupGDriveUI() {
   updateGdPending();
   $('gd-clear').addEventListener('click', () => {
     if (!confirm('Desconectar o Google Drive deste aparelho?')) return;
-    gdAccess = { token: '', exp: 0 };
+    gdAccess = { token: '', exp: 0, refresh: '' };
     if (gdRefreshTimer) { clearTimeout(gdRefreshTimer); gdRefreshTimer = null; }
     localStorage.removeItem(GDTOK_KEY);
     localStorage.removeItem(GDRIVE_KEY);
     $('gd-client').value = '';
+    if ($('gd-worker')) $('gd-worker').value = '';
     refreshGdStatus();
     toast('Google Drive desconectado.');
   });
@@ -343,7 +419,11 @@ function setGdStatus(msg, kind) { const el = $('gd-status'); if (el) { el.textCo
 function refreshGdStatus() {
   updateGdPending();
   if (!gdConfigured()) { setGdStatus('Não configurado.', ''); return; }
-  setGdStatus(gdConnected() ? 'Conectado ✓' : 'Configurado. Toque em “Conectar Google”.', gdConnected() ? 'ok' : '');
+  if (gdConnected()) {
+    setGdStatus(gdHasRefresh() ? 'Conectado ✓ (sessão permanente)' : 'Conectado ✓', 'ok');
+  } else {
+    setGdStatus('Configurado. Toque em “Conectar Google”.', '');
+  }
 }
 
 /* ---- Conexão do Drive: fluxo único + reconexão silenciosa + popup ao abrir ---- */

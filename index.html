@@ -286,6 +286,13 @@
             <p class="hint">Crie no Google Cloud (tipo “Aplicativo da Web”, origem
               <b>https://mrosella.github.io</b>). Funciona só no site publicado (HTTPS).</p>
           </div>
+          <div class="field">
+            <label for="gd-worker">URL do renovador de sessão (Cloudflare Worker, opcional)</label>
+            <input type="url" id="gd-worker" placeholder="https://....workers.dev" autocapitalize="off" autocomplete="off" spellcheck="false" />
+            <p class="hint">Preenchendo, a conexão com o Google passa a durar indefinidamente (não pede
+              login de novo a cada ~1h/dia). Sem isso, o app funciona igual, mas pode pedir login com mais
+              frequência.</p>
+          </div>
           <div class="sync-actions">
             <button class="btn btn-excel" id="gd-connect" type="button">Conectar Google</button>
           </div>

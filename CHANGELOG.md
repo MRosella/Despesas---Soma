@@ -3,6 +3,16 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v39
+- **Sessão do Google Drive permanente (opcional):** novo campo "URL do renovador de sessão
+  (Cloudflare Worker)" nas Configurações (`-gdrive-v1.workerUrl`). Quando preenchido, o app troca o
+  fluxo antigo (`initTokenClient`, só dura enquanto a sessão do navegador valer) por
+  `initCodeClient` + um Worker externo (`cloudflare-worker/drive-token-worker.js`, fora deste
+  repo/PWA) que guarda o `client_secret` do Google com segurança e devolve `refresh_token`. Esse
+  refresh token não expira por tempo — `gdRefreshAccessToken` renova o access token por rede, sem
+  popup, mesmo dias depois de fechar o app. Sem o Worker configurado, o app continua funcionando
+  como antes (v34). `-gdtok-v1` ganhou o campo `refresh`.
+
 ## v38
 - **Período de Prestação (Cartão Santander) agora é escolhido pelo usuário:** dois campos de data
   (`#sant-periodo-inicio`/`#sant-periodo-fim`, `state.santPeriodo.start/end`) substituem o cálculo
