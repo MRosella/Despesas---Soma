@@ -14,6 +14,37 @@ function knownDriveIds() {
   return s;
 }
 
+/* Arquivos GERADOS no fechamento do mês (zip de comprovantes + Excel + PDF do relatório).
+   Nunca são comprovantes enviados pelo usuário — a varredura os ignora. Nomes vêm de
+   archiveMonthToDrive ('NFs - {Mês} {Ano}.zip') e reportFileBase/santanderFileBase. */
+function isGeneratedArtifact(f) {
+  const name = f.name || '';
+  const mime = f.mimeType || '';
+  if (mime === 'application/zip' || /\.zip$/i.test(name)) return true;
+  if (mime.indexOf('spreadsheet') >= 0 || /\.xlsx?$/i.test(name)) return true;
+  if (/^NFs - /i.test(name)) return true;                 // zip dos comprovantes
+  if (/^Relatorio_Despesas_/i.test(name)) return true;    // Excel/PDF do reembolso
+  if (/^Prestacao_Contas_Cartao_/i.test(name)) return true; // Excel/PDF do cartão Santander
+  return false;
+}
+
+/* Só imagens e PDFs de comprovante entram na varredura (exclui os artefatos de fechamento). */
+function isReceiptCandidate(f) {
+  if (isGeneratedArtifact(f)) return false;
+  const mime = f.mimeType || '';
+  const name = f.name || '';
+  if (mime.indexOf('image/') === 0) return true;
+  if (mime === 'application/pdf' || /\.pdf$/i.test(name)) return true;
+  return false;
+}
+
+/* Já existe um lançamento igual (mesma data + valor) nessa tabela? Evita duplicidade quando o
+   mesmo comprovante é reenviado ao Drive com outro id (a dedupe por id só pega o mesmo arquivo). */
+function findDuplicateEntry(tabela, dateISO, total) {
+  const cents = Math.round((total || 0) * 100);
+  return (state[tabela] || []).find((x) => x.data === dateISO && Math.round((x.valor || 0) * 100) === cents) || null;
+}
+
 /* lista todos os arquivos (recursivo) sob a raiz da tabela, incluindo subpastas Ano/Mês */
 async function gdListReceipts(tabela) {
   const root = await gdEnsureFolder(tabela);
@@ -36,7 +67,7 @@ async function gdListReceipts(tabela) {
     } while (pageToken);
   }
   await walk(root);
-  return out;
+  return out.filter(isReceiptCandidate);   // ignora zip/Excel/PDF gerados no fechamento
 }
 
 /* ---- modal de progresso da varredura (mostra ao usuário o que está acontecendo) ---- */
@@ -98,7 +129,7 @@ async function scanDriveForReceipts() {
       catch (e) { scanProgress.log('Não foi possível conectar ao Drive (autorize o acesso de leitura).', 'err'); scanProgress.done('Conexão necessária.'); return; }
     }
     const known = knownDriveIds();
-    let novos = 0, pend = 0, erros = 0, jaLanc = 0, total = 0, lidos = 0;
+    let novos = 0, pend = 0, erros = 0, jaLanc = 0, total = 0, lidos = 0, dups = 0;
     const LBL = { reembolso: 'Reembolso', alelo: 'Cartão Santander' };
     for (const tabela of ['reembolso', 'alelo']) {
       scanProgress.status('Listando pasta de ' + LBL[tabela] + '…');
@@ -117,7 +148,11 @@ async function scanDriveForReceipts() {
         let ocr = null, falhou = false, errMsg = '';
         try { const blob = await gdDownloadBlob(f.id); ocr = await ocrReceipt(blob, f.mimeType); }
         catch (e) { console.error('OCR/scan falhou', e); falhou = true; errMsg = e.message || String(e); }
-        if (ocr && ocr.dateISO && ocr.total != null) {
+        if (ocr && ocr.dateISO && ocr.total != null && findDuplicateEntry(tabela, ocr.dateISO, ocr.total)) {
+          // já existe um lançamento igual (mesma data+valor) — não duplica; fica marcado como conhecido
+          dups++;
+          scanProgress.log('↔ <b>' + escapeHtml(f.name) + '</b> → ignorado (já lançado: ' + formatMoney(ocr.total) + ' · ' + fmtDateBR(ocr.dateISO) + ').', 'info');
+        } else if (ocr && ocr.dateISO && ocr.total != null) {
           const entry = {
             id: uid(), data: ocr.dateISO, descricao: buildDescricao(ocr.category, ocr.city, ocr.uf),
             categoria: ocr.category, valor: ocr.total, updatedAt: Date.now(),
@@ -146,6 +181,7 @@ async function scanDriveForReceipts() {
     const partes = [];
     partes.push('<b>' + novos + '</b> lançado(s) automaticamente');
     partes.push('<b>' + pend + '</b> pendente(s) para revisar');
+    if (dups) partes.push(dups + ' duplicado(s) ignorado(s)');
     if (jaLanc) partes.push(jaLanc + ' já conhecido(s)');
     if (erros) partes.push(erros + ' pasta(s) com erro');
     scanProgress.log('Concluído: ' + partes.join(' · ') + '.', novos || pend ? 'info' : 'info');
@@ -226,7 +262,13 @@ async function retryPendingOcr(fileId, btn) {
     let ocr = null;
     try { const blob = await gdDownloadBlob(fileId); ocr = await ocrReceipt(blob, p.mimeType); }
     catch (e) { console.error('Reanálise falhou', e); toast('Falha ao ler: ' + (e.message || 'tente de novo') + '.'); return; }
-    if (ocr && ocr.dateISO && ocr.total != null) {
+    if (ocr && ocr.dateISO && ocr.total != null && findDuplicateEntry(p.tabela, ocr.dateISO, ocr.total)) {
+      // já existe lançamento igual — não duplica; remove o pendente e marca como conhecido
+      state.pending = (state.pending || []).filter((x) => x.fileId !== fileId);
+      state.driveKnown[fileId] = 1;
+      touchDoc(); saveState(); renderPending();
+      toast('Já existe um lançamento igual (' + formatMoney(ocr.total) + ' · ' + fmtDateBR(ocr.dateISO) + '). Não dupliquei.');
+    } else if (ocr && ocr.dateISO && ocr.total != null) {
       const entry = {
         id: uid(), data: ocr.dateISO, descricao: buildDescricao(ocr.category, ocr.city, ocr.uf),
         categoria: ocr.category, valor: ocr.total, updatedAt: Date.now(),
