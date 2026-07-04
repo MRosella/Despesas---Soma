@@ -223,12 +223,18 @@ async function onFinImportFile(file) {
     if (!rows.length) { finImpStatus('Nenhuma transação encontrada no arquivo.', 'warn'); return; }
     finImportDraft = {
       destino,
-      rows: rows.map((r) => Object.assign({
-        categoria: '',
-        reembolsavel: false,
-        incluir: true,
-        dup: false
-      }, r))   // preserva categoria/parcela vindos da IA
+      rows: rows.map((r) => {
+        const merged = Object.assign({
+          categoria: '',
+          reembolsavel: false,
+          incluir: true,
+          dup: false
+        }, r);   // preserva categoria/parcela vindos da IA
+        // categoria aprendida de correções manuais anteriores tem prioridade sobre a sugestão da IA/CSV
+        const aprendida = finAprenderCategoria(merged.descricao, merged.tipo);
+        if (aprendida) merged.categoria = aprendida;
+        return merged;
+      })
     };
     const drows = finImportDraft.rows;
     finMarcarDuplicados(drows, state.finTx || [], destino);

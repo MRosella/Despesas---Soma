@@ -177,6 +177,18 @@ try {
   chk('fin_ofx_debito', po[0].data + '|' + po[0].valor + '|' + po[0].tipo + '|' + po[0].descricao, '2026-06-05|45.9|despesa|UBER TRIP');
   chk('fin_ofx_credito', po[1].tipo + '|' + po[1].descricao, 'receita|SALARIO');
 
+  // aprendizado de categoria: casa descrições com números diferentes (código/parcela) e usa a mais frequente
+  state.finTx = [
+    { tipo:'despesa', descricao:'UBER *TRIP 1234', categoria:'Transporte' },
+    { tipo:'despesa', descricao:'UBER *TRIP 5678', categoria:'Transporte' },
+    { tipo:'despesa', descricao:'UBER *TRIP 9999', categoria:'Alimentação' },
+    { tipo:'receita', descricao:'UBER *TRIP 1111', categoria:'Outras receitas' }
+  ];
+  chk('fin_aprende_categoria', finAprenderCategoria('UBER *TRIP 4321', 'despesa'), 'Transporte');
+  chk('fin_aprende_categoria_tipo_diff', finAprenderCategoria('UBER *TRIP 4321', 'receita'), 'Outras receitas');
+  chk('fin_aprende_categoria_sem_match', finAprenderCategoria('LOJA DESCONHECIDA', 'despesa'), '');
+  state.finTx = [];
+
   // persistência do token do Drive: round-trip de token válido + rejeição de token expirado
   gdAccess = { token: 'tok123', exp: Date.now() + 100000 };
   saveGdAccess();

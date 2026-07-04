@@ -59,6 +59,17 @@ function openFinTxModal(id, prefill) {
 }
 function closeFinTxModal() { $('fin-tx-modal').classList.remove('open'); }
 
+/* Ao digitar a descrição de uma transação NOVA (sem categoria escolhida ainda),
+   sugere a categoria mais usada em lançamentos anteriores com descrição parecida. */
+function finSugerirCategoriaAoDigitar() {
+  if ($('fm-id').value) return;   // só em transação nova, não sobrescreve edição
+  const mc = $('fm-categoria'); if (!mc || mc.value) return;
+  const desc = $('fm-descricao').value.trim(); if (!desc) return;
+  const tipo = $('fm-tipo').value === 'receita' ? 'receita' : 'despesa';
+  const aprendida = finAprenderCategoria(desc, tipo);
+  if (aprendida) mc.value = aprendida;
+}
+
 function saveFinTx() {
   const id = $('fm-id').value;
   const tipo = $('fm-tipo').value === 'receita' ? 'receita' : 'despesa';
@@ -248,6 +259,7 @@ function setupFinModals() {
   $('fm-delete').addEventListener('click', deleteFinTx);
   $('fm-tipo').addEventListener('change', populateFinSelects);
   $('fm-destino').addEventListener('change', finToggleReembRow);
+  $('fm-descricao').addEventListener('blur', finSugerirCategoriaAoDigitar);
   maskCurrencyEl($('fm-valor'));
 
   $('fc-save').addEventListener('click', saveFinConta);

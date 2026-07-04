@@ -167,6 +167,29 @@ function finDedupKey(tx) {
   return (tx.data || '') + '|' + Math.round((tx.valor || 0) * 100) + '|' + finNormDesc(tx.descricao);
 }
 
+/* ---------------- Aprendizado de categoria por descrição ----------------
+   Agrupa descrições parecidas ignorando números (parcela, código do estabelecimento, etc.)
+   p/ casar "UBER *TRIP 1234" com "UBER *TRIP 5678". */
+function finDescChave(s) {
+  return finNormDesc(s).replace(/\d+/g, '').replace(/\s+/g, ' ').trim();
+}
+/* Categoria mais usada em lançamentos já existentes (state.finTx) com a mesma
+   descrição (normalizada) e tipo — captura correções manuais do usuário e passa
+   a sugerir/aplicar essa categoria em importações e lançamentos futuros. */
+function finAprenderCategoria(descricao, tipo) {
+  const chave = finDescChave(descricao);
+  if (!chave) return '';
+  const contagem = {};
+  for (const tx of (state.finTx || [])) {
+    if (tx.tipo !== tipo || !tx.categoria) continue;
+    if (finDescChave(tx.descricao) !== chave) continue;
+    contagem[tx.categoria] = (contagem[tx.categoria] || 0) + 1;
+  }
+  let melhor = '', max = 0;
+  for (const c in contagem) if (contagem[c] > max) { max = contagem[c]; melhor = c; }
+  return melhor;
+}
+
 /* Marca nas linhas importadas as que já existem no destino (mesma data+valor+descrição). */
 function finMarcarDuplicados(rows, txs, destino) {
   const existentes = new Set();

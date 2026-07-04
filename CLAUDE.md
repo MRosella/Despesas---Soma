@@ -23,7 +23,7 @@ https://mrosella.github.io/Despesas---Soma/
 | `js/ui.js` | navegação (`showView`/`setupNav`), **abas dos relatórios** (`setupReportTabs`/`showReportTab`, lembra em `-tab-v1`), `populateCategorySelects`, editor de categorias (`renderCatEditor`/`saveCatEditor`/`setupCatUI`) |
 | `js/ocr.js` | Gemini (`AI_KEY`, `GEMINI_MODEL`, **`geminiCall(parts,generationConfig)`** = chamada genérica com retry/backoff usada também pelo fin-import, `ocrReceipt` = wrapper com **cache por hash**, `ocrReceiptRaw`, `blobSha256`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI`) |
 | `js/idb.js` | IndexedDB (`idb`/`idbPut`/`idbGet`/`idbDel`), `compressImage`, `blobToDataUrl`, `saveThumb`, `getPhotoBlob` (camada de storage local) |
-| `js/fin-core.js` | **Finanças (pessoal), lógica pura**: faturas por competência (`finCompetencia`/`finVencimentoISO`/`finFaturasDoCartao`/`finFaturaDe`), visão multi-mês (`finFaturaMeses`), `finSaldoConta`, `finResumoMes`, dedupe (`finNormDesc`/`finDedupKey`/`finMarcarDuplicados`), cruzamento reembolso (`finMatchReembolsaveis`), parcelamento (`finParcelasFuturas`/`finParcelaJaExiste`/`finParcelaGrupoBase`), `finArquivarAno`, meses (`finMonthAdd`/`finMesLabel`), getters (`finContaById`/`finCartaoById`/`finGetCategorias`/`finCategoriasPorTipo`) |
+| `js/fin-core.js` | **Finanças (pessoal), lógica pura**: faturas por competência (`finCompetencia`/`finVencimentoISO`/`finFaturasDoCartao`/`finFaturaDe`), visão multi-mês (`finFaturaMeses`), `finSaldoConta`, `finResumoMes`, dedupe (`finNormDesc`/`finDedupKey`/`finMarcarDuplicados`), cruzamento reembolso (`finMatchReembolsaveis`), parcelamento (`finParcelasFuturas`/`finParcelaJaExiste`/`finParcelaGrupoBase`), aprendizado de categoria (`finDescChave`/`finAprenderCategoria`), `finArquivarAno`, meses (`finMonthAdd`/`finMesLabel`), getters (`finContaById`/`finCartaoById`/`finGetCategorias`/`finCategoriasPorTipo`) |
 | `js/fin-render.js` | Finanças, tela: `renderFin` (+`renderFinDashboard`/`renderFinTransacoes`/`renderFinContasCartoes`/`renderFinFatura`), abas **próprias** `.ftab`/`.fin-panel` (`setupFinTabs`/`showFinTab`, lembra em `-fintab-v1`), `openFinFatura`, filtros (`finTxFiltro`/`finFatFiltro`), navegador de mês (`finMesAtivo`), `setupFinUI` |
 | `js/fin-modal.js` | Finanças, modais: transação (`openFinTxModal`/`saveFinTx`/`deleteFinTx`), conta (`openFinContaModal`…), cartão (`openFinCartaoModal`…), `populateFinSelects`, `setupFinModals`, editor de categorias (`finCatDraft`/`renderFinCatEditor`/`setupFinCatUI`), arquivamento anual (`setupFinArquivoUI`) |
 | `js/fin-import.js` | Finanças, importação: `ocrStatement` (chama `ocrStatementRaw` **sem cache** — reenviar o mesmo arquivo sempre reanalisa), `ocrStatementRaw` (usa `geminiCall`), parsers locais `finParseCsv`/`finParseOfx`, revisão (`finImportDraft`/`onFinImportFile`/`renderFinReview`/`confirmFinImport`), `setupFinImportUI` |
@@ -218,6 +218,13 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
   Excluir conta/cartão oferece excluir as tx vinculadas (lápides em massa) — nunca deixa tx órfã. Arquivamento anual em
   Configurações (`finArquivarAno` + backup .json via `downloadBlob`). Backup/sync já incluem os
   ramos `fin*` (via `currentDoc`/`applyDoc`/`mergeDocs`).
+- **Aprendizado de categoria por descrição** (`finAprenderCategoria`, sem storage extra — deriva de
+  `state.finTx` a cada chamada): agrupa descrições por `finDescChave` (= `finNormDesc` sem dígitos,
+  p/ casar "UBER *TRIP 1234" com "...5678") e retorna a categoria **mais frequente** já usada nessa
+  chave+tipo — captura correções manuais do usuário (ele edita a categoria uma vez, o app aprende).
+  Aplicado em dois pontos: (1) `onFinImportFile` (`fin-import.js`) — sobrepõe a categoria vinda da
+  IA/CSV/OFX quando há aprendizado; (2) `finSugerirCategoriaAoDigitar` (`fin-modal.js`, no `blur` de
+  `#fm-descricao`) — só em transação **nova** e só se a categoria ainda não foi escolhida.
 
 ## Fluxo de trabalho típico (ao editar)
 1. Grep o nome da função → editar o `js/*.js` certo.
