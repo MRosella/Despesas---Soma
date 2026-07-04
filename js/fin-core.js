@@ -40,6 +40,13 @@ function finGetCategorias() {
 function finCategoriasPorTipo(tipo) { return finGetCategorias().filter((c) => c.tipo === tipo).map((c) => c.nome); }
 function finCatObj(nome) { return finGetCategorias().find((c) => c.nome === nome) || null; }
 function finCatIcon(nome) { const c = finCatObj(nome); return (c && c.icone) || ''; }
+function finCatColor(nome) { const c = finCatObj(nome); return (c && c.cor) || ''; }
+/* Versão translúcida de uma cor hex (#rrggbb) para usar como fundo suave. */
+function finCorSoft(hex, alpha) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex || ''));
+  if (!m) return '';
+  return 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + (alpha == null ? 0.15 : alpha) + ')';
+}
 function finSubcategorias(nome) { const c = finCatObj(nome); return (c && c.subcategorias) || []; }
 /* Lançamentos de reembolso corporativo p/ cruzar com importação: inclui os abertos (state.reembolso)
    E os já arquivados no histórico (state.history[].reembolso) — um mês fechado não deve ficar invisível. */

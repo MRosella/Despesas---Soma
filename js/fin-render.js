@@ -11,6 +11,17 @@ let finFaturaView = null;                    // {cartaoId, competencia} da fatur
 let finTxFiltro = 'todas';                   // todas | receitas | despesas | reembolsaveis
 let finFatFiltro = 'todas';                  // todas | pessoais | reembolsaveis
 
+/* Selo colorido da categoria (ícone em círculo na cor da categoria + nome + subcategoria). */
+function finCatTagHtml(cat, sub) {
+  if (!cat) return '<span class="cat-tag">—</span>';
+  const cor = finCatColor(cat);
+  const ic = finCatIcon(cat);
+  const badge = ic
+    ? `<span class="ct-ic"${cor ? ` style="background:${cor}"` : ''} data-icon="${ic}" data-size="11"></span>`
+    : '';
+  return `<span class="cat-tag">${badge}${escapeHtml(cat)}${sub ? ' · ' + escapeHtml(sub) : ''}</span>`;
+}
+
 function finDestinoNome(tx) {
   if (tx.cartaoId) { const k = finCartaoById(tx.cartaoId); return k ? k.nome : 'Cartão'; }
   if (tx.contaId) { const c = finContaById(tx.contaId); return c ? c.nome : 'Conta'; }
@@ -104,7 +115,7 @@ function renderFinDashboard() {
   if (box) {
     const arr = Object.keys(res.porCategoria).map((c) => [c, res.porCategoria[c]]).sort((a, b) => b[1] - a[1]);
     box.innerHTML = arr.length
-      ? arr.map(([cat, val]) => `<span class="cat-chip">${finCatIcon(cat) ? `<span class="cc-ic" data-icon="${finCatIcon(cat)}" data-size="14"></span>` : ''}<span class="cc-name">${escapeHtml(cat)}</span><span class="cc-val">${formatMoney(val)}</span></span>`).join('')
+      ? arr.map(([cat, val]) => `<span class="cat-chip">${finCatIcon(cat) ? `<span class="cc-ic"${finCatColor(cat) ? ` style="background:${finCatColor(cat)}"` : ''} data-icon="${finCatIcon(cat)}" data-size="13"></span>` : ''}<span class="cc-name">${escapeHtml(cat)}</span><span class="cc-val">${formatMoney(val)}</span></span>`).join('')
       : '<span class="cat-empty">Sem despesas neste mês.</span>';
     setupIcons(box);
   }
@@ -119,7 +130,7 @@ function finTxLi(t) {
     <div class="e-main">
       <div class="e-desc">${escapeHtml(t.descricao || '(sem descrição)')}</div>
       <div class="e-meta">
-        <span class="cat-tag">${t.categoria && finCatIcon(t.categoria) ? `<span class="ct-ic" data-icon="${finCatIcon(t.categoria)}" data-size="12"></span>` : ''}${escapeHtml(t.categoria || '—')}${t.subcategoria ? ' · ' + escapeHtml(t.subcategoria) : ''}</span>
+        ${finCatTagHtml(t.categoria, t.subcategoria)}
         ${fmtDateBR(t.data)} · ${escapeHtml(finDestinoNome(t))}
         ${t.reembolsavel ? '<span class="fin-tag-reemb">↩ reembolsável</span>' : ''}
       </div>
@@ -288,7 +299,7 @@ function renderFinFatura() {
       <div class="e-main">
         <div class="e-desc">${escapeHtml(t.descricao || '(sem descrição)')}</div>
         <div class="e-meta">
-          <span class="cat-tag">${t.categoria && finCatIcon(t.categoria) ? `<span class="ct-ic" data-icon="${finCatIcon(t.categoria)}" data-size="12"></span>` : ''}${escapeHtml(t.categoria || '—')}${t.subcategoria ? ' · ' + escapeHtml(t.subcategoria) : ''}</span>
+          ${finCatTagHtml(t.categoria, t.subcategoria)}
           ${fmtDateBR(t.data)}
           ${t.reembolsavel ? '<span class="fin-tag-reemb">↩ reembolsável</span>' : ''}
         </div>

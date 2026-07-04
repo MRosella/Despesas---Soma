@@ -217,10 +217,13 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--orange); bo
 .entry .e-meta { font-size: .76rem; color: var(--muted); margin-top: 2px; }
 .entry .e-val { font-weight: 700; color: var(--brown); white-space: nowrap; }
 .entry .cat-tag {
-  display: inline-flex; align-items: center; gap: 3px; font-size: .68rem; padding: 1px 7px; border-radius: 10px;
+  display: inline-flex; align-items: center; gap: 5px; font-size: .68rem; padding: 1px 8px 1px 2px; border-radius: 11px;
   background: #f5e9dc; color: #a35a10; margin-right: 6px;
 }
-.entry .cat-tag .ct-ic { display: inline-flex; }
+.entry .cat-tag .ct-ic {
+  display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--brown); color: #fff; flex: 0 0 auto;
+}
 .empty-list { padding: 18px 16px; color: var(--muted); font-size: .85rem; text-align: center; }
 
 /* Cabeçalho de grupo na lista de transações (Contas × Cartões) */
@@ -307,7 +310,10 @@ body.locked { overflow: hidden; }
   padding: 4px 11px; font-size: .78rem;
 }
 .cat-chip .cc-val { font-weight: 700; }
-.cat-chip .cc-ic { display: inline-flex; }
+.cat-chip .cc-ic {
+  display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  border-radius: 50%; background: var(--brown); color: #fff; flex: 0 0 auto;
+}
 
 /* ---------- Indicador de sincronização (cabeçalho) ---------- */
 .sync-ind { font-size: 1.15rem; line-height: 1; }
@@ -460,14 +466,46 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 .cat-row .cat-nome { flex: 1 1 auto; min-width: 0; }
 .cat-row .cat-lim { width: 96px; flex: 0 0 auto; }
 .cat-row .cat-del { flex: 0 0 auto; }
-.fincat-ic { flex: 0 0 auto; color: var(--brown); display: inline-flex; }
-.fincat-subs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 14px 30px; }
+/* Selo colorido (ícone + cor) da categoria — abre o seletor ao clicar */
+.fincat-badge {
+  flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; border: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; color: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .1s;
+}
+.fincat-badge:hover { transform: scale(1.06); }
+.fincat-badge:active { transform: scale(.96); }
+
+/* Seletor de cor + ícone (abre abaixo da linha da categoria) */
+.fincat-picker {
+  margin: 2px 0 10px 42px; padding: 10px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface2, rgba(0,0,0,.02));
+}
+.fincat-picker[hidden] { display: none; }
+.fincat-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.fincat-color {
+  width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0;
+}
+.fincat-color.sel { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg); }
+.fincat-iconpick { display: flex; flex-wrap: wrap; gap: 6px; }
+.fincat-icon {
+  width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: var(--card, #fff);
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); padding: 0;
+}
+.fincat-icon.sel { border-color: var(--brown); color: var(--brown); background: #f5e9dc; }
+
+.fincat-subs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 14px 42px; }
 .fincat-sub-chip { display: inline-flex; align-items: center; gap: 4px; }
 .fincat-sub-chip .fincat-sub-del {
   border: 0; background: none; color: inherit; cursor: pointer; padding: 0; font-size: .78rem; line-height: 1; opacity: .7;
 }
 .fincat-sub-chip .fincat-sub-del:hover { opacity: 1; }
-.fincat-sub-add { flex: 1 1 120px; min-width: 100px; padding: 5px 9px; font-size: .78rem; }
+.fincat-sub-input { display: inline-flex; align-items: center; gap: 4px; flex: 1 1 140px; min-width: 120px; }
+.fincat-sub-add { flex: 1 1 auto; min-width: 80px; padding: 5px 9px; font-size: .78rem; }
+.fincat-sub-addbtn {
+  flex: 0 0 auto; width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--card, #fff); color: var(--brown); font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0;
+}
+.fincat-sub-addbtn:hover { background: #f5e9dc; }
 
 /* ---------- Aviso de offline ---------- */
 .offline-notice {

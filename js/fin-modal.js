@@ -292,15 +292,22 @@ function setupFinModals() {
 
 /* ---------------- Editor de categorias do módulo (Configurações) ---------------- */
 let finCatDraft = null;
+let finCatPickerOpen = -1;   // índice da categoria com o seletor de ícone/cor aberto (-1 = nenhum)
 function getFinCatDraft() { if (!finCatDraft) finCatDraft = finGetCategorias().map((c) => Object.assign({}, c)); return finCatDraft; }
 function setFinCatStatus(msg, cls) { const s = $('fincat-status'); if (s) { s.textContent = msg || ''; s.className = 'sync-status' + (cls ? ' ' + cls : ''); } }
 
 function renderFinCatEditor() {
   const box = $('fincat-list'); if (!box) return;
   const rows = getFinCatDraft();
-  box.innerHTML = rows.map((c, i) => `
-    <div class="cat-row" data-i="${i}">
-      <span class="fincat-ic" data-icon="${escapeHtml(c.icone || 'more-horizontal')}" data-size="18"></span>
+  box.innerHTML = rows.map((c, i) => {
+    const cor = c.cor || '#95a5a6';
+    const ic = c.icone || 'more-horizontal';
+    const open = finCatPickerOpen === i;
+    return `
+    <div class="cat-row fincat-row" data-i="${i}">
+      <button type="button" class="fincat-badge" data-i="${i}" style="background:${escapeHtml(cor)}" aria-label="Escolher ícone e cor">
+        <span data-icon="${escapeHtml(ic)}" data-size="18"></span>
+      </button>
       <input type="text" class="fincat-nome" data-i="${i}" value="${escapeHtml(c.nome)}" placeholder="Categoria" autocapitalize="words" />
       <select class="fincat-tipo" data-i="${i}">
         <option value="despesa"${c.tipo !== 'receita' ? ' selected' : ''}>Despesa</option>
@@ -308,14 +315,53 @@ function renderFinCatEditor() {
       </select>
       <button type="button" class="hist-btn danger fincat-del" data-i="${i}" aria-label="Remover categoria">✕</button>
     </div>
+    <div class="fincat-picker${open ? ' open' : ''}" data-i="${i}"${open ? '' : ' hidden'}>
+      <div class="fincat-swatches">
+        ${FIN_CAT_COLORS.map((col) => `<button type="button" class="fincat-color${col.toLowerCase() === cor.toLowerCase() ? ' sel' : ''}" data-i="${i}" data-cor="${col}" style="background:${col}" aria-label="Cor ${col}"></button>`).join('')}
+      </div>
+      <div class="fincat-iconpick">
+        ${FIN_CAT_ICON_CHOICES.map((nm) => `<button type="button" class="fincat-icon${nm === ic ? ' sel' : ''}" data-i="${i}" data-ic="${nm}" aria-label="Ícone ${nm}"><span data-icon="${nm}" data-size="18"></span></button>`).join('')}
+      </div>
+    </div>
     <div class="fincat-subs" data-i="${i}">
       ${(c.subcategorias || []).map((s, j) => `<span class="cat-chip fincat-sub-chip">${escapeHtml(s)}<button type="button" class="fincat-sub-del" data-i="${i}" data-j="${j}" aria-label="Remover subcategoria">✕</button></span>`).join('')}
-      <input type="text" class="fincat-sub-add" data-i="${i}" placeholder="+ subcategoria" autocapitalize="words" />
-    </div>`).join('');
+      <span class="fincat-sub-input">
+        <input type="text" class="fincat-sub-add" data-i="${i}" placeholder="+ subcategoria" autocapitalize="words" />
+        <button type="button" class="fincat-sub-addbtn" data-i="${i}" aria-label="Adicionar subcategoria">+</button>
+      </span>
+    </div>`;
+  }).join('');
   setupIcons(box);
 }
 
+/* Grava no draft (sem re-render) o texto ainda digitado nos campos "+ subcategoria" —
+   evita perder a subcategoria quando o usuário digita e clica em Salvar sem apertar Enter. */
+function finCatCommitPendingSubs() {
+  const box = $('fincat-list'); if (!box || !finCatDraft) return;
+  box.querySelectorAll('.fincat-sub-add').forEach((inp) => {
+    const i = +inp.dataset.i, v = (inp.value || '').trim();
+    if (isNaN(i) || !finCatDraft[i] || !v) return;
+    finCatDraft[i].subcategorias = finCatDraft[i].subcategorias || [];
+    if (finCatDraft[i].subcategorias.indexOf(v) < 0) finCatDraft[i].subcategorias.push(v);
+    inp.value = '';
+  });
+}
+
+/* Adiciona a subcategoria digitada na categoria i, re-renderiza e mantém o foco p/ digitar a próxima. */
+function finCatAddSub(i) {
+  const box = $('fincat-list'); if (!box || isNaN(i) || !finCatDraft || !finCatDraft[i]) return;
+  const inp = box.querySelector('.fincat-sub-add[data-i="' + i + '"]');
+  const v = inp ? (inp.value || '').trim() : '';
+  if (!v) { if (inp) inp.focus(); return; }
+  finCatDraft[i].subcategorias = finCatDraft[i].subcategorias || [];
+  if (finCatDraft[i].subcategorias.indexOf(v) < 0) finCatDraft[i].subcategorias.push(v);
+  renderFinCatEditor();
+  const again = box.querySelector('.fincat-sub-add[data-i="' + i + '"]');
+  if (again) again.focus();
+}
+
 function saveFinCatEditor() {
+  finCatCommitPendingSubs();
   const rows = getFinCatDraft();
   const seen = {}, out = [];
   for (const r of rows) {
@@ -324,13 +370,14 @@ function saveFinCatEditor() {
     if (seen[nome]) { setFinCatStatus('Categoria repetida: ' + nome, 'err'); return; }
     seen[nome] = 1;
     const subcategorias = Array.from(new Set((r.subcategorias || []).map((s) => (s || '').trim()).filter(Boolean)));
-    out.push({ nome, tipo: r.tipo === 'receita' ? 'receita' : 'despesa', icone: r.icone || '', subcategorias });
+    out.push({ nome, tipo: r.tipo === 'receita' ? 'receita' : 'despesa', icone: r.icone || '', cor: r.cor || '', subcategorias });
   }
   if (!out.length) { setFinCatStatus('Defina ao menos uma categoria.', 'err'); return; }
   state.finConfig = { categorias: out };
   touchProfile();
   saveState();
   finCatDraft = null;
+  finCatPickerOpen = -1;
   renderFinCatEditor();
   renderFin();
   setFinCatStatus('Categorias salvas.', 'ok');
@@ -376,15 +423,19 @@ function setupFinCatUI() {
   box.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || !e.target.classList.contains('fincat-sub-add')) return;
     e.preventDefault();
-    const i = +e.target.dataset.i, v = e.target.value.trim();
-    if (isNaN(i) || !finCatDraft || !finCatDraft[i] || !v) return;
-    finCatDraft[i].subcategorias = finCatDraft[i].subcategorias || [];
-    if (finCatDraft[i].subcategorias.indexOf(v) < 0) finCatDraft[i].subcategorias.push(v);
-    renderFinCatEditor();
+    finCatAddSub(+e.target.dataset.i);
   });
   box.addEventListener('click', (e) => {
+    const badge = e.target.closest('.fincat-badge');
+    if (badge) { const i = +badge.dataset.i; finCatPickerOpen = (finCatPickerOpen === i) ? -1 : i; renderFinCatEditor(); return; }
+    const cor = e.target.closest('.fincat-color');
+    if (cor) { const i = +cor.dataset.i; if (finCatDraft && finCatDraft[i]) finCatDraft[i].cor = cor.dataset.cor; renderFinCatEditor(); return; }
+    const ic = e.target.closest('.fincat-icon');
+    if (ic) { const i = +ic.dataset.i; if (finCatDraft && finCatDraft[i]) finCatDraft[i].icone = ic.dataset.ic; renderFinCatEditor(); return; }
+    const addBtn = e.target.closest('.fincat-sub-addbtn');
+    if (addBtn) { finCatAddSub(+addBtn.dataset.i); return; }
     const del = e.target.closest('.fincat-del');
-    if (del) { getFinCatDraft().splice(+del.dataset.i, 1); renderFinCatEditor(); setFinCatStatus(''); return; }
+    if (del) { finCatCommitPendingSubs(); getFinCatDraft().splice(+del.dataset.i, 1); if (finCatPickerOpen === +del.dataset.i) finCatPickerOpen = -1; renderFinCatEditor(); setFinCatStatus(''); return; }
     const subDel = e.target.closest('.fincat-sub-del');
     if (subDel) {
       const i = +subDel.dataset.i, j = +subDel.dataset.j;
@@ -392,10 +443,10 @@ function setupFinCatUI() {
       renderFinCatEditor();
     }
   });
-  $('fincat-add').addEventListener('click', () => { getFinCatDraft().push({ nome: '', tipo: 'despesa', icone: 'more-horizontal', subcategorias: [] }); renderFinCatEditor(); });
+  $('fincat-add').addEventListener('click', () => { finCatCommitPendingSubs(); const d = getFinCatDraft(); d.push({ nome: '', tipo: 'despesa', icone: 'more-horizontal', cor: '#95a5a6', subcategorias: [] }); finCatPickerOpen = -1; renderFinCatEditor(); });
   $('fincat-save').addEventListener('click', saveFinCatEditor);
   $('fincat-reset').addEventListener('click', () => {
     if (!confirm('Restaurar as categorias padrão de Finanças?')) return;
-    finCatDraft = FIN_DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c)); renderFinCatEditor(); setFinCatStatus('');
+    finCatDraft = FIN_DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c)); finCatPickerOpen = -1; renderFinCatEditor(); setFinCatStatus('');
   });
 }

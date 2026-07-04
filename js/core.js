@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v50';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v51';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -50,27 +50,39 @@ function limitsObsText() {
 /* Categorias do módulo Finanças (controle pessoal) — separadas das corporativas acima.
    Configuração efetiva em state.finConfig.categorias (editável, sincroniza como perfil). */
 const FIN_DEFAULT_CATEGORIAS = [
-  { nome: 'Alimentação', tipo: 'despesa', icone: 'utensils', subcategorias: [] },
-  { nome: 'Mercado', tipo: 'despesa', icone: 'shopping-cart', subcategorias: [] },
-  { nome: 'Transporte', tipo: 'despesa', icone: 'car', subcategorias: [] },
-  { nome: 'Moradia', tipo: 'despesa', icone: 'home', subcategorias: [] },
-  { nome: 'Contas & Serviços', tipo: 'despesa', icone: 'file-text', subcategorias: [] },
-  { nome: 'Saúde', tipo: 'despesa', icone: 'heart-pulse', subcategorias: [] },
-  { nome: 'Educação', tipo: 'despesa', icone: 'graduation-cap', subcategorias: [] },
-  { nome: 'Lazer', tipo: 'despesa', icone: 'gamepad-2', subcategorias: [] },
-  { nome: 'Assinaturas', tipo: 'despesa', icone: 'repeat', subcategorias: [] },
-  { nome: 'Vestuário', tipo: 'despesa', icone: 'shirt', subcategorias: [] },
-  { nome: 'Viagem', tipo: 'despesa', icone: 'send', subcategorias: [] },
-  { nome: 'Pets', tipo: 'despesa', icone: 'paw-print', subcategorias: [] },
-  { nome: 'Impostos & Taxas', tipo: 'despesa', icone: 'landmark', subcategorias: [] },
-  { nome: 'Trabalho', tipo: 'despesa', icone: 'briefcase', subcategorias: [] },
-  { nome: 'Pagamento de fatura', tipo: 'despesa', icone: 'credit-card', subcategorias: [] },
-  { nome: 'Outros', tipo: 'despesa', icone: 'more-horizontal', subcategorias: [] },
-  { nome: 'Salário', tipo: 'receita', icone: 'banknote', subcategorias: [] },
-  { nome: 'Freelance', tipo: 'receita', icone: 'laptop', subcategorias: [] },
-  { nome: 'Rendimentos', tipo: 'receita', icone: 'trending-up', subcategorias: [] },
-  { nome: 'Reembolso', tipo: 'receita', icone: 'refresh-cw', subcategorias: [] },
-  { nome: 'Outras receitas', tipo: 'receita', icone: 'plus-circle', subcategorias: [] }
+  { nome: 'Alimentação', tipo: 'despesa', icone: 'utensils', cor: '#e74c3c', subcategorias: [] },
+  { nome: 'Mercado', tipo: 'despesa', icone: 'shopping-cart', cor: '#27ae60', subcategorias: [] },
+  { nome: 'Transporte', tipo: 'despesa', icone: 'car', cor: '#2980b9', subcategorias: [] },
+  { nome: 'Moradia', tipo: 'despesa', icone: 'home', cor: '#8e44ad', subcategorias: [] },
+  { nome: 'Contas & Serviços', tipo: 'despesa', icone: 'file-text', cor: '#16a085', subcategorias: [] },
+  { nome: 'Saúde', tipo: 'despesa', icone: 'heart-pulse', cor: '#e84393', subcategorias: [] },
+  { nome: 'Educação', tipo: 'despesa', icone: 'graduation-cap', cor: '#2c3e50', subcategorias: [] },
+  { nome: 'Lazer', tipo: 'despesa', icone: 'gamepad-2', cor: '#f39c12', subcategorias: [] },
+  { nome: 'Assinaturas', tipo: 'despesa', icone: 'repeat', cor: '#9b59b6', subcategorias: [] },
+  { nome: 'Vestuário', tipo: 'despesa', icone: 'shirt', cor: '#e67e22', subcategorias: [] },
+  { nome: 'Viagem', tipo: 'despesa', icone: 'send', cor: '#1abc9c', subcategorias: [] },
+  { nome: 'Pets', tipo: 'despesa', icone: 'paw-print', cor: '#d35400', subcategorias: [] },
+  { nome: 'Impostos & Taxas', tipo: 'despesa', icone: 'landmark', cor: '#7f8c8d', subcategorias: [] },
+  { nome: 'Trabalho', tipo: 'despesa', icone: 'briefcase', cor: '#34495e', subcategorias: [] },
+  { nome: 'Pagamento de fatura', tipo: 'despesa', icone: 'credit-card', cor: '#c0392b', subcategorias: [] },
+  { nome: 'Outros', tipo: 'despesa', icone: 'more-horizontal', cor: '#95a5a6', subcategorias: [] },
+  { nome: 'Salário', tipo: 'receita', icone: 'banknote', cor: '#2ecc71', subcategorias: [] },
+  { nome: 'Freelance', tipo: 'receita', icone: 'laptop', cor: '#3498db', subcategorias: [] },
+  { nome: 'Rendimentos', tipo: 'receita', icone: 'trending-up', cor: '#00b894', subcategorias: [] },
+  { nome: 'Reembolso', tipo: 'receita', icone: 'refresh-cw', cor: '#0984e3', subcategorias: [] },
+  { nome: 'Outras receitas', tipo: 'receita', icone: 'plus-circle', cor: '#6ab04c', subcategorias: [] }
+];
+
+/* Paleta de cores e ícones oferecidos no editor de categorias de Finanças. */
+const FIN_CAT_COLORS = [
+  '#e74c3c', '#e84393', '#e67e22', '#f39c12', '#f1c40f', '#2ecc71', '#27ae60', '#1abc9c',
+  '#16a085', '#3498db', '#2980b9', '#0984e3', '#9b59b6', '#8e44ad', '#34495e', '#95a5a6'
+];
+const FIN_CAT_ICON_CHOICES = [
+  'utensils', 'shopping-cart', 'car', 'home', 'file-text', 'heart-pulse', 'graduation-cap',
+  'gamepad-2', 'shirt', 'send', 'paw-print', 'briefcase', 'landmark', 'credit-card', 'wallet',
+  'receipt', 'banknote', 'laptop', 'trending-up', 'plus-circle', 'repeat', 'refresh-cw',
+  'calendar', 'camera', 'settings', 'more-horizontal'
 ];
 
 function normalizeFinConfig(cfg) {
@@ -80,6 +92,7 @@ function normalizeFinConfig(cfg) {
         nome: String(c.nome || '').trim(),
         tipo: c.tipo === 'receita' ? 'receita' : 'despesa',
         icone: String(c.icone || '').trim(),
+        cor: String(c.cor || '').trim(),
         subcategorias: Array.from(new Set((Array.isArray(c.subcategorias) ? c.subcategorias : [])
           .map((s) => String(s || '').trim()).filter(Boolean)))
       })).filter((c) => c.nome)
