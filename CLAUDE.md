@@ -204,10 +204,13 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
   projetado de cada mês da competência corrente até a última com tx, destaca meses com parcela;
   clicar troca a competência aberta). Importação **inteligente**: PDF/imagem → `ocrStatement`
   (Gemini, cache `ocrstmt_<hash>`, guard-rail 15MB) — a IA também **categoriza** (escolhe da lista
-  do módulo) e detecta **parcela** (`installmentCurrent`/`Total`); CSV/OFX → `finParseCsv`/
+  do módulo; casamento por `finNormDesc` — tolera acento/caixa diferente da IA, grava o nome
+  canônico da lista) e detecta **parcela** (`installmentCurrent`/`Total`); CSV/OFX → `finParseCsv`/
   `finParseOfx` locais (sem categoria/parcela). Na revisão, `finMatchReembolsaveis` **pré-marca**
   reembolsável nas linhas que casam (mesmos centavos + data ±5d) com um lançamento de
-  `state.reembolso`; ao confirmar, cada linha parcelada gera as **parcelas futuras reais**
+  `finReembolsoPool()` (soma `state.reembolso` **+** `state.history[].reembolso`, senão meses de
+  reembolso já fechados/arquivados ficariam invisíveis pro cruzamento); ao confirmar, cada linha
+  parcelada gera as **parcelas futuras reais**
   (`finParcelasFuturas`, uma por mês, `parcela.grupo` comum), com dedupe por `finParcelaJaExiste`
   (reimportar o mês seguinte não duplica a série). Excluir uma parcela oferece apagar o grupo todo.
   Dedupe geral por `finDedupKey` (data|centavos|descrição normalizada) antes de virar `finTx`.

@@ -119,6 +119,12 @@ try {
   finMatchReembolsaveis(mrows, [{ data:'2026-06-07', valor:100 }]);
   chk('fin_match_reemb', (!!mrows[0].reembMatch) + '|' + (!!mrows[0].reembolsavel) + '|' + (!!mrows[1].reembMatch) + '|' + (!!mrows[2].reembMatch), 'true|true|false|false');
 
+  // pool de reembolso p/ cruzamento: soma o aberto (state.reembolso) com o já arquivado (state.history[].reembolso)
+  state.reembolso = [{ id:'r1', data:'2026-06-05', valor:30 }];
+  state.history = [{ table:'reembolso', reembolso:[{ id:'r2', data:'2026-05-10', valor:70 }] }, { table:'alelo', alelo:[] }];
+  var pool = finReembolsoPool();
+  chk('fin_reembolso_pool', pool.map(function(p){return p.id;}).join(','), 'r1,r2');
+
   // parcelas futuras: gera atual+1..total, uma por mês, grupo comum
   var prow = { data:'2026-06-05', valor:200, tipo:'despesa', categoria:'Mercado', parcela:{ atual:2, total:4, base:'GELADEIRA' } };
   var fut = finParcelasFuturas(prow, { cartaoId:'k1' }, 'g1');

@@ -38,6 +38,12 @@ function finGetCategorias() {
     ? state.finConfig.categorias : FIN_DEFAULT_CATEGORIAS;
 }
 function finCategoriasPorTipo(tipo) { return finGetCategorias().filter((c) => c.tipo === tipo).map((c) => c.nome); }
+/* Lançamentos de reembolso corporativo p/ cruzar com importação: inclui os abertos (state.reembolso)
+   E os já arquivados no histórico (state.history[].reembolso) — um mês fechado não deve ficar invisível. */
+function finReembolsoPool() {
+  const arquivados = (state.history || []).reduce((acc, h) => acc.concat(h.reembolso || []), []);
+  return (state.reembolso || []).concat(arquivados);
+}
 
 /* ---------------- Competência da fatura ----------------
    Compra até o dia efetivo de fechamento entra na fatura que fecha

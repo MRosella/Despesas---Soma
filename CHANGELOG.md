@@ -3,6 +3,19 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v47 — Finanças: corrige categorização/cruzamento de reembolso na importação
+- **Categoria da IA não batia por acento/maiúscula**: `ocrStatementRaw` comparava `category` da IA
+  com a lista de categorias por igualdade EXATA de string — qualquer diferença de acento, caixa ou
+  espaço (ex. IA responde "alimentação" e a lista tem "Alimentação") zerava a categoria. Agora usa
+  `finNormDesc` (mesma normalização do dedupe) pra achar a categoria correspondente e gravar o nome
+  **canônico** da lista.
+- **Cruzamento com reembolso não via meses já fechados**: `finMatchReembolsaveis` só olhava
+  `state.reembolso` (tabela aberta) — se o relatório de reembolso daquele mês já tinha sido
+  fechado/arquivado (`closeTable`), os lançamentos foram para `state.history[].reembolso` e ficavam
+  invisíveis pro cruzamento. Novo getter `finReembolsoPool()` (`js/fin-core.js`) soma os abertos com
+  os arquivados; `onFinImportFile` passa a usar esse pool. Teste novo em `tests/logic.html`. Cache
+  v46→v47.
+
 ## v46 — Finanças: importação inteligente (reembolso + categoria + parcelas) e fatura multi-mês
 - **Cruzamento com o reembolso**: ao importar extrato/fatura num cartão, `finMatchReembolsaveis`
   (em `js/fin-core.js`) casa cada despesa com um lançamento de `state.reembolso` por **mesmos

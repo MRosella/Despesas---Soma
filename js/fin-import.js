@@ -78,23 +78,26 @@ async function ocrStatementRaw(blob, mime) {
       }
     }
   );
-  const catsDespSet = catsDesp;
-  const catsRecSet = catsRec;
   const stripParc = (s) => String(s || '').replace(/\bparc(ela)?\b\.?/gi, '')
     .replace(/\b\d{1,2}\s*(\/|de)\s*\d{1,2}\b/gi, '').replace(/\s{2,}/g, ' ').trim();
+  // casa a categoria da IA com a lista mesmo se vier com acento/maiúscula/espaço diferente
+  const acharCategoria = (catIA, lista) => {
+    const alvo = finNormDesc(catIA);
+    if (!alvo) return '';
+    return lista.find((c) => finNormDesc(c) === alvo) || '';
+  };
   const txs = (data.transacoes || [])
     .filter((t) => t && typeof t.amount === 'number' && isFinite(t.amount) && t.amount !== 0)
     .map((t) => {
       const tipo = t.kind === 'credito' ? 'receita' : 'despesa';
       const descricao = (t.description || '').trim();
-      const catValidas = tipo === 'receita' ? catsRecSet : catsDespSet;
-      const catIA = (t.category || '').trim();
+      const catValidas = tipo === 'receita' ? catsRec : catsDesp;
       const row = {
         data: (t.date && /^\d{4}-\d{2}-\d{2}$/.test(t.date)) ? t.date : '',
         descricao,
         valor: Math.round(Math.abs(t.amount) * 100) / 100,
         tipo,
-        categoria: catValidas.indexOf(catIA) >= 0 ? catIA : ''
+        categoria: acharCategoria(t.category, catValidas)
       };
       const atual = Math.round(t.installmentCurrent || 0);
       const total = Math.round(t.installmentTotal || 0);
@@ -239,8 +242,8 @@ async function onFinImportFile(file) {
     };
     const drows = finImportDraft.rows;
     finMarcarDuplicados(drows, state.finTx || [], destino);
-    // cruza com o reembolso corporativo (só faz sentido em cartão) e dedupe de parcelas já lançadas
-    if (destino.cartaoId) finMatchReembolsaveis(drows, state.reembolso || []);
+    // cruza com o reembolso corporativo (só faz sentido em cartão; inclui meses já arquivados) e dedupe de parcelas já lançadas
+    if (destino.cartaoId) finMatchReembolsaveis(drows, finReembolsoPool());
     for (const r of drows) {
       if (r.parcela && finParcelaJaExiste(state.finTx || [], destino, r.parcela.base, r.parcela.total, r.parcela.atual)) {
         r.dup = true; r.incluir = false;
