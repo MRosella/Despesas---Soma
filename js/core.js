@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v49';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v50';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -50,34 +50,39 @@ function limitsObsText() {
 /* Categorias do módulo Finanças (controle pessoal) — separadas das corporativas acima.
    Configuração efetiva em state.finConfig.categorias (editável, sincroniza como perfil). */
 const FIN_DEFAULT_CATEGORIAS = [
-  { nome: 'Alimentação', tipo: 'despesa' },
-  { nome: 'Mercado', tipo: 'despesa' },
-  { nome: 'Transporte', tipo: 'despesa' },
-  { nome: 'Moradia', tipo: 'despesa' },
-  { nome: 'Contas & Serviços', tipo: 'despesa' },
-  { nome: 'Saúde', tipo: 'despesa' },
-  { nome: 'Educação', tipo: 'despesa' },
-  { nome: 'Lazer', tipo: 'despesa' },
-  { nome: 'Assinaturas', tipo: 'despesa' },
-  { nome: 'Vestuário', tipo: 'despesa' },
-  { nome: 'Viagem', tipo: 'despesa' },
-  { nome: 'Pets', tipo: 'despesa' },
-  { nome: 'Impostos & Taxas', tipo: 'despesa' },
-  { nome: 'Trabalho', tipo: 'despesa' },
-  { nome: 'Pagamento de fatura', tipo: 'despesa' },
-  { nome: 'Outros', tipo: 'despesa' },
-  { nome: 'Salário', tipo: 'receita' },
-  { nome: 'Freelance', tipo: 'receita' },
-  { nome: 'Rendimentos', tipo: 'receita' },
-  { nome: 'Reembolso', tipo: 'receita' },
-  { nome: 'Outras receitas', tipo: 'receita' }
+  { nome: 'Alimentação', tipo: 'despesa', icone: 'utensils', subcategorias: [] },
+  { nome: 'Mercado', tipo: 'despesa', icone: 'shopping-cart', subcategorias: [] },
+  { nome: 'Transporte', tipo: 'despesa', icone: 'car', subcategorias: [] },
+  { nome: 'Moradia', tipo: 'despesa', icone: 'home', subcategorias: [] },
+  { nome: 'Contas & Serviços', tipo: 'despesa', icone: 'file-text', subcategorias: [] },
+  { nome: 'Saúde', tipo: 'despesa', icone: 'heart-pulse', subcategorias: [] },
+  { nome: 'Educação', tipo: 'despesa', icone: 'graduation-cap', subcategorias: [] },
+  { nome: 'Lazer', tipo: 'despesa', icone: 'gamepad-2', subcategorias: [] },
+  { nome: 'Assinaturas', tipo: 'despesa', icone: 'repeat', subcategorias: [] },
+  { nome: 'Vestuário', tipo: 'despesa', icone: 'shirt', subcategorias: [] },
+  { nome: 'Viagem', tipo: 'despesa', icone: 'send', subcategorias: [] },
+  { nome: 'Pets', tipo: 'despesa', icone: 'paw-print', subcategorias: [] },
+  { nome: 'Impostos & Taxas', tipo: 'despesa', icone: 'landmark', subcategorias: [] },
+  { nome: 'Trabalho', tipo: 'despesa', icone: 'briefcase', subcategorias: [] },
+  { nome: 'Pagamento de fatura', tipo: 'despesa', icone: 'credit-card', subcategorias: [] },
+  { nome: 'Outros', tipo: 'despesa', icone: 'more-horizontal', subcategorias: [] },
+  { nome: 'Salário', tipo: 'receita', icone: 'banknote', subcategorias: [] },
+  { nome: 'Freelance', tipo: 'receita', icone: 'laptop', subcategorias: [] },
+  { nome: 'Rendimentos', tipo: 'receita', icone: 'trending-up', subcategorias: [] },
+  { nome: 'Reembolso', tipo: 'receita', icone: 'refresh-cw', subcategorias: [] },
+  { nome: 'Outras receitas', tipo: 'receita', icone: 'plus-circle', subcategorias: [] }
 ];
 
 function normalizeFinConfig(cfg) {
   const arr = (cfg && Array.isArray(cfg.categorias)) ? cfg.categorias : null;
   const list = (arr && arr.length)
-    ? arr.map((c) => ({ nome: String(c.nome || '').trim(), tipo: c.tipo === 'receita' ? 'receita' : 'despesa' }))
-         .filter((c) => c.nome)
+    ? arr.map((c) => ({
+        nome: String(c.nome || '').trim(),
+        tipo: c.tipo === 'receita' ? 'receita' : 'despesa',
+        icone: String(c.icone || '').trim(),
+        subcategorias: Array.from(new Set((Array.isArray(c.subcategorias) ? c.subcategorias : [])
+          .map((s) => String(s || '').trim()).filter(Boolean)))
+      })).filter((c) => c.nome)
     : FIN_DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c));
   return { categorias: list.length ? list : FIN_DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c)) };
 }
@@ -240,7 +245,25 @@ const ICONS = {
   wallet: '<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/>',
   'credit-card': '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
   landmark: '<line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/>',
-  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>'
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
+  /* ícones das categorias do módulo Finanças (finConfig.categorias[].icone) */
+  utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+  'shopping-cart': '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>',
+  car: '<path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a1 1 0 0 0-.8-.4H5.24a2 2 0 0 0-1.8 1.1l-.8 1.63A6 6 0 0 0 2 12.42V16h2"/><circle cx="6.5" cy="16.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/>',
+  home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  'file-text': '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/>',
+  'heart-pulse': '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/><path d="M3.22 8.5h1.5l1.3-2 1.94 4 1.3-2h9.5"/>',
+  'graduation-cap': '<path d="M21.42 10.92 12 5.5 2.58 10.92a1 1 0 0 0 0 1.75l9.42 5.83 9.42-5.83a1 1 0 0 0 0-1.75Z"/><path d="M22 10v6"/><path d="M6 12.5V17c0 1.1 2.7 3 6 3s6-1.9 6-3v-4.5"/>',
+  'gamepad-2': '<line x1="6" x2="10" y1="12" y2="12"/><line x1="8" x2="8" y1="10" y2="14"/><circle cx="15" cy="13" r="1"/><circle cx="18" cy="11" r="1"/><rect width="20" height="12" x="2" y="6" rx="2"/>',
+  shirt: '<path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23Z"/>',
+  send: '<path d="M2 12 20 4l-7 18-3-8-8-2Z"/>',
+  'paw-print': '<circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="15" r="2"/><path d="M9 10a5 5 0 0 0-5 5v3.5a3.5 3.5 0 0 0 6.84 1.05A4.5 4.5 0 0 1 15 16.5v-3a5 5 0 0 0-5-5Z"/>',
+  briefcase: '<rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+  'more-horizontal': '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  banknote: '<rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01"/><path d="M18 12h.01"/>',
+  laptop: '<path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m-1 0h18l1.28 2.55a1 1 0 0 1-.9 1.45H2.62a1 1 0 0 1-.9-1.45Z"/>',
+  'trending-up': '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
+  'plus-circle': '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>'
 };
 function icon(name, size) {
   const p = ICONS[name]; if (!p) return '';

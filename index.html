@@ -478,7 +478,8 @@
         <div class="card-head"><h2>Finanças — categorias</h2></div>
         <div class="card-body">
           <p class="hint" style="margin-top:0">Categorias das suas transações pessoais (tela <b>Finanças</b>),
-            separadas das categorias de reembolso acima. Renomear não altera transações já salvas.</p>
+            separadas das categorias de reembolso acima. Renomear não altera transações já salvas.
+            Use "+ subcategoria" em cada categoria para detalhar melhor os lançamentos.</p>
           <div id="fincat-list"></div>
           <div class="sync-actions">
             <button class="btn btn-ghost" id="fincat-add" type="button">Adicionar categoria</button>
@@ -652,6 +653,10 @@
       <div class="field">
         <label for="fm-categoria">Categoria</label>
         <select id="fm-categoria"></select>
+      </div>
+      <div class="field" id="fm-subcategoria-row" style="display:none">
+        <label for="fm-subcategoria">Subcategoria</label>
+        <select id="fm-subcategoria"></select>
       </div>
       <div class="field">
         <label for="fm-destino">Conta / Cartão</label>

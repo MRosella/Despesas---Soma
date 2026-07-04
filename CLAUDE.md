@@ -62,8 +62,8 @@ https://mrosella.github.io/Despesas---Soma/
   driveFolders:{reembolso,alelo},    // RAÍZES SEPARADAS no Drive (reembolso × cartão Santander)
   pending:[], driveKnown:{}, driveDismissed:{},  // varredura do Drive: pendentes p/ revisar; ids já vistos; ids descartados
   config:{ categorias:[{nome,limite,grupo}] },  // editável em Configurações
-  finContas:[], finCartoes:[], finTx:[],  // MÓDULO FINANÇAS (pessoal): contas {nome,instituicao,tipo,saldoInicial,arquivada}, cartões {nome,bandeira,limite,diaFechamento,diaVencimento}, transações {data,descricao,valor,tipo:'receita'|'despesa',categoria,contaId|cartaoId,reembolsavel,pagamentoCartaoId,origemImport, parcela?:{atual,total,grupo,base}}
-  finConfig:{ categorias:[{nome,tipo}] },  // categorias PRÓPRIAS de Finanças (≠ config.categorias do reembolso)
+  finContas:[], finCartoes:[], finTx:[],  // MÓDULO FINANÇAS (pessoal): contas {nome,instituicao,tipo,saldoInicial,arquivada}, cartões {nome,bandeira,limite,diaFechamento,diaVencimento}, transações {data,descricao,valor,tipo:'receita'|'despesa',categoria,subcategoria?,contaId|cartaoId,reembolsavel,pagamentoCartaoId,origemImport, parcela?:{atual,total,grupo,base}}
+  finConfig:{ categorias:[{nome,tipo,icone,subcategorias:[nome]}] },  // categorias PRÓPRIAS de Finanças (≠ config.categorias do reembolso); icone = nome no mapa ICONS (core.js); subcategorias é lista simples de nomes, sem tipo/ícone próprio (herdam da categoria-mãe)
   finArquivo:{},                     // agregados de anos arquivados: {'2025':{receitas,despesas,porCategoria}}
   tomb:{reembolso:{},alelo:{},finContas:{},finCartoes:{},finTx:{}},  // lápides de deleção (id->updatedAt)
   meta:{updatedAt, profileUpdatedAt} }
@@ -218,6 +218,17 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
   Excluir conta/cartão oferece excluir as tx vinculadas (lápides em massa) — nunca deixa tx órfã. Arquivamento anual em
   Configurações (`finArquivarAno` + backup .json via `downloadBlob`). Backup/sync já incluem os
   ramos `fin*` (via `currentDoc`/`applyDoc`/`mergeDocs`).
+- **Ícones + subcategorias por categoria** (editor em Configurações, `renderFinCatEditor`/`saveFinCatEditor`
+  em `fin-modal.js`): cada categoria tem `icone` (nome no mapa `ICONS` de `core.js`, escolhido de fábrica em
+  `FIN_DEFAULT_CATEGORIAS` — ex. `utensils` p/ Alimentação, `car` p/ Transporte; categoria nova criada pelo
+  usuário recebe `more-horizontal`, sem picker de ícone) e `subcategorias` (lista simples de nomes, sem tipo
+  próprio — herdam da categoria-mãe), gerenciadas inline no editor ("+ subcategoria", Enter adiciona, ✕
+  remove). `finCatIcon(nome)`/`finSubcategorias(nome)` (`fin-core.js`) leem essas listas. No modal de
+  transação, `#fm-subcategoria-row` só aparece quando a categoria escolhida tem subcategorias cadastradas
+  (`populateFinSubSelect`, chamado ao trocar tipo/categoria); `finTx.subcategoria` é opcional. Exibida junto
+  da categoria (com ícone) na lista de transações, na fatura e no resumo do dashboard — não entra no
+  agrupamento `finResumoMes`/`porCategoria` (que continua só por categoria-mãe) nem na importação/aprendizado
+  de categoria (escopo deliberadamente restrito à categoria).
 - **Aprendizado de categoria por descrição** (`finAprenderCategoria`, sem storage extra — deriva de
   `state.finTx` a cada chamada): agrupa descrições por `finDescChave` (= `finNormDesc` sem dígitos,
   p/ casar "UBER *TRIP 1234" com "...5678") e retorna a categoria **mais frequente** já usada nessa

@@ -104,8 +104,9 @@ function renderFinDashboard() {
   if (box) {
     const arr = Object.keys(res.porCategoria).map((c) => [c, res.porCategoria[c]]).sort((a, b) => b[1] - a[1]);
     box.innerHTML = arr.length
-      ? arr.map(([cat, val]) => `<span class="cat-chip"><span class="cc-name">${escapeHtml(cat)}</span><span class="cc-val">${formatMoney(val)}</span></span>`).join('')
+      ? arr.map(([cat, val]) => `<span class="cat-chip">${finCatIcon(cat) ? `<span class="cc-ic" data-icon="${finCatIcon(cat)}" data-size="14"></span>` : ''}<span class="cc-name">${escapeHtml(cat)}</span><span class="cc-val">${formatMoney(val)}</span></span>`).join('')
       : '<span class="cat-empty">Sem despesas neste mês.</span>';
+    setupIcons(box);
   }
   const gt = $('fin-gastos-total'); if (gt) gt.textContent = formatMoney(res.despesas);
 }
@@ -118,7 +119,7 @@ function finTxLi(t) {
     <div class="e-main">
       <div class="e-desc">${escapeHtml(t.descricao || '(sem descrição)')}</div>
       <div class="e-meta">
-        <span class="cat-tag">${escapeHtml(t.categoria || '—')}</span>
+        <span class="cat-tag">${t.categoria && finCatIcon(t.categoria) ? `<span class="ct-ic" data-icon="${finCatIcon(t.categoria)}" data-size="12"></span>` : ''}${escapeHtml(t.categoria || '—')}${t.subcategoria ? ' · ' + escapeHtml(t.subcategoria) : ''}</span>
         ${fmtDateBR(t.data)} · ${escapeHtml(finDestinoNome(t))}
         ${t.reembolsavel ? '<span class="fin-tag-reemb">↩ reembolsável</span>' : ''}
       </div>
@@ -287,7 +288,7 @@ function renderFinFatura() {
       <div class="e-main">
         <div class="e-desc">${escapeHtml(t.descricao || '(sem descrição)')}</div>
         <div class="e-meta">
-          <span class="cat-tag">${escapeHtml(t.categoria || '—')}</span>
+          <span class="cat-tag">${t.categoria && finCatIcon(t.categoria) ? `<span class="ct-ic" data-icon="${finCatIcon(t.categoria)}" data-size="12"></span>` : ''}${escapeHtml(t.categoria || '—')}${t.subcategoria ? ' · ' + escapeHtml(t.subcategoria) : ''}</span>
           ${fmtDateBR(t.data)}
           ${t.reembolsavel ? '<span class="fin-tag-reemb">↩ reembolsável</span>' : ''}
         </div>

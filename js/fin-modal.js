@@ -15,6 +15,7 @@ function populateFinSelects() {
     mc.innerHTML = '<option value="">Selecione…</option>' + cats.map((c) => `<option>${escapeHtml(c)}</option>`).join('');
     if (cats.indexOf(cur) >= 0) mc.value = cur;
   }
+  populateFinSubSelect();
   const md = $('fm-destino');
   if (md) {
     const cur = md.value;
@@ -36,6 +37,18 @@ function finToggleReembRow() {
   row.style.display = (dest.startsWith('k:') && !isPagamento) ? '' : 'none';
 }
 
+/* Subcategoria depende da categoria escolhida; some quando a categoria não tem nenhuma cadastrada. */
+function populateFinSubSelect() {
+  const ms = $('fm-subcategoria'); const row = $('fm-subcategoria-row');
+  if (!ms || !row) return;
+  const cur = ms.value;
+  const cat = $('fm-categoria') ? $('fm-categoria').value : '';
+  const subs = cat ? finSubcategorias(cat) : [];
+  row.style.display = subs.length ? '' : 'none';
+  ms.innerHTML = '<option value="">—</option>' + subs.map((s) => `<option>${escapeHtml(s)}</option>`).join('');
+  if (subs.indexOf(cur) >= 0) ms.value = cur;
+}
+
 /* ---------------- Modal: transação ---------------- */
 function openFinTxModal(id, prefill) {
   const isEdit = !!id;
@@ -50,6 +63,8 @@ function openFinTxModal(id, prefill) {
   $('fm-pagamento-cartao').value = e.pagamentoCartaoId || '';
   populateFinSelects();
   $('fm-categoria').value = e.categoria || '';
+  populateFinSubSelect();
+  $('fm-subcategoria').value = e.subcategoria || '';
   $('fm-destino').value = e.cartaoId ? ('k:' + e.cartaoId) : (e.contaId ? ('c:' + e.contaId) : '');
   $('fm-reembolsavel').checked = !!e.reembolsavel;
   finToggleReembRow();
@@ -77,6 +92,7 @@ function saveFinTx() {
   const descricao = $('fm-descricao').value.trim();
   const valor = parseMoney($('fm-valor').value);
   const categoria = $('fm-categoria').value;
+  const subcategoria = $('fm-subcategoria') ? ($('fm-subcategoria').value || '') : '';
   const dest = $('fm-destino').value || '';
   const pagamentoCartaoId = $('fm-pagamento-cartao').value || '';
 
@@ -99,7 +115,7 @@ function saveFinTx() {
   const old = id ? (state.finTx || []).find((x) => x.id === id) : null;
   const entry = {
     id: id || uid(),
-    data, descricao, valor, tipo, categoria, contaId, cartaoId,
+    data, descricao, valor, tipo, categoria, subcategoria, contaId, cartaoId,
     reembolsavel: cartaoId ? $('fm-reembolsavel').checked : false,
     pagamentoCartaoId,
     origemImport: (old && old.origemImport) || '',
@@ -258,6 +274,7 @@ function setupFinModals() {
   $('fm-cancel').addEventListener('click', closeFinTxModal);
   $('fm-delete').addEventListener('click', deleteFinTx);
   $('fm-tipo').addEventListener('change', populateFinSelects);
+  $('fm-categoria').addEventListener('change', populateFinSubSelect);
   $('fm-destino').addEventListener('change', finToggleReembRow);
   $('fm-descricao').addEventListener('blur', finSugerirCategoriaAoDigitar);
   maskCurrencyEl($('fm-valor'));
@@ -283,13 +300,19 @@ function renderFinCatEditor() {
   const rows = getFinCatDraft();
   box.innerHTML = rows.map((c, i) => `
     <div class="cat-row" data-i="${i}">
+      <span class="fincat-ic" data-icon="${escapeHtml(c.icone || 'more-horizontal')}" data-size="18"></span>
       <input type="text" class="fincat-nome" data-i="${i}" value="${escapeHtml(c.nome)}" placeholder="Categoria" autocapitalize="words" />
       <select class="fincat-tipo" data-i="${i}">
         <option value="despesa"${c.tipo !== 'receita' ? ' selected' : ''}>Despesa</option>
         <option value="receita"${c.tipo === 'receita' ? ' selected' : ''}>Receita</option>
       </select>
       <button type="button" class="hist-btn danger fincat-del" data-i="${i}" aria-label="Remover categoria">✕</button>
+    </div>
+    <div class="fincat-subs" data-i="${i}">
+      ${(c.subcategorias || []).map((s, j) => `<span class="cat-chip fincat-sub-chip">${escapeHtml(s)}<button type="button" class="fincat-sub-del" data-i="${i}" data-j="${j}" aria-label="Remover subcategoria">✕</button></span>`).join('')}
+      <input type="text" class="fincat-sub-add" data-i="${i}" placeholder="+ subcategoria" autocapitalize="words" />
     </div>`).join('');
+  setupIcons(box);
 }
 
 function saveFinCatEditor() {
@@ -300,7 +323,8 @@ function saveFinCatEditor() {
     if (!nome) continue;
     if (seen[nome]) { setFinCatStatus('Categoria repetida: ' + nome, 'err'); return; }
     seen[nome] = 1;
-    out.push({ nome, tipo: r.tipo === 'receita' ? 'receita' : 'despesa' });
+    const subcategorias = Array.from(new Set((r.subcategorias || []).map((s) => (s || '').trim()).filter(Boolean)));
+    out.push({ nome, tipo: r.tipo === 'receita' ? 'receita' : 'despesa', icone: r.icone || '', subcategorias });
   }
   if (!out.length) { setFinCatStatus('Defina ao menos uma categoria.', 'err'); return; }
   state.finConfig = { categorias: out };
@@ -349,11 +373,26 @@ function setupFinCatUI() {
     if (t.classList.contains('fincat-nome')) finCatDraft[i].nome = t.value;
     else if (t.classList.contains('fincat-tipo')) finCatDraft[i].tipo = t.value;
   });
-  box.addEventListener('click', (e) => {
-    const del = e.target.closest('.fincat-del'); if (!del) return;
-    getFinCatDraft().splice(+del.dataset.i, 1); renderFinCatEditor(); setFinCatStatus('');
+  box.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !e.target.classList.contains('fincat-sub-add')) return;
+    e.preventDefault();
+    const i = +e.target.dataset.i, v = e.target.value.trim();
+    if (isNaN(i) || !finCatDraft || !finCatDraft[i] || !v) return;
+    finCatDraft[i].subcategorias = finCatDraft[i].subcategorias || [];
+    if (finCatDraft[i].subcategorias.indexOf(v) < 0) finCatDraft[i].subcategorias.push(v);
+    renderFinCatEditor();
   });
-  $('fincat-add').addEventListener('click', () => { getFinCatDraft().push({ nome: '', tipo: 'despesa' }); renderFinCatEditor(); });
+  box.addEventListener('click', (e) => {
+    const del = e.target.closest('.fincat-del');
+    if (del) { getFinCatDraft().splice(+del.dataset.i, 1); renderFinCatEditor(); setFinCatStatus(''); return; }
+    const subDel = e.target.closest('.fincat-sub-del');
+    if (subDel) {
+      const i = +subDel.dataset.i, j = +subDel.dataset.j;
+      if (finCatDraft && finCatDraft[i] && finCatDraft[i].subcategorias) finCatDraft[i].subcategorias.splice(j, 1);
+      renderFinCatEditor();
+    }
+  });
+  $('fincat-add').addEventListener('click', () => { getFinCatDraft().push({ nome: '', tipo: 'despesa', icone: 'more-horizontal', subcategorias: [] }); renderFinCatEditor(); });
   $('fincat-save').addEventListener('click', saveFinCatEditor);
   $('fincat-reset').addEventListener('click', () => {
     if (!confirm('Restaurar as categorias padrão de Finanças?')) return;
