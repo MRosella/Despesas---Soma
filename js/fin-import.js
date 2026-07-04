@@ -30,6 +30,8 @@ async function ocrStatementRaw(blob, mime) {
   if (blob.size > 15 * 1024 * 1024) throw new Error('Arquivo muito grande para a IA (máx. ~15 MB). Exporte em CSV/OFX no app do banco.');
   const b64 = String(await blobToDataUrl(blob)).split(',')[1];
   const mimeType = mime || blob.type || 'application/pdf';
+  const catsDesp = (typeof finCategoriasPorTipo === 'function') ? finCategoriasPorTipo('despesa') : [];
+  const catsRec = (typeof finCategoriasPorTipo === 'function') ? finCategoriasPorTipo('receita') : [];
   const prompt = [
     'Você é um leitor de faturas de cartão de crédito e extratos bancários brasileiros.',
     'Extraia TODAS as transações/lançamentos do documento. Responda SOMENTE no JSON do schema.',
@@ -37,6 +39,13 @@ async function ocrStatementRaw(blob, mime) {
     '- Para cada transação: date (AAAA-MM-DD; deduza o ano pelo contexto do documento),',
     '  description (descrição/estabelecimento como aparece), amount (valor em reais, número POSITIVO),',
     '  kind: "debito" para gastos/saídas/compras, "credito" para receitas/entradas/estornos/pagamentos recebidos.',
+    '- category: classifique a transação escolhendo EXATAMENTE UMA das categorias abaixo (não invente outras).',
+    '  Categorias de despesa: ' + (catsDesp.join(', ') || '(nenhuma)') + '.',
+    '  Categorias de receita: ' + (catsRec.join(', ') || '(nenhuma)') + '.',
+    '  Se não tiver certeza, deixe category vazio.',
+    '- installmentCurrent / installmentTotal: quando a linha indicar PARCELAMENTO (ex.: "PARC 02/12",',
+    '  "2/12", "2 DE 12", "PARCELA 2 DE 12"), preencha o número da parcela atual e o total de parcelas.',
+    '  Se não for parcelado, deixe ambos nulos. amount deve ser o valor DA PARCELA (mensal), não o total da compra.',
     'Ignore linhas de saldo, subtotais, totais, limites, juros informativos e cabeçalhos.',
     'Em fatura de cartão, ignore a linha "pagamento recebido" da fatura anterior apenas se for repetição do resumo; se for lançamento real, inclua como credito.'
   ].join('\n');
@@ -58,7 +67,10 @@ async function ocrStatementRaw(blob, mime) {
                 date: { type: 'STRING', nullable: true },
                 description: { type: 'STRING', nullable: true },
                 amount: { type: 'NUMBER', nullable: true },
-                kind: { type: 'STRING', enum: ['debito', 'credito'], nullable: true }
+                kind: { type: 'STRING', enum: ['debito', 'credito'], nullable: true },
+                category: { type: 'STRING', nullable: true },
+                installmentCurrent: { type: 'NUMBER', nullable: true },
+                installmentTotal: { type: 'NUMBER', nullable: true }
               }
             }
           }
@@ -66,14 +78,31 @@ async function ocrStatementRaw(blob, mime) {
       }
     }
   );
+  const catsDespSet = catsDesp;
+  const catsRecSet = catsRec;
+  const stripParc = (s) => String(s || '').replace(/\bparc(ela)?\b\.?/gi, '')
+    .replace(/\b\d{1,2}\s*(\/|de)\s*\d{1,2}\b/gi, '').replace(/\s{2,}/g, ' ').trim();
   const txs = (data.transacoes || [])
     .filter((t) => t && typeof t.amount === 'number' && isFinite(t.amount) && t.amount !== 0)
-    .map((t) => ({
-      data: (t.date && /^\d{4}-\d{2}-\d{2}$/.test(t.date)) ? t.date : '',
-      descricao: (t.description || '').trim(),
-      valor: Math.round(Math.abs(t.amount) * 100) / 100,
-      tipo: t.kind === 'credito' ? 'receita' : 'despesa'
-    }));
+    .map((t) => {
+      const tipo = t.kind === 'credito' ? 'receita' : 'despesa';
+      const descricao = (t.description || '').trim();
+      const catValidas = tipo === 'receita' ? catsRecSet : catsDespSet;
+      const catIA = (t.category || '').trim();
+      const row = {
+        data: (t.date && /^\d{4}-\d{2}-\d{2}$/.test(t.date)) ? t.date : '',
+        descricao,
+        valor: Math.round(Math.abs(t.amount) * 100) / 100,
+        tipo,
+        categoria: catValidas.indexOf(catIA) >= 0 ? catIA : ''
+      };
+      const atual = Math.round(t.installmentCurrent || 0);
+      const total = Math.round(t.installmentTotal || 0);
+      if (total > 1 && atual >= 1 && atual <= total) {
+        row.parcela = { atual, total, base: stripParc(descricao) || descricao };
+      }
+      return row;
+    });
   return { docType: data.docType || '', transacoes: txs };
 }
 
@@ -199,19 +228,30 @@ async function onFinImportFile(file) {
       rows = res.transacoes;
     }
     if (!rows.length) { finImpStatus('Nenhuma transação encontrada no arquivo.', 'warn'); return; }
-    const catPadrao = '';
     finImportDraft = {
       destino,
-      rows: rows.map((r) => Object.assign({}, r, {
-        categoria: catPadrao,
+      rows: rows.map((r) => Object.assign({
+        categoria: '',
         reembolsavel: false,
         incluir: true,
         dup: false
-      }))
+      }, r))   // preserva categoria/parcela vindos da IA
     };
-    finMarcarDuplicados(finImportDraft.rows, state.finTx || [], destino);
-    const dups = finImportDraft.rows.filter((r) => r.dup).length;
-    finImpStatus(rows.length + ' transação(ões) encontrada(s)' + (dups ? ' — ' + dups + ' já existente(s) desmarcada(s)' : '') + '. Revise abaixo.', 'ok');
+    const drows = finImportDraft.rows;
+    finMarcarDuplicados(drows, state.finTx || [], destino);
+    // cruza com o reembolso corporativo (só faz sentido em cartão) e dedupe de parcelas já lançadas
+    if (destino.cartaoId) finMatchReembolsaveis(drows, state.reembolso || []);
+    for (const r of drows) {
+      if (r.parcela && finParcelaJaExiste(state.finTx || [], destino, r.parcela.base, r.parcela.total, r.parcela.atual)) {
+        r.dup = true; r.incluir = false;
+      }
+    }
+    const dups = drows.filter((r) => r.dup).length;
+    const casados = drows.filter((r) => r.reembMatch).length;
+    finImpStatus(rows.length + ' transação(ões) encontrada(s)'
+      + (dups ? ' — ' + dups + ' já existente(s) desmarcada(s)' : '')
+      + (casados ? ' · ' + casados + ' casada(s) com reembolso' : '')
+      + '. Revise abaixo.', 'ok');
     renderFinReview();
   } catch (e) {
     console.error(e);
@@ -229,10 +269,13 @@ function renderFinReview() {
   const box = $('fin-review-list');
   box.innerHTML = finImportDraft.rows.map((r, i) => {
     const cats = r.tipo === 'receita' ? catsR : catsD;
+    const futuras = r.parcela ? (r.parcela.total - r.parcela.atual) : 0;
     return `
     <div class="fin-rev-row${r.dup ? ' dup' : ''}" data-i="${i}">
       <input type="checkbox" class="frv-inc" data-i="${i}"${r.incluir ? ' checked' : ''} />
-      <div class="frv-desc">${escapeHtml(r.descricao)}</div>
+      <div class="frv-desc">${escapeHtml(r.descricao)}
+        ${r.parcela ? `<span class="frv-parc">parcela ${r.parcela.atual}/${r.parcela.total}${futuras > 0 ? ' · +' + futuras + ' futura' + (futuras > 1 ? 's' : '') : ''}</span>` : ''}
+      </div>
       <div class="frv-val${r.tipo === 'receita' ? ' receita' : ''}">${r.tipo === 'receita' ? '+' : ''}${formatMoney(r.valor)}</div>
       <div class="frv-meta">
         ${fmtDateBR(r.data)}
@@ -240,7 +283,7 @@ function renderFinReview() {
           <option value="">Categoria…</option>
           ${cats.map((c) => `<option${r.categoria === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}
         </select>
-        ${isCartao && r.tipo !== 'receita' ? `<label><input type="checkbox" class="frv-reemb" data-i="${i}"${r.reembolsavel ? ' checked' : ''} /> ↩ reemb.</label>` : ''}
+        ${isCartao && r.tipo !== 'receita' ? `<label class="${r.reembMatch ? 'frv-reemb-match' : ''}"><input type="checkbox" class="frv-reemb" data-i="${i}"${r.reembolsavel ? ' checked' : ''} /> ↩ reemb.${r.reembMatch ? ' <span class="frv-match">casado</span>' : ''}</label>` : ''}
         ${r.dup ? '<span class="frv-dup">já existe</span>' : ''}
       </div>
     </div>`;
@@ -259,27 +302,44 @@ function confirmFinImport() {
   const d = finImportDraft.destino;
   const now = Date.now();
   const ignoradas = finImportDraft.rows.length - sel.length;
+  let futurasCriadas = 0;
   for (const r of sel) {
-    state.finTx.push({
+    const catFinal = r.categoria || (r.tipo === 'receita' ? 'Outras receitas' : 'Outros');
+    const tx = {
       id: uid(),
       data: r.data || todayISO(),
       descricao: r.descricao,
       valor: r.valor,
       tipo: r.tipo,
-      categoria: r.categoria || (r.tipo === 'receita' ? 'Outras receitas' : 'Outros'),
+      categoria: catFinal,
       contaId: d.contaId || '',
       cartaoId: d.cartaoId || '',
       reembolsavel: !!(d.cartaoId && r.reembolsavel),
       pagamentoCartaoId: '',
       origemImport: 'import',
       updatedAt: now
-    });
+    };
+    // parcela: grava a atual e projeta as futuras (uma por mês), sem duplicar as já lançadas
+    if (d.cartaoId && r.parcela && r.parcela.total > 1) {
+      const grupo = uid();
+      tx.parcela = { atual: r.parcela.atual, total: r.parcela.total, grupo, base: r.parcela.base };
+      const rowParc = Object.assign({}, r, { categoria: catFinal, valor: r.valor });
+      for (const fp of finParcelasFuturas(rowParc, d, grupo)) {
+        if (finParcelaJaExiste(state.finTx, d, fp.parcela.base, fp.parcela.total, fp.parcela.atual)) continue;
+        fp.id = uid(); fp.updatedAt = now;
+        state.finTx.push(fp);
+        futurasCriadas++;
+      }
+    }
+    state.finTx.push(tx);
   }
   state.finTx.sort((a, b) => (a.data || '').localeCompare(b.data || ''));
   finImportDraft = null;
   touchDoc(); saveState(); renderFin(); renderFinReview();
   finImpStatus('');
-  toast(sel.length + ' transação(ões) importada(s)' + (ignoradas ? ' · ' + ignoradas + ' ignorada(s)' : '') + '.');
+  toast(sel.length + ' transação(ões) importada(s)'
+    + (futurasCriadas ? ' · ' + futurasCriadas + ' parcela(s) futura(s)' : '')
+    + (ignoradas ? ' · ' + ignoradas + ' ignorada(s)' : '') + '.');
 }
 
 function setupFinImportUI() {

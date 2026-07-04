@@ -173,8 +173,19 @@ function renderFinTransacoes() {
 function quickDeleteFinTx(id) {
   const t = (state.finTx || []).find((x) => x.id === id);
   if (!t) return;
+  const grupo = t.parcela && t.parcela.grupo;
+  const outras = grupo ? (state.finTx || []).filter((x) => x.id !== id && x.parcela && x.parcela.grupo === grupo) : [];
+  const now = Date.now();
+  if (outras.length && confirm('Esta é uma parcela. Excluir TAMBÉM as outras ' + outras.length + ' parcela(s) deste parcelamento?')) {
+    const ids = new Set([id].concat(outras.map((o) => o.id)));
+    ids.forEach((x) => { state.tomb.finTx[x] = now; });
+    state.finTx = state.finTx.filter((x) => !ids.has(x.id));
+    touchDoc(); saveState(); renderFin();
+    toast((outras.length + 1) + ' parcelas excluídas.');
+    return;
+  }
   if (!confirm('Excluir a transação "' + (t.descricao || '') + '" (' + formatMoney(t.valor) + ')?')) return;
-  state.tomb.finTx[id] = Date.now();
+  state.tomb.finTx[id] = now;
   state.finTx = state.finTx.filter((x) => x.id !== id);
   touchDoc(); saveState(); renderFin();
   toast('Transação excluída.');
@@ -247,6 +258,7 @@ function renderFinFatura() {
   box.style.display = '';
   const f = finFaturaDe(k, state.finTx || [], finFaturaView.competencia);
 
+  renderFinFatStrip(k);
   $('fin-fatura-title').textContent = 'Fatura — ' + k.nome;
   $('fin-fat-label').textContent = finMesLabel(f.competencia);
   $('fin-fatura-total').textContent = formatMoney(f.total);
@@ -285,6 +297,21 @@ function renderFinFatura() {
     ul.appendChild(li);
   }
   setupIcons(ul);
+}
+
+/* Tira horizontal de meses: total projetado de cada fatura (destaca meses com parcela). */
+function renderFinFatStrip(cartao) {
+  const box = $('fin-fat-strip'); if (!box) return;
+  const meses = finFaturaMeses(cartao, state.finTx || [], todayISO());
+  const ativa = finFaturaView ? finFaturaView.competencia : '';
+  box.innerHTML = meses.map((m) => `
+    <button type="button" class="fin-fat-chip${m.competencia === ativa ? ' active' : ''}${m.temParcela ? ' parc' : ''}" data-comp="${m.competencia}">
+      <span class="ffc-mes">${escapeHtml(finMesLabel(m.competencia))}</span>
+      <span class="ffc-val">${formatMoney(m.total)}</span>
+      <span class="ffc-tags"><span class="fin-tag-status ${m.status}">${m.status}</span>${m.temParcela ? '<span class="ffc-parc">⇢ parcelas</span>' : ''}</span>
+    </button>`).join('');
+  const on = box.querySelector('.fin-fat-chip.active');
+  if (on) on.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
 }
 
 /* ---------------- Abas próprias ---------------- */
@@ -331,6 +358,11 @@ function setupFinUI() {
   $('fin-conta-add').addEventListener('click', () => openFinContaModal(null));
   $('fin-cartao-add').addEventListener('click', () => openFinCartaoModal(null));
 
+  const strip = $('fin-fat-strip');
+  if (strip) strip.addEventListener('click', (e) => {
+    const b = e.target.closest('.fin-fat-chip'); if (!b || !finFaturaView) return;
+    finFaturaView.competencia = b.dataset.comp; renderFinFatura();
+  });
   $('fin-fat-prev').addEventListener('click', () => { if (finFaturaView) { finFaturaView.competencia = finMonthAdd(finFaturaView.competencia, -1); renderFinFatura(); } });
   $('fin-fat-next').addEventListener('click', () => { if (finFaturaView) { finFaturaView.competencia = finMonthAdd(finFaturaView.competencia, 1); renderFinFatura(); } });
   $('fin-fat-close').addEventListener('click', () => { finFaturaView = null; renderFinFatura(); });

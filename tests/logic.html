@@ -110,6 +110,36 @@ try {
   finMarcarDuplicados(rows, [{ cartaoId:'k1', data:'2026-06-05', valor:100, descricao:'mercado y' }], { cartaoId:'k1' });
   chk('fin_dedup_marca', rows[0].dup + '|' + rows[0].incluir + '|' + rows[1].dup, 'true|false|false');
 
+  // cruzamento com reembolso: casa por valor + data dentro de ±5 dias (só despesa)
+  var mrows = [
+    { data:'2026-06-05', valor:100, tipo:'despesa' },
+    { data:'2026-06-20', valor:50, tipo:'despesa' },
+    { data:'2026-06-05', valor:100, tipo:'receita' }
+  ];
+  finMatchReembolsaveis(mrows, [{ data:'2026-06-07', valor:100 }]);
+  chk('fin_match_reemb', (!!mrows[0].reembMatch) + '|' + (!!mrows[0].reembolsavel) + '|' + (!!mrows[1].reembMatch) + '|' + (!!mrows[2].reembMatch), 'true|true|false|false');
+
+  // parcelas futuras: gera atual+1..total, uma por mês, grupo comum
+  var prow = { data:'2026-06-05', valor:200, tipo:'despesa', categoria:'Mercado', parcela:{ atual:2, total:4, base:'GELADEIRA' } };
+  var fut = finParcelasFuturas(prow, { cartaoId:'k1' }, 'g1');
+  chk('fin_parc_len', fut.length, 2);
+  chk('fin_parc_datas', fut[0].data + '|' + fut[1].data, '2026-07-05|2026-08-05');
+  chk('fin_parc_desc_grupo', fut[0].descricao + '|' + fut[0].parcela.atual + '|' + fut[0].parcela.grupo + '|' + fut[0].cartaoId, 'GELADEIRA (3/4)|3|g1|k1');
+
+  // dedupe de parcela ao reimportar: parcela nº já existente é detectada
+  var txExist = [{ cartaoId:'k1', data:'2026-07-05', parcela:{ atual:3, total:4, grupo:'g1', base:'GELADEIRA' } }];
+  chk('fin_parc_existe', finParcelaJaExiste(txExist, { cartaoId:'k1' }, 'GELADEIRA', 4, 3) + '|' + finParcelaJaExiste(txExist, { cartaoId:'k1' }, 'GELADEIRA', 4, 4), 'true|false');
+
+  // meses da fatura (visão multi-mês): horizonte mínimo e cobertura das parcelas futuras
+  var mesesTx = [
+    { id:'p1', cartaoId:'k1', data:'2026-07-05', valor:200, tipo:'despesa', parcela:{ atual:3, total:4, grupo:'g1', base:'X' } },
+    { id:'p2', cartaoId:'k1', data:'2026-09-05', valor:200, tipo:'despesa', parcela:{ atual:5, total:6, grupo:'g2', base:'X' } }
+  ];
+  var fmeses = finFaturaMeses(K, mesesTx, '2026-06-25', 6);
+  chk('fin_meses_len', fmeses.length, 6);
+  chk('fin_meses_inicio', fmeses[0].competencia + '|' + fmeses[0].temParcela, '2026-07|true');
+  chk('fin_meses_cobre_parcela', finFaturaMeses(K, mesesTx, '2026-06-25', 2).slice(-1)[0].competencia, '2026-09');
+
   // merge: finTx segue mergeTable (maior updatedAt vence; lápide remove) e finConfig é LWW do perfil
   var fa2 = doc(100, 'A'); fa2.finConfig = { categorias: [{nome:'CatA', tipo:'despesa'}] };
   fa2.finTx = [{ id:'z', data:'2026-01-01', valor:10, updatedAt:50 }];

@@ -3,6 +3,27 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v46 — Finanças: importação inteligente (reembolso + categoria + parcelas) e fatura multi-mês
+- **Cruzamento com o reembolso**: ao importar extrato/fatura num cartão, `finMatchReembolsaveis`
+  (em `js/fin-core.js`) casa cada despesa com um lançamento de `state.reembolso` por **mesmos
+  centavos + data dentro de ±5 dias** e **pré-marca** a linha como reembolsável na revisão (o
+  usuário confere/desmarca). Selo "casado" na tela de revisão.
+- **Categorização pela IA**: `ocrStatementRaw` (`js/fin-import.js`) agora manda a lista de
+  categorias do módulo no prompt e recebe `category` por transação (validada contra a lista; se não
+  bater, fica vazia). CSV/OFX seguem sem categoria (parsers locais inalterados).
+- **Parcelamento automático**: a IA detecta parcela (`installmentCurrent`/`installmentTotal`;
+  reconhece "PARC 02/12", "2/12", "2 de 12"). Ao confirmar a importação, cada linha parcelada gera
+  as **parcelas futuras reais** (`finParcelasFuturas`: uma finTx por mês seguinte, mesmo valor,
+  `parcela.grupo` compartilhado). Dedupe por `finParcelaJaExiste` — reimportar a fatura do mês
+  seguinte (que mostra a mesma série) não duplica. Excluir uma parcela oferece apagar o grupo todo
+  (em `deleteFinTx`/`quickDeleteFinTx`). Campo novo em finTx: `parcela:{atual,total,grupo,base}`.
+- **Fatura multi-mês**: nova tira de chips (`#fin-fat-strip`/`renderFinFatStrip`, dados por
+  `finFaturaMeses`) acima da fatura aberta — total projetado de cada mês, da competência corrente
+  até a última com transação (cobre as parcelas futuras), destacando meses com parcela; clicar num
+  chip troca a competência aberta. Mantém a navegação ‹ › e o detalhe.
+- Helper `finNormDesc` extraído de `finDedupKey` (normalização compartilhada). Testes novos em
+  `tests/logic.html`/`integrity.html`. Cache v45→v46.
+
 ## v41–v44 — Módulo Finanças (controle financeiro pessoal, estilo Mobills)
 - **Nova tela `#view-financas`** (item "Finanças" no menu) com 4 abas próprias `.ftab`/`.fin-panel`:
   **Resumo** (saldos por conta, fatura do mês por cartão com totais Pessoal × Reembolsável,

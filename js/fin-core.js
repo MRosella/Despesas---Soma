@@ -153,9 +153,12 @@ function finResumoMes(txs, ym) {
 }
 
 /* ---------------- Deduplicação de importação ---------------- */
+/* Normaliza descrição p/ comparação: minúsculas, sem acento, espaços colapsados. */
+function finNormDesc(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, ' ');
+}
 function finDedupKey(tx) {
-  const desc = (tx.descricao || '').toLowerCase().trim().replace(/\s+/g, ' ');
-  return (tx.data || '') + '|' + Math.round((tx.valor || 0) * 100) + '|' + desc;
+  return (tx.data || '') + '|' + Math.round((tx.valor || 0) * 100) + '|' + finNormDesc(tx.descricao);
 }
 
 /* Marca nas linhas importadas as que já existem no destino (mesma data+valor+descrição). */
@@ -171,6 +174,99 @@ function finMarcarDuplicados(rows, txs, destino) {
     if (r.dup) r.incluir = false;
   }
   return rows;
+}
+
+/* ---------------- Cruzamento com o reembolso corporativo ----------------
+   Marca nas linhas importadas (despesas de cartão) as que casam com um lançamento
+   de reembolso já feito (mesmos centavos + data dentro de ±toleranciaDias).
+   Pré-marca reembolsavel=true e reembMatch=true (a UI mostra e o usuário confere). */
+function finDiffDias(aISO, bISO) {
+  const a = new Date(aISO + 'T00:00:00'), b = new Date(bISO + 'T00:00:00');
+  if (isNaN(a) || isNaN(b)) return Infinity;
+  return Math.abs(Math.round((a - b) / 86400000));
+}
+function finMatchReembolsaveis(rows, reembList, toleranciaDias) {
+  const tol = (toleranciaDias == null) ? 5 : toleranciaDias;
+  const alvos = (reembList || []).filter((e) => e && e.data && e.valor)
+    .map((e) => ({ cents: Math.round((e.valor || 0) * 100), data: e.data }));
+  for (const r of (rows || [])) {
+    if (r.tipo === 'receita') continue;
+    const cents = Math.round((r.valor || 0) * 100);
+    const hit = alvos.some((a) => a.cents === cents && finDiffDias(a.data, r.data) <= tol);
+    if (hit) { r.reembolsavel = true; r.reembMatch = true; }
+  }
+  return rows;
+}
+
+/* ---------------- Parcelamentos ----------------
+   Chave estável de uma série de parcelas num destino (cartão): base+total normalizados. */
+function finParcelaGrupoBase(destino, base, total) {
+  return (destino && destino.cartaoId ? destino.cartaoId : '') + '|' + finNormDesc(base) + '|' + (total || 0);
+}
+/* True se já existe no estado a parcela nº n dessa série (dedupe ao reimportar o mês seguinte). */
+function finParcelaJaExiste(txs, destino, base, total, n) {
+  const chave = finParcelaGrupoBase(destino, base, total);
+  return (txs || []).some((t) => t && t.parcela && t.parcela.atual === n &&
+    finParcelaGrupoBase({ cartaoId: t.cartaoId }, t.parcela.base, t.parcela.total) === chave);
+}
+/* Gera os objetos das parcelas FUTURAS (atual+1..total) de uma linha parcelada.
+   Cada uma: data deslocada +1 mês por passo (dia clampado), descricao "base (n/total)",
+   mesmo valor/categoria/cartão, e parcela {atual:n,total,grupo,base}. Sem id (o caller atribui). */
+function finParcelasFuturas(row, destino, grupo) {
+  const out = [];
+  const p = row && row.parcela;
+  if (!p || !(p.total > 1) || !(p.atual >= 1) || !(destino && destino.cartaoId)) return out;
+  const base = p.base || row.descricao || '';
+  const dia = parseInt((row.data || '').slice(8, 10), 10) || 1;
+  for (let n = p.atual + 1; n <= p.total; n++) {
+    const ym = finMonthAdd((row.data || '').slice(0, 7), n - p.atual);
+    out.push({
+      data: finDiaEfetivoISO(ym, dia),
+      descricao: base + ' (' + n + '/' + p.total + ')',
+      valor: row.valor,
+      tipo: 'despesa',
+      categoria: row.categoria || '',
+      contaId: '',
+      cartaoId: destino.cartaoId,
+      reembolsavel: !!row.reembolsavel,
+      pagamentoCartaoId: '',
+      origemImport: 'parcela',
+      parcela: { atual: n, total: p.total, grupo: grupo, base: base }
+    });
+  }
+  return out;
+}
+
+/* ---------------- Meses da fatura (visão multi-mês) ----------------
+   Lista ordenada da competência corrente até a última competência com transação
+   (cobre parcelas futuras), com mínimo de horizonteMin meses:
+   [{competencia, total, temParcela, status}]. */
+function finFaturaMeses(cartao, txs, hojeISO, horizonteMin) {
+  const min = horizonteMin || 6;
+  const hoje = hojeISO || todayISO();
+  const faturas = finFaturasDoCartao(cartao, txs, hoje);
+  const porComp = {};
+  for (const f of faturas) porComp[f.competencia] = f;
+  const inicio = finCompetencia(cartao, hoje);
+  let fim = inicio;
+  for (const f of faturas) { if (f.competencia > fim && f.total !== 0) fim = f.competencia; }
+  // garante o horizonte mínimo
+  let horizonteFim = inicio;
+  for (let i = 1; i < min; i++) horizonteFim = finMonthAdd(horizonteFim, 1);
+  if (horizonteFim > fim) fim = horizonteFim;
+  const out = [];
+  let comp = inicio;
+  while (comp <= fim) {
+    const f = porComp[comp];
+    out.push({
+      competencia: comp,
+      total: f ? f.total : 0,
+      temParcela: !!(f && f.itens.some((t) => t.parcela)),
+      status: f ? f.status : ((hoje > finDiaEfetivoISO(comp, cartao.diaFechamento)) ? 'fechada' : 'aberta')
+    });
+    comp = finMonthAdd(comp, 1);
+  }
+  return out;
 }
 
 /* ---------------- Arquivamento anual ----------------

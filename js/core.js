@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v45';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v46';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -100,7 +100,7 @@ function emptyState() {
     config: { categorias: DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c)) },  // categorias + limites
     finContas: [],                        // finanças pessoais: contas {id,nome,instituicao,tipo,saldoInicial,arquivada,updatedAt}
     finCartoes: [],                       // cartões de crédito {id,nome,bandeira,limite,diaFechamento,diaVencimento,arquivado,updatedAt}
-    finTx: [],                            // transações {id,data,descricao,valor,tipo,categoria,contaId,cartaoId,reembolsavel,pagamentoCartaoId,origemImport,updatedAt}
+    finTx: [],                            // transações {id,data,descricao,valor,tipo,categoria,contaId,cartaoId,reembolsavel,pagamentoCartaoId,origemImport,updatedAt, parcela?:{atual,total,grupo,base}}
     finConfig: { categorias: FIN_DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c)) },  // categorias do módulo Finanças
     finArquivo: {},                       // agregados de anos arquivados: {'2025':{receitas,despesas,porCategoria}}
     tomb: { reembolso: {}, alelo: {}, finContas: {}, finCartoes: {}, finTx: {} },   // lápides: id -> updatedAt (deleções)

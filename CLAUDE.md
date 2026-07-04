@@ -23,7 +23,7 @@ https://mrosella.github.io/Despesas---Soma/
 | `js/ui.js` | navegação (`showView`/`setupNav`), **abas dos relatórios** (`setupReportTabs`/`showReportTab`, lembra em `-tab-v1`), `populateCategorySelects`, editor de categorias (`renderCatEditor`/`saveCatEditor`/`setupCatUI`) |
 | `js/ocr.js` | Gemini (`AI_KEY`, `GEMINI_MODEL`, **`geminiCall(parts,generationConfig)`** = chamada genérica com retry/backoff usada também pelo fin-import, `ocrReceipt` = wrapper com **cache por hash**, `ocrReceiptRaw`, `blobSha256`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI`) |
 | `js/idb.js` | IndexedDB (`idb`/`idbPut`/`idbGet`/`idbDel`), `compressImage`, `blobToDataUrl`, `saveThumb`, `getPhotoBlob` (camada de storage local) |
-| `js/fin-core.js` | **Finanças (pessoal), lógica pura**: faturas por competência (`finCompetencia`/`finVencimentoISO`/`finFaturasDoCartao`/`finFaturaDe`), `finSaldoConta`, `finResumoMes`, dedupe (`finDedupKey`/`finMarcarDuplicados`), `finArquivarAno`, meses (`finMonthAdd`/`finMesLabel`), getters (`finContaById`/`finCartaoById`/`finGetCategorias`/`finCategoriasPorTipo`) |
+| `js/fin-core.js` | **Finanças (pessoal), lógica pura**: faturas por competência (`finCompetencia`/`finVencimentoISO`/`finFaturasDoCartao`/`finFaturaDe`), visão multi-mês (`finFaturaMeses`), `finSaldoConta`, `finResumoMes`, dedupe (`finNormDesc`/`finDedupKey`/`finMarcarDuplicados`), cruzamento reembolso (`finMatchReembolsaveis`), parcelamento (`finParcelasFuturas`/`finParcelaJaExiste`/`finParcelaGrupoBase`), `finArquivarAno`, meses (`finMonthAdd`/`finMesLabel`), getters (`finContaById`/`finCartaoById`/`finGetCategorias`/`finCategoriasPorTipo`) |
 | `js/fin-render.js` | Finanças, tela: `renderFin` (+`renderFinDashboard`/`renderFinTransacoes`/`renderFinContasCartoes`/`renderFinFatura`), abas **próprias** `.ftab`/`.fin-panel` (`setupFinTabs`/`showFinTab`, lembra em `-fintab-v1`), `openFinFatura`, filtros (`finTxFiltro`/`finFatFiltro`), navegador de mês (`finMesAtivo`), `setupFinUI` |
 | `js/fin-modal.js` | Finanças, modais: transação (`openFinTxModal`/`saveFinTx`/`deleteFinTx`), conta (`openFinContaModal`…), cartão (`openFinCartaoModal`…), `populateFinSelects`, `setupFinModals`, editor de categorias (`finCatDraft`/`renderFinCatEditor`/`setupFinCatUI`), arquivamento anual (`setupFinArquivoUI`) |
 | `js/fin-import.js` | Finanças, importação: `ocrStatement` (wrapper com cache `ocrstmt_<hash>`), `ocrStatementRaw` (usa `geminiCall`), parsers locais `finParseCsv`/`finParseOfx`, revisão (`finImportDraft`/`onFinImportFile`/`renderFinReview`/`confirmFinImport`), `setupFinImportUI` |
@@ -62,7 +62,7 @@ https://mrosella.github.io/Despesas---Soma/
   driveFolders:{reembolso,alelo},    // RAÍZES SEPARADAS no Drive (reembolso × cartão Santander)
   pending:[], driveKnown:{}, driveDismissed:{},  // varredura do Drive: pendentes p/ revisar; ids já vistos; ids descartados
   config:{ categorias:[{nome,limite,grupo}] },  // editável em Configurações
-  finContas:[], finCartoes:[], finTx:[],  // MÓDULO FINANÇAS (pessoal): contas {nome,instituicao,tipo,saldoInicial,arquivada}, cartões {nome,bandeira,limite,diaFechamento,diaVencimento}, transações {data,descricao,valor,tipo:'receita'|'despesa',categoria,contaId|cartaoId,reembolsavel,pagamentoCartaoId,origemImport}
+  finContas:[], finCartoes:[], finTx:[],  // MÓDULO FINANÇAS (pessoal): contas {nome,instituicao,tipo,saldoInicial,arquivada}, cartões {nome,bandeira,limite,diaFechamento,diaVencimento}, transações {data,descricao,valor,tipo:'receita'|'despesa',categoria,contaId|cartaoId,reembolsavel,pagamentoCartaoId,origemImport, parcela?:{atual,total,grupo,base}}
   finConfig:{ categorias:[{nome,tipo}] },  // categorias PRÓPRIAS de Finanças (≠ config.categorias do reembolso)
   finArquivo:{},                     // agregados de anos arquivados: {'2025':{receitas,despesas,porCategoria}}
   tomb:{reembolso:{},alelo:{},finContas:{},finCartoes:{},finTx:{}},  // lápides de deleção (id->updatedAt)
@@ -196,14 +196,22 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
 
 - **Módulo Finanças (pessoal, `#view-financas`)**: 4 abas próprias `.ftab`/`.fin-panel` (Resumo/
   Transações/Contas/Importar; **não** usar `.rtab` — `setupReportTabs` binda todos). Fatura por
-  competência: compra até o dia efetivo de fechamento (`min(dia, diasNoMês)`) entra na fatura que
+    competência: compra até o dia efetivo de fechamento (`min(dia, diasNoMês)`) entra na fatura que
   fecha no mês; pagamento = tx com `contaId`+`pagamentoCartaoId` (abate a fatura com vencimento no
   mês do pagamento; fora dos gastos por categoria). Flag `reembolsavel` só marca/filtra (totais
-  Pessoal × Reembolsável na fatura) — NÃO cria lançamento no reembolso corporativo. Importação:
-  PDF/imagem → `ocrStatement` (Gemini, cache `ocrstmt_<hash>`, guard-rail 15MB); CSV/OFX →
-  `finParseCsv`/`finParseOfx` locais; tudo passa pela revisão com dedupe
-  (`finDedupKey` = data|centavos|descrição normalizada) antes de virar `finTx`. Excluir conta/cartão
-  oferece excluir as tx vinculadas (lápides em massa) — nunca deixa tx órfã. Arquivamento anual em
+  Pessoal × Reembolsável na fatura) — NÃO cria lançamento no reembolso corporativo. **Fatura tem
+  visão multi-mês** (`finFaturaMeses` → tira de chips `#fin-fat-strip`/`renderFinFatStrip`: total
+  projetado de cada mês da competência corrente até a última com tx, destaca meses com parcela;
+  clicar troca a competência aberta). Importação **inteligente**: PDF/imagem → `ocrStatement`
+  (Gemini, cache `ocrstmt_<hash>`, guard-rail 15MB) — a IA também **categoriza** (escolhe da lista
+  do módulo) e detecta **parcela** (`installmentCurrent`/`Total`); CSV/OFX → `finParseCsv`/
+  `finParseOfx` locais (sem categoria/parcela). Na revisão, `finMatchReembolsaveis` **pré-marca**
+  reembolsável nas linhas que casam (mesmos centavos + data ±5d) com um lançamento de
+  `state.reembolso`; ao confirmar, cada linha parcelada gera as **parcelas futuras reais**
+  (`finParcelasFuturas`, uma por mês, `parcela.grupo` comum), com dedupe por `finParcelaJaExiste`
+  (reimportar o mês seguinte não duplica a série). Excluir uma parcela oferece apagar o grupo todo.
+  Dedupe geral por `finDedupKey` (data|centavos|descrição normalizada) antes de virar `finTx`.
+  Excluir conta/cartão oferece excluir as tx vinculadas (lápides em massa) — nunca deixa tx órfã. Arquivamento anual em
   Configurações (`finArquivarAno` + backup .json via `downloadBlob`). Backup/sync já incluem os
   ramos `fin*` (via `currentDoc`/`applyDoc`/`mergeDocs`).
 

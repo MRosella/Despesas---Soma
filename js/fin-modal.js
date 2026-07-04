@@ -104,8 +104,22 @@ function saveFinTx() {
 
 function deleteFinTx() {
   const id = $('fm-id').value; if (!id) return;
+  const tx = (state.finTx || []).find((x) => x.id === id);
+  const grupo = tx && tx.parcela && tx.parcela.grupo;
+  const outras = grupo ? (state.finTx || []).filter((x) => x.id !== id && x.parcela && x.parcela.grupo === grupo) : [];
+  const now = Date.now();
+  if (outras.length && confirm('Esta é uma parcela. Excluir TAMBÉM as outras ' + outras.length + ' parcela(s) deste parcelamento?')) {
+    for (const o of outras) state.tomb.finTx[o.id] = now;
+    const ids = new Set([id].concat(outras.map((o) => o.id)));
+    state.tomb.finTx[id] = now;
+    state.finTx = state.finTx.filter((x) => !ids.has(x.id));
+    touchDoc(); saveState(); renderFin();
+    closeFinTxModal();
+    toast((outras.length + 1) + ' parcelas excluídas.');
+    return;
+  }
   if (!confirm('Excluir esta transação?')) return;
-  state.tomb.finTx[id] = Date.now();
+  state.tomb.finTx[id] = now;
   state.finTx = state.finTx.filter((x) => x.id !== id);
   touchDoc(); saveState(); renderFin();
   closeFinTxModal();

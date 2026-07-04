@@ -656,3 +656,24 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 .fin-rev-row .frv-val.receita { color: var(--ok); }
 .fin-rev-row.dup { opacity: .55; }
 .fin-rev-row .frv-dup { color: #9a6b15; font-weight: 700; }
+.fin-rev-row .frv-parc { display: inline-block; margin-left: 6px; font-size: .68rem; font-weight: 700;
+  background: #ede4f7; color: #6a3ca0; border-radius: 6px; padding: 1px 6px; }
+[data-theme="dark"] .fin-rev-row .frv-parc { background: #2a2038; color: #c3a3e8; }
+.fin-rev-row .frv-reemb-match { color: var(--ok); font-weight: 700; }
+.fin-rev-row .frv-match { font-size: .66rem; background: var(--ok); color: #fff; border-radius: 5px; padding: 0 5px; }
+
+/* tira de meses da fatura (visão multi-mês) */
+.fin-fat-strip { display: flex; gap: 8px; overflow-x: auto; padding: 10px 12px 2px; scroll-snap-type: x proximity; }
+.fin-fat-strip::-webkit-scrollbar { height: 6px; }
+.fin-fat-chip {
+  flex: 0 0 auto; scroll-snap-align: center; min-width: 116px; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 3px; padding: 8px 10px;
+  background: var(--input-bg); border: 1px solid var(--line, rgba(0,0,0,.12)); border-radius: 10px; color: var(--text);
+}
+.fin-fat-chip.active { border-color: var(--red); box-shadow: 0 0 0 1px var(--red) inset; }
+.fin-fat-chip.parc { border-color: #8f5fc7; }
+.fin-fat-chip .ffc-mes { font-size: .72rem; font-weight: 700; }
+.fin-fat-chip .ffc-val { font-size: .92rem; font-weight: 800; }
+.fin-fat-chip .ffc-tags { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+.fin-fat-chip .ffc-parc { font-size: .62rem; font-weight: 700; color: #6a3ca0; }
+[data-theme="dark"] .fin-fat-chip .ffc-parc { color: #c3a3e8; }
