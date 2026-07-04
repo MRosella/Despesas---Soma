@@ -124,6 +124,23 @@ try {
   var fd2 = doc(NOW, 'C'); fd2.finTx = []; fd2.tomb.finTx = { z: NOW };
   chk('fin_merge_tombstone', mergeDocs(fc2, fd2).finTx.length, 0);
 
+  // parsers de importação: CSV com cabeçalho acentuado e sinal, OFX com blocos STMTTRN
+  var csv = 'Data;Descrição;Valor\n05/06/2026;MERCADO X;-123,45\n06/06/2026;PIX RECEBIDO;500,00';
+  var pc = finParseCsv(csv);
+  chk('fin_csv_len', pc.length, 2);
+  chk('fin_csv_debito', pc[0].data + '|' + pc[0].valor + '|' + pc[0].tipo, '2026-06-05|123.45|despesa');
+  chk('fin_csv_credito', pc[1].tipo + '|' + pc[1].descricao, 'receita|PIX RECEBIDO');
+  var csvFat = 'data,descricao,valor\n2026-06-05,"LOJA A, LTDA","1.234,56"\n2026-06-07,LOJA B,"10,00"';
+  var pf = finParseCsv(csvFat);
+  chk('fin_csv_fatura_tudo_debito', pf.map(function(t){return t.tipo;}).join(','), 'despesa,despesa');
+  chk('fin_csv_aspas_virgula', pf[0].descricao + '|' + pf[0].valor, 'LOJA A, LTDA|1234.56');
+  var ofx = '<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260605120000[-3:BRT]<TRNAMT>-45.90<MEMO>UBER TRIP</STMTTRN>' +
+            '<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20260610<TRNAMT>1500.00<NAME>SALARIO</STMTTRN>';
+  var po = finParseOfx(ofx);
+  chk('fin_ofx_len', po.length, 2);
+  chk('fin_ofx_debito', po[0].data + '|' + po[0].valor + '|' + po[0].tipo + '|' + po[0].descricao, '2026-06-05|45.9|despesa|UBER TRIP');
+  chk('fin_ofx_credito', po[1].tipo + '|' + po[1].descricao, 'receita|SALARIO');
+
   // persistência do token do Drive: round-trip de token válido + rejeição de token expirado
   gdAccess = { token: 'tok123', exp: Date.now() + 100000 };
   saveGdAccess();

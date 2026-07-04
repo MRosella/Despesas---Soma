@@ -40,43 +40,13 @@ async function ocrReceipt(blob, mime) {
   return ocr;
 }
 
-async function ocrReceiptRaw(blob, mime) {
+/* Chamada genérica ao Gemini (JSON estruturado) com retentativa/backoff — usada pelo OCR de
+   comprovante (abaixo) e pela importação de extrato/fatura (js/fin-import.js). Recebe as `parts`
+   do conteúdo e o generationConfig; devolve o JSON já parseado. */
+async function geminiCall(parts, generationConfig) {
   const a = loadAi();
   if (!a.key) throw new Error('Chave do Gemini não configurada.');
-  const b64 = String(await blobToDataUrl(blob)).split(',')[1];
-  const mimeType = mime || blob.type || 'image/jpeg';   // Gemini lê imagem ou PDF
-  const cats = getCategorias();
-  const prompt = [
-    'Você é um leitor de cupons fiscais e notas fiscais brasileiras (NF/NFC-e/cupom).',
-    'Extraia da imagem os campos pedidos. Responda SOMENTE no JSON do schema.',
-    '- nfNumber: número da nota/cupom (apenas dígitos; null se não houver).',
-    '- date: data de emissão no formato AAAA-MM-DD (null se ilegível).',
-    '- city / uf: cidade e UF do estabelecimento emissor (ex.: "Porto Seguro", "BA").',
-    '- establishment: nome do estabelecimento/loja emissor (razão social ou nome fantasia; null se ilegível).',
-    '- total: valor total pago, em reais, como número (ponto decimal).',
-    '- category: escolha UMA destas categorias exatas: ' + cats.join(' | ') + '.',
-    '  Refeições => a categoria de refeição correspondente; posto de combustível => Combustível;',
-    '  pedágio => Pedágio; o restante => Outras Despesas.'
-  ].join('\n');
-  const body = {
-    contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: b64 } }, { text: prompt }] }],
-    generationConfig: {
-      temperature: 0,
-      response_mime_type: 'application/json',
-      response_schema: {
-        type: 'OBJECT',
-        properties: {
-          nfNumber: { type: 'STRING', nullable: true },
-          date: { type: 'STRING', nullable: true },
-          city: { type: 'STRING', nullable: true },
-          uf: { type: 'STRING', nullable: true },
-          establishment: { type: 'STRING', nullable: true },
-          total: { type: 'NUMBER', nullable: true },
-          category: { type: 'STRING', enum: cats, nullable: true }
-        }
-      }
-    }
-  };
+  const body = { contents: [{ parts }], generationConfig };
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + encodeURIComponent(a.key);
   // Retentativa com backoff: erros transitórios da IA (429 quota/limite, 500/503 sobrecarga,
   // falha de rede) costumam passar na 2ª/3ª tentativa — sem isso, varrer vários comprovantes
@@ -111,7 +81,44 @@ async function ocrReceiptRaw(blob, mime) {
   const c = j && j.candidates && j.candidates[0];
   const txt = c && c.content && c.content.parts && c.content.parts[0] && c.content.parts[0].text;
   if (!txt) throw new Error('Resposta vazia da IA.');
-  const data = JSON.parse(txt);
+  return JSON.parse(txt);
+}
+
+async function ocrReceiptRaw(blob, mime) {
+  const b64 = String(await blobToDataUrl(blob)).split(',')[1];
+  const mimeType = mime || blob.type || 'image/jpeg';   // Gemini lê imagem ou PDF
+  const cats = getCategorias();
+  const prompt = [
+    'Você é um leitor de cupons fiscais e notas fiscais brasileiras (NF/NFC-e/cupom).',
+    'Extraia da imagem os campos pedidos. Responda SOMENTE no JSON do schema.',
+    '- nfNumber: número da nota/cupom (apenas dígitos; null se não houver).',
+    '- date: data de emissão no formato AAAA-MM-DD (null se ilegível).',
+    '- city / uf: cidade e UF do estabelecimento emissor (ex.: "Porto Seguro", "BA").',
+    '- establishment: nome do estabelecimento/loja emissor (razão social ou nome fantasia; null se ilegível).',
+    '- total: valor total pago, em reais, como número (ponto decimal).',
+    '- category: escolha UMA destas categorias exatas: ' + cats.join(' | ') + '.',
+    '  Refeições => a categoria de refeição correspondente; posto de combustível => Combustível;',
+    '  pedágio => Pedágio; o restante => Outras Despesas.'
+  ].join('\n');
+  const data = await geminiCall(
+    [{ inline_data: { mime_type: mimeType, data: b64 } }, { text: prompt }],
+    {
+      temperature: 0,
+      response_mime_type: 'application/json',
+      response_schema: {
+        type: 'OBJECT',
+        properties: {
+          nfNumber: { type: 'STRING', nullable: true },
+          date: { type: 'STRING', nullable: true },
+          city: { type: 'STRING', nullable: true },
+          uf: { type: 'STRING', nullable: true },
+          establishment: { type: 'STRING', nullable: true },
+          total: { type: 'NUMBER', nullable: true },
+          category: { type: 'STRING', enum: cats, nullable: true }
+        }
+      }
+    }
+  );
   return {
     nfNumber: data.nfNumber ? String(data.nfNumber).replace(/\D/g, '') : '',
     dateISO: (data.date && /^\d{4}-\d{2}-\d{2}$/.test(data.date)) ? data.date : '',
