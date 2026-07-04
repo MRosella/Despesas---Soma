@@ -286,6 +286,34 @@ function saveFinCatEditor() {
   setFinCatStatus('Categorias salvas.', 'ok');
 }
 
+/* ---------------- Arquivamento anual (Configurações) ---------------- */
+function setupFinArquivoUI() {
+  const sel = $('finarq-ano'); if (!sel) return;
+  const setSt = (msg, cls) => { const s = $('finarq-status'); if (s) { s.textContent = msg || ''; s.className = 'sync-status' + (cls ? ' ' + cls : ''); } };
+  const fill = () => {
+    const anoAtual = todayISO().slice(0, 4);
+    const anos = {};
+    for (const t of (state.finTx || [])) { const a = (t.data || '').slice(0, 4); if (a && a < anoAtual) anos[a] = 1; }
+    const keys = Object.keys(anos).sort();
+    sel.innerHTML = keys.length ? keys.map((a) => `<option>${a}</option>`).join('') : '<option value="">—</option>';
+    return keys.length;
+  };
+  fill();
+  $('finarq-btn').addEventListener('click', () => {
+    if (!fill()) { setSt('Nenhum ano anterior com transações para arquivar.', 'warn'); return; }
+    const ano = sel.value; if (!ano) return;
+    const n = (state.finTx || []).filter((t) => (t.data || '').startsWith(ano + '-')).length;
+    if (!confirm('Arquivar ' + n + ' transação(ões) de ' + ano + '?\nUm backup .json será baixado; as transações saem do app (os totais do ano ficam guardados).')) return;
+    const removidas = finArquivarAno(ano);
+    if (!removidas.length) { setSt('Nada para arquivar em ' + ano + '.', 'warn'); return; }
+    const blob = new Blob([JSON.stringify(removidas, null, 2)], { type: 'application/json' });
+    downloadBlob(blob, 'financas-' + ano + '.json');
+    renderFin();
+    fill();
+    setSt(removidas.length + ' transação(ões) de ' + ano + ' arquivada(s) — backup baixado.', 'ok');
+  });
+}
+
 function setupFinCatUI() {
   const box = $('fincat-list'); if (!box) return;
   renderFinCatEditor();

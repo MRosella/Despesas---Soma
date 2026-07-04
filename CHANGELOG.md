@@ -3,6 +3,34 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v41–v44 — Módulo Finanças (controle financeiro pessoal, estilo Mobills)
+- **Nova tela `#view-financas`** (item "Finanças" no menu) com 4 abas próprias `.ftab`/`.fin-panel`:
+  **Resumo** (saldos por conta, fatura do mês por cartão com totais Pessoal × Reembolsável,
+  receitas × despesas, gastos por categoria, navegador de mês), **Transações** (lista mensal com
+  filtros todas/receitas/despesas/reembolsáveis), **Contas** (CRUD de contas e cartões + painel de
+  fatura por competência com filtro e "Registrar pagamento") e **Importar**.
+- **Estado novo** (`finContas`/`finCartoes`/`finTx`/`finConfig`/`finArquivo` + lápides
+  `tomb.fin*`), sincronizado no dados.json: tabelas via `mergeTable` (LWW por `updatedAt` +
+  lápides), `finConfig`/`finArquivo` LWW de perfil. Categorias próprias (≠ reembolso corporativo),
+  editáveis em Configurações.
+- **Fatura por competência** (`js/fin-core.js`, lógica pura testada em `tests/logic.html`): compra
+  até o dia efetivo de fechamento (`min(dia, diasNoMês)` — resolve dia 31 em fevereiro) cai na
+  fatura do mês; vencimento no mês seguinte quando `venc <= fechamento`; status
+  aberta/fechada/paga; pagamento = tx `contaId`+`pagamentoCartaoId` abatendo a fatura com
+  vencimento no mês do pagamento. **Flag `reembolsavel`**: marca gastos de trabalho feitos no
+  cartão pessoal — a fatura mostra Pessoal × Reembolsável separados (dor original do usuário).
+- **Importação de extrato/fatura**: PDF/imagem via Gemini (`ocrStatement`, cache IndexedDB
+  `ocrstmt_<hash>`, limite 15MB, `maxOutputTokens` alto) — a chamada de rede com retry do OCR foi
+  extraída para `geminiCall(parts, generationConfig)` em `js/ocr.js` e é compartilhada; CSV/OFX com
+  parsers locais (`finParseCsv` heurística de cabeçalho/separador/sinal, `finParseOfx` por blocos
+  `STMTTRN`). Tela de revisão: marcar/desmarcar, categoria por linha, reembolsável (destino
+  cartão), duplicadas (mesma data+valor+descrição) já vêm desmarcadas.
+- **Arquivamento anual** (Configurações): `finArquivarAno` baixa backup .json do ano, guarda
+  agregados em `finArquivo` e remove as transações (com lápides) — controla o crescimento do
+  dados.json. Excluir conta/cartão oferece excluir as transações vinculadas (nunca deixa órfãs).
+- 4 arquivos novos (`js/fin-core/-render/-modal/-import.js`, prefixo `fin` em tudo) registrados em
+  `index.html`, `sw.js` ASSETS e nos dois harnesses; ~30 testes novos em `tests/logic.html`.
+
 ## v39
 - **Sessão do Google Drive permanente (opcional):** novo campo "URL do renovador de sessão
   (Cloudflare Worker)" nas Configurações (`-gdrive-v1.workerUrl`). Quando preenchido, o app troca o

@@ -270,6 +270,7 @@ function init() {
   setupFinModals();
   setupFinImportUI();
   setupFinCatUI();
+  setupFinArquivoUI();
   updateFooter();
   updateSyncIndicator();
   $('sync-ind').addEventListener('click', () => syncNow(false));

@@ -21,12 +21,16 @@ https://mrosella.github.io/Despesas---Soma/
 | `js/sync.js` | sync GitHub privado (`ghGetFile`/`ghPutFile`, `currentDoc`/`applyDoc`/`mergeDocs`, `syncNow`, `setupSyncUI`) |
 | `js/lock.js` | bloqueio bio/PIN (`enableBio`/`unlockBio`/`setPin`/`showLock`) + backup (`exportBackup`/`importBackupFile`/`setupBackupUI`) |
 | `js/ui.js` | navegação (`showView`/`setupNav`), **abas dos relatórios** (`setupReportTabs`/`showReportTab`, lembra em `-tab-v1`), `populateCategorySelects`, editor de categorias (`renderCatEditor`/`saveCatEditor`/`setupCatUI`) |
-| `js/ocr.js` | Gemini (`AI_KEY`, `GEMINI_MODEL`, `ocrReceipt` = wrapper com **cache por hash**, `ocrReceiptRaw` = chamada à rede, `blobSha256`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI`) |
+| `js/ocr.js` | Gemini (`AI_KEY`, `GEMINI_MODEL`, **`geminiCall(parts,generationConfig)`** = chamada genérica com retry/backoff usada também pelo fin-import, `ocrReceipt` = wrapper com **cache por hash**, `ocrReceiptRaw`, `blobSha256`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI`) |
 | `js/idb.js` | IndexedDB (`idb`/`idbPut`/`idbGet`/`idbDel`), `compressImage`, `blobToDataUrl`, `saveThumb`, `getPhotoBlob` (camada de storage local) |
+| `js/fin-core.js` | **Finanças (pessoal), lógica pura**: faturas por competência (`finCompetencia`/`finVencimentoISO`/`finFaturasDoCartao`/`finFaturaDe`), `finSaldoConta`, `finResumoMes`, dedupe (`finDedupKey`/`finMarcarDuplicados`), `finArquivarAno`, meses (`finMonthAdd`/`finMesLabel`), getters (`finContaById`/`finCartaoById`/`finGetCategorias`/`finCategoriasPorTipo`) |
+| `js/fin-render.js` | Finanças, tela: `renderFin` (+`renderFinDashboard`/`renderFinTransacoes`/`renderFinContasCartoes`/`renderFinFatura`), abas **próprias** `.ftab`/`.fin-panel` (`setupFinTabs`/`showFinTab`, lembra em `-fintab-v1`), `openFinFatura`, filtros (`finTxFiltro`/`finFatFiltro`), navegador de mês (`finMesAtivo`), `setupFinUI` |
+| `js/fin-modal.js` | Finanças, modais: transação (`openFinTxModal`/`saveFinTx`/`deleteFinTx`), conta (`openFinContaModal`…), cartão (`openFinCartaoModal`…), `populateFinSelects`, `setupFinModals`, editor de categorias (`finCatDraft`/`renderFinCatEditor`/`setupFinCatUI`), arquivamento anual (`setupFinArquivoUI`) |
+| `js/fin-import.js` | Finanças, importação: `ocrStatement` (wrapper com cache `ocrstmt_<hash>`), `ocrStatementRaw` (usa `geminiCall`), parsers locais `finParseCsv`/`finParseOfx`, revisão (`finImportDraft`/`onFinImportFile`/`renderFinReview`/`confirmFinImport`), `setupFinImportUI` |
 | `js/drive-core.js` | Drive: auth/token (`gdGetToken`, `GD_SCOPE`), pastas/upload (`gdEnsureFolder`/`gdEnsureMonthFolder`/`gdUpload`), exclusão+fila (`gdDeleteFile`/`flushGdDeletions`/`purgeEntryPhoto`), flush de pendentes, `setupGDriveUI`, conexão (`gdConnectFlow`/`maybePromptDrive`) |
 | `js/drive-scan.js` | Varredura (`scanDriveForReceipts`/`gdListReceipts`/`knownDriveIds`), overlay `scanProgress` (`open(title,icon)`/`status`/`log`/`done`/`close`), pendentes (`renderPending`/`openPendingEntry`/`dismissPending`/`retryPendingOcr`) |
 | `js/main.js` | tema, `bindField`, **fechamento por tabela** (`closeMonthFlow`/`closeTable`/`archiveMonthToDrive`/`chooseCloseTable`), `copyBankData`, `init` (registra todos os `setup*`), SW, conectividade — **carregado por último** |
-| `index.html` | 3 telas (`#view-lancamentos/-relatorios/-config`); a de Lançamentos tem **abas** `#tab-reembolso`/`#tab-alelo` (`.report-panel`) + seletor `.rtab`, cada uma com seu cabeçalho/tabela/resumo; carrega `lib/*` e depois `js/*` na ordem. |
+| `index.html` | 4 telas (`#view-lancamentos/-relatorios/-financas/-config`); a de Lançamentos tem **abas** `#tab-reembolso`/`#tab-alelo` (`.report-panel`) + seletor `.rtab`; a de Finanças tem abas próprias `.ftab`/`.fin-panel` + modais `#fin-tx-modal`/`#fin-conta-modal`/`#fin-cartao-modal`; carrega `lib/*` e depois `js/*` na ordem (fin-* entre idb e drive-core). |
 | `styles.css` | tema claro/escuro via variáveis. Reusar `.card/.field/.sync-status/.cat-row/.offline-notice`. |
 | `sw.js` | SW network-first; `CACHE` na **linha 4** + lista `ASSETS` (inclui **cada** `js/*.js`). |
 | `template.xlsx`, `template-santander.xlsx` | modelos Excel (não editar à mão). |
@@ -58,11 +62,15 @@ https://mrosella.github.io/Despesas---Soma/
   driveFolders:{reembolso,alelo},    // RAÍZES SEPARADAS no Drive (reembolso × cartão Santander)
   pending:[], driveKnown:{}, driveDismissed:{},  // varredura do Drive: pendentes p/ revisar; ids já vistos; ids descartados
   config:{ categorias:[{nome,limite,grupo}] },  // editável em Configurações
-  tomb:{reembolso:{},alelo:{}},      // lápides de deleção (id->updatedAt)
+  finContas:[], finCartoes:[], finTx:[],  // MÓDULO FINANÇAS (pessoal): contas {nome,instituicao,tipo,saldoInicial,arquivada}, cartões {nome,bandeira,limite,diaFechamento,diaVencimento}, transações {data,descricao,valor,tipo:'receita'|'despesa',categoria,contaId|cartaoId,reembolsavel,pagamentoCartaoId,origemImport}
+  finConfig:{ categorias:[{nome,tipo}] },  // categorias PRÓPRIAS de Finanças (≠ config.categorias do reembolso)
+  finArquivo:{},                     // agregados de anos arquivados: {'2025':{receitas,despesas,porCategoria}}
+  tomb:{reembolso:{},alelo:{},finContas:{},finCartoes:{},finTx:{}},  // lápides de deleção (id->updatedAt)
   meta:{updatedAt, profileUpdatedAt} }
 ```
-Merge de sync: `meta.updatedAt` p/ tabelas; `profileUpdatedAt` (last-write-wins) p/
-perfil/banco/**config**/`driveFolders`/`reportMonths`. Lápides propagam deleções. `pending` = união
+Merge de sync: `meta.updatedAt` p/ tabelas (`reembolso`/`alelo`/`finContas`/`finCartoes`/`finTx`
+via `mergeTable`); `profileUpdatedAt` (last-write-wins) p/ perfil/banco/**config**/**finConfig**/
+`finArquivo`/`driveFolders`/`reportMonths`. Lápides propagam deleções. `pending` = união
 por `fileId` **menos** os já virados lançamento (`foto.id`) ou descartados; `driveKnown`/
 `driveDismissed` = união (evita reprocessar/ressuscitar).
 
@@ -71,7 +79,7 @@ por `fileId` **menos** os já virados lançamento (`foto.id`) ou descartados; `d
 `folderId` legado, `workerUrl` do renovador) · `-gdtok-v1` (token OAuth do Drive, LOCAL, persiste
 entre aberturas; inclui `refresh` quando o renovador está configurado) · `-gddel-v1` (fila de
 exclusões) · `-ai-v1` (Gemini) · `-lock-v1` (bio/PIN) · `-theme-v1` · `-lastsync-v1` · `-dirty-v1` ·
-`-tab-v1` (aba ativa).
+`-tab-v1` (aba ativa) · `-fintab-v1` (aba ativa de Finanças).
 
 ## Verificação (esta máquina — sem Node/python; preview MCP trava)
 Chrome em `C:\Program Files\Google\Chrome\Application\chrome.exe` com `--headless=new
@@ -185,6 +193,19 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
   string vazia (use `!ocr.dateISO`). `GEMINI_MODEL` (`gemini-2.5-flash`) é fácil de trocar.
 - Categoria nova fora da validação do `template.xlsx` é gravada mesmo assim (Excel pode avisar
   "valor fora da lista"). Renomear categoria **não** reescreve lançamentos antigos.
+
+- **Módulo Finanças (pessoal, `#view-financas`)**: 4 abas próprias `.ftab`/`.fin-panel` (Resumo/
+  Transações/Contas/Importar; **não** usar `.rtab` — `setupReportTabs` binda todos). Fatura por
+  competência: compra até o dia efetivo de fechamento (`min(dia, diasNoMês)`) entra na fatura que
+  fecha no mês; pagamento = tx com `contaId`+`pagamentoCartaoId` (abate a fatura com vencimento no
+  mês do pagamento; fora dos gastos por categoria). Flag `reembolsavel` só marca/filtra (totais
+  Pessoal × Reembolsável na fatura) — NÃO cria lançamento no reembolso corporativo. Importação:
+  PDF/imagem → `ocrStatement` (Gemini, cache `ocrstmt_<hash>`, guard-rail 15MB); CSV/OFX →
+  `finParseCsv`/`finParseOfx` locais; tudo passa pela revisão com dedupe
+  (`finDedupKey` = data|centavos|descrição normalizada) antes de virar `finTx`. Excluir conta/cartão
+  oferece excluir as tx vinculadas (lápides em massa) — nunca deixa tx órfã. Arquivamento anual em
+  Configurações (`finArquivarAno` + backup .json via `downloadBlob`). Backup/sync já incluem os
+  ramos `fin*` (via `currentDoc`/`applyDoc`/`mergeDocs`).
 
 ## Fluxo de trabalho típico (ao editar)
 1. Grep o nome da função → editar o `js/*.js` certo.

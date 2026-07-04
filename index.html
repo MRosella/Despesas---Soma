@@ -488,6 +488,21 @@
         </div>
       </section>
 
+      <!-- Arquivamento anual do módulo Finanças -->
+      <section class="card">
+        <div class="card-head"><h2>Finanças — arquivar ano antigo</h2></div>
+        <div class="card-body">
+          <p class="hint" style="margin-top:0">Com o tempo as transações acumulam e pesam na sincronização.
+            Arquivar um ano baixa um <b>backup .json</b> com todas as transações daquele ano, mantém só os
+            totais no app e libera espaço. Vale só para anos já encerrados.</p>
+          <div class="sync-actions">
+            <select id="finarq-ano"><option value="">—</option></select>
+            <button class="btn btn-excel" id="finarq-btn" type="button">Arquivar ano</button>
+          </div>
+          <p class="sync-status" id="finarq-status"></p>
+        </div>
+      </section>
+
       <!-- Backup / Restauração -->
       <section class="card">
         <div class="card-head"><h2>Backup / Restaurar</h2></div>
