@@ -26,7 +26,7 @@ https://mrosella.github.io/Despesas---Soma/
 | `js/fin-core.js` | **Finanças (pessoal), lógica pura**: faturas por competência (`finCompetencia`/`finVencimentoISO`/`finFaturasDoCartao`/`finFaturaDe`), visão multi-mês (`finFaturaMeses`), `finSaldoConta`, `finResumoMes`, dedupe (`finNormDesc`/`finDedupKey`/`finMarcarDuplicados`), cruzamento reembolso (`finMatchReembolsaveis`), parcelamento (`finParcelasFuturas`/`finParcelaJaExiste`/`finParcelaGrupoBase`), `finArquivarAno`, meses (`finMonthAdd`/`finMesLabel`), getters (`finContaById`/`finCartaoById`/`finGetCategorias`/`finCategoriasPorTipo`) |
 | `js/fin-render.js` | Finanças, tela: `renderFin` (+`renderFinDashboard`/`renderFinTransacoes`/`renderFinContasCartoes`/`renderFinFatura`), abas **próprias** `.ftab`/`.fin-panel` (`setupFinTabs`/`showFinTab`, lembra em `-fintab-v1`), `openFinFatura`, filtros (`finTxFiltro`/`finFatFiltro`), navegador de mês (`finMesAtivo`), `setupFinUI` |
 | `js/fin-modal.js` | Finanças, modais: transação (`openFinTxModal`/`saveFinTx`/`deleteFinTx`), conta (`openFinContaModal`…), cartão (`openFinCartaoModal`…), `populateFinSelects`, `setupFinModals`, editor de categorias (`finCatDraft`/`renderFinCatEditor`/`setupFinCatUI`), arquivamento anual (`setupFinArquivoUI`) |
-| `js/fin-import.js` | Finanças, importação: `ocrStatement` (wrapper com cache `ocrstmt_<hash>`), `ocrStatementRaw` (usa `geminiCall`), parsers locais `finParseCsv`/`finParseOfx`, revisão (`finImportDraft`/`onFinImportFile`/`renderFinReview`/`confirmFinImport`), `setupFinImportUI` |
+| `js/fin-import.js` | Finanças, importação: `ocrStatement` (chama `ocrStatementRaw` **sem cache** — reenviar o mesmo arquivo sempre reanalisa), `ocrStatementRaw` (usa `geminiCall`), parsers locais `finParseCsv`/`finParseOfx`, revisão (`finImportDraft`/`onFinImportFile`/`renderFinReview`/`confirmFinImport`), `setupFinImportUI` |
 | `js/drive-core.js` | Drive: auth/token (`gdGetToken`, `GD_SCOPE`), pastas/upload (`gdEnsureFolder`/`gdEnsureMonthFolder`/`gdUpload`), exclusão+fila (`gdDeleteFile`/`flushGdDeletions`/`purgeEntryPhoto`), flush de pendentes, `setupGDriveUI`, conexão (`gdConnectFlow`/`maybePromptDrive`) |
 | `js/drive-scan.js` | Varredura (`scanDriveForReceipts`/`gdListReceipts`/`knownDriveIds`), overlay `scanProgress` (`open(title,icon)`/`status`/`log`/`done`/`close`), pendentes (`renderPending`/`openPendingEntry`/`dismissPending`/`retryPendingOcr`) |
 | `js/main.js` | tema, `bindField`, **fechamento por tabela** (`closeMonthFlow`/`closeTable`/`archiveMonthToDrive`/`chooseCloseTable`), `copyBankData`, `init` (registra todos os `setup*`), SW, conectividade — **carregado por último** |
@@ -203,7 +203,8 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
   visão multi-mês** (`finFaturaMeses` → tira de chips `#fin-fat-strip`/`renderFinFatStrip`: total
   projetado de cada mês da competência corrente até a última com tx, destaca meses com parcela;
   clicar troca a competência aberta). Importação **inteligente**: PDF/imagem → `ocrStatement`
-  (Gemini, cache `ocrstmt_<hash>`, guard-rail 15MB) — a IA também **categoriza** (escolhe da lista
+  (Gemini via `ocrStatementRaw`, **sem cache** — reenviar o mesmo arquivo sempre reanalisa, ao
+  contrário do `ocrReceipt` de comprovantes; guard-rail 15MB) — a IA também **categoriza** (escolhe da lista
   do módulo; casamento por `finNormDesc` — tolera acento/caixa diferente da IA, grava o nome
   canônico da lista) e detecta **parcela** (`installmentCurrent`/`Total`); CSV/OFX → `finParseCsv`/
   `finParseOfx` locais (sem categoria/parcela). Na revisão, `finMatchReembolsaveis` **pré-marca**

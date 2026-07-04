@@ -10,20 +10,10 @@
 let finImportDraft = null;   // {destino:{contaId|cartaoId}, rows:[{data,descricao,valor,tipo,categoria,reembolsavel,incluir,dup}]}
 
 /* ---------------- IA: extrato/fatura em PDF ou imagem ----------------
-   Wrapper com cache por hash (mesmo arquivo não regasta o Gemini), igual ao ocrReceipt. */
+   Sem cache: reenviar o mesmo arquivo (ex.: fatura atualizada, categorias mudaram)
+   deve sempre reanalisar. O dedupe de transações já evita duplicar lançamentos. */
 async function ocrStatement(blob, mime) {
-  let hash = '';
-  try { hash = await blobSha256(blob); } catch (e) { console.warn('hash do extrato falhou', e); }
-  if (hash) {
-    try { const hit = await idbGet('ocrstmt_' + hash); if (hit && hit.res) return hit.res; }
-    catch (e) { console.warn('leitura do cache de extrato falhou', e); }
-  }
-  const res = await ocrStatementRaw(blob, mime);
-  if (hash && res && res.transacoes && res.transacoes.length) {
-    try { await idbPut('ocrstmt_' + hash, { res, at: Date.now() }); }
-    catch (e) { console.warn('gravacao do cache de extrato falhou', e); }
-  }
-  return res;
+  return ocrStatementRaw(blob, mime);
 }
 
 async function ocrStatementRaw(blob, mime) {
