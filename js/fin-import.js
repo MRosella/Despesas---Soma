@@ -100,25 +100,14 @@ async function ocrStatementRaw(blob, mime) {
 }
 
 /* ---------------- Parsers locais (sem IA) ---------------- */
-/* CSV: detecta separador e acha as colunas por heurística de cabeçalho.
-   Aceita valores "1.234,56" / "-50,00" (negativo = débito) e datas DD/MM/AAAA ou AAAA-MM-DD. */
-function finParseCsv(text) {
-  const lines = String(text || '').replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim());
-  if (!lines.length) return [];
-  const sep = lines[0].indexOf('\t') >= 0 ? '\t'
-    : ((lines[0].match(/;/g) || []).length >= (lines[0].match(/,/g) || []).length ? ';' : ',');
-  const split = (l) => {   // respeita aspas
-    const out = []; let cur = '', q = false;
-    for (const ch of l) {
-      if (ch === '"') q = !q;
-      else if (ch === sep && !q) { out.push(cur); cur = ''; }
-      else cur += ch;
-    }
-    out.push(cur);
-    return out.map((s) => s.trim().replace(/^"|"$/g, ''));
-  };
-  const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  const head = split(lines[0]).map(norm);
+/* Núcleo comum (CSV e XLSX): recebe uma matriz de células (linha 0 = cabeçalho quando houver),
+   acha as colunas por heurística e devolve transações.
+   Aceita valores "1.234,56" / "-50,00" (negativo = débito), datas DD/MM/AAAA, AAAA-MM-DD
+   ou serial do Excel (número). */
+function finRowsFromMatrix(matrix) {
+  if (!matrix || !matrix.length) return [];
+  const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const head = (matrix[0] || []).map(norm);
   const findCol = (...keys) => head.findIndex((h) => keys.some((k) => h.indexOf(k) >= 0));
   let iData = findCol('data', 'date');
   let iDesc = findCol('descri', 'histor', 'lancamento', 'estabelecimento', 'memo', 'title');
@@ -127,11 +116,11 @@ function finParseCsv(text) {
   const start = temHeader ? 1 : 0;
   if (!temHeader) { iData = 0; iDesc = 1; iVal = 2; }   // fallback: posição fixa data;descricao;valor
   const out = [];
-  for (let i = start; i < lines.length; i++) {
-    const cols = split(lines[i]);
-    if (cols.length < 2) continue;
-    const dataISO = finParseDataBR(cols[iData]);
-    const raw = (cols[iVal] || '').trim();
+  for (let i = start; i < matrix.length; i++) {
+    const cols = matrix[i] || [];
+    if (cols.filter((c) => String(c || '').trim()).length < 2) continue;
+    const dataISO = finParseDataBR(cols[iData]) || finExcelSerialToISO(cols[iData]);
+    const raw = String(cols[iVal] || '').trim();
     if (!dataISO || !raw) continue;
     const neg = raw.indexOf('-') >= 0;
     const valor = parseMoney(raw.replace('-', ''));
@@ -147,6 +136,90 @@ function finParseCsv(text) {
   // Se NADA veio negativo, assume que são gastos (débito) — mais comum em fatura.
   if (out.length && out.every((t) => t.tipo === 'receita')) out.forEach((t) => { t.tipo = 'despesa'; });
   return out;
+}
+
+/* CSV: detecta separador, respeita aspas e vira matriz p/ finRowsFromMatrix. */
+function finParseCsv(text) {
+  const lines = String(text || '').replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim());
+  if (!lines.length) return [];
+  const sep = lines[0].indexOf('\t') >= 0 ? '\t'
+    : ((lines[0].match(/;/g) || []).length >= (lines[0].match(/,/g) || []).length ? ';' : ',');
+  const split = (l) => {   // respeita aspas
+    const out = []; let cur = '', q = false;
+    for (const ch of l) {
+      if (ch === '"') q = !q;
+      else if (ch === sep && !q) { out.push(cur); cur = ''; }
+      else cur += ch;
+    }
+    out.push(cur);
+    return out.map((s) => s.trim().replace(/^"|"$/g, ''));
+  };
+  return finRowsFromMatrix(lines.map(split));
+}
+
+/* Serial de data do Excel (número de dias desde 1899-12-30) → ISO. Só aceita a faixa
+   ~1954..2119 pra não confundir com valores monetários. String de data comum devolve ''. */
+function finExcelSerialToISO(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!/^\d{4,6}(\.\d+)?$/.test(s)) return '';
+  const n = Number(s);
+  if (!isFinite(n) || n < 20000 || n > 80000) return '';
+  const d = new Date(Math.round((n - 25569) * 86400000));   // 25569 = serial de 1970-01-01
+  return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+}
+
+/* XLSX (planilha do Excel/LibreOffice): descompacta com fflate e lê a 1ª aba.
+   Sem dependência nova — usa fflate (unzipSync/strFromU8) já incluído. .xls binário antigo NÃO é suportado. */
+function finParseXlsx(u8) {
+  const files = fflate.unzipSync(u8);
+  const dec = (name) => (files[name] ? fflate.strFromU8(files[name]) : '');
+  const unesc = (str) => String(str)
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d))
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+  const textOf = (xml) => {   // concatena todos os <t> de um bloco (rich text vem quebrado)
+    let acc = '', m; const re = /<t[^>]*>([\s\S]*?)<\/t>/g;
+    while ((m = re.exec(xml))) acc += m[1];
+    return unesc(acc);
+  };
+  // sharedStrings (células de texto referenciam por índice)
+  const shared = [];
+  const ssXml = dec('xl/sharedStrings.xml');
+  if (ssXml) { let m; const re = /<si>([\s\S]*?)<\/si>/g; while ((m = re.exec(ssXml))) shared.push(textOf(m[1])); }
+  // 1ª planilha
+  let sheetKey = 'xl/worksheets/sheet1.xml';
+  if (!files[sheetKey]) sheetKey = Object.keys(files).find((n) => /^xl\/worksheets\/.*\.xml$/i.test(n)) || sheetKey;
+  const sheet = dec(sheetKey);
+  if (!sheet) return [];
+  const colIdx = (ref) => {   // "B12" → 1
+    const m = /^([A-Z]+)/.exec(ref || ''); if (!m) return -1;
+    let n = 0; for (const ch of m[1]) n = n * 26 + (ch.charCodeAt(0) - 64);
+    return n - 1;
+  };
+  const matrix = [];
+  let rm; const rowRe = /<row[^>]*>([\s\S]*?)<\/row>/g;
+  while ((rm = rowRe.exec(sheet))) {
+    const cells = [];
+    let cm; const cRe = /<c\s+([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
+    while ((cm = cRe.exec(rm[1]))) {
+      const attrs = cm[1], inner = cm[2] || '';
+      const col = colIdx((/r="([A-Z]+\d+)"/.exec(attrs) || [])[1] || '');
+      if (col < 0) continue;
+      const t = (/t="([^"]+)"/.exec(attrs) || [])[1] || '';
+      let val = '';
+      if (t === 'inlineStr') val = textOf(inner);
+      else {
+        const vm = /<v>([\s\S]*?)<\/v>/.exec(inner);
+        val = vm ? vm[1] : '';
+        if (t === 's') val = shared[+val] || '';
+        else val = unesc(val);
+      }
+      cells[col] = val;
+    }
+    matrix.push(cells);
+  }
+  return finRowsFromMatrix(matrix);
 }
 
 function finParseDataBR(s) {
@@ -208,12 +281,17 @@ async function onFinImportFile(file) {
   const name = (file.name || '').toLowerCase();
   try {
     let rows = [];
-    if (name.endsWith('.csv') || file.type === 'text/csv') {
+    if (name.endsWith('.csv') || name.endsWith('.tsv') || name.endsWith('.txt') || file.type === 'text/csv') {
       finImpStatus('Lendo CSV…');
       rows = finParseCsv(await file.text());
     } else if (name.endsWith('.ofx')) {
       finImpStatus('Lendo OFX…');
       rows = finParseOfx(await file.text());
+    } else if (name.endsWith('.xlsx') || name.endsWith('.xlsm') || (file.type || '').indexOf('spreadsheetml') >= 0) {
+      finImpStatus('Lendo planilha…');
+      rows = finParseXlsx(new Uint8Array(await file.arrayBuffer()));
+    } else if (name.endsWith('.xls')) {
+      finImpStatus('Formato .xls antigo não é suportado. Abra a planilha e salve como .xlsx ou CSV.', 'warn'); return;
     } else {
       if (!aiConfigured()) { finImpStatus('Para PDF/imagem, configure a chave da IA (Gemini) em Configurações — ou use CSV/OFX.', 'warn'); return; }
       finImpStatus('Enviando para a IA — pode levar alguns segundos…');
@@ -341,9 +419,29 @@ function confirmFinImport() {
     + (ignoradas ? ' · ' + ignoradas + ' ignorada(s)' : '') + '.');
 }
 
+/* Limpa TODAS as transações de Finanças (recomeçar após import ruim). Cria lápides p/ o sync
+   propagar a deleção; não mexe em contas/cartões/categorias. */
+function finLimparTransacoes() {
+  const n = (state.finTx || []).length;
+  if (!n) { toast('Não há transações para limpar.'); return; }
+  if (!confirm('Apagar TODAS as ' + n + ' transação(ões) de Finanças? Contas, cartões e categorias são mantidos. Esta ação não pode ser desfeita.')) return;
+  if (!confirm('Confirme novamente: apagar as ' + n + ' transação(ões)?')) return;
+  const now = Date.now();
+  state.tomb = state.tomb || {};
+  state.tomb.finTx = state.tomb.finTx || {};
+  for (const t of state.finTx) state.tomb.finTx[t.id] = now;
+  state.finTx = [];
+  finImportDraft = null;
+  touchDoc(); saveState(); renderFin(); renderFinReview();
+  finImpStatus('');
+  toast(n + ' transação(ões) apagada(s).');
+}
+
 function setupFinImportUI() {
   if (!$('fin-imp-file')) return;
   populateFinImpDestino();
+  const limpar = $('fin-imp-limpar');
+  if (limpar) limpar.addEventListener('click', finLimparTransacoes);
   $('fin-imp-btn').addEventListener('click', () => { populateFinImpDestino(); $('fin-imp-file').click(); });
   $('fin-imp-file').addEventListener('change', (e) => {
     const f = e.target.files && e.target.files[0];

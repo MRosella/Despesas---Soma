@@ -328,15 +328,18 @@
           <div class="card-head"><h2>Importar extrato / fatura</h2></div>
           <div class="card-body">
             <p class="hint" style="margin-top:0">Envie o <b>PDF</b> da fatura do cartão ou do extrato bancário (a IA extrai
-              as transações) ou um arquivo <b>CSV/OFX</b> exportado pelo banco (leitura direta, sem IA).
+              as transações) ou uma <b>planilha</b> / arquivo <b>CSV, XLSX ou OFX</b> exportado pelo banco (leitura direta, sem IA).
               Você revisa tudo antes de gravar; transações repetidas são detectadas.</p>
             <div class="field">
               <label for="fin-imp-destino">Lançar em</label>
               <select id="fin-imp-destino"></select>
             </div>
-            <input type="file" id="fin-imp-file" accept=".pdf,.csv,.ofx,application/pdf,text/csv,image/*" style="display:none" />
+            <input type="file" id="fin-imp-file" accept=".pdf,.csv,.tsv,.txt,.ofx,.xlsx,.xlsm,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/*" style="display:none" />
             <button class="btn btn-excel" id="fin-imp-btn" type="button" style="width:100%"><span class="bic" data-icon="upload" data-size="18"></span> Escolher arquivo…</button>
             <p class="sync-status" id="fin-imp-status"></p>
+            <hr style="border:none;border-top:1px solid var(--border);margin:14px 0 10px" />
+            <p class="hint" style="margin-top:0">Importação ficou errada? Apague todas as transações e recomece do zero (contas, cartões e categorias são mantidos).</p>
+            <button class="btn btn-danger" id="fin-imp-limpar" type="button" style="width:100%"><span class="bic" data-icon="trash-2" data-size="18"></span> Limpar todas as transações</button>
           </div>
         </section>
         <section class="card" id="fin-review-card" style="display:none">

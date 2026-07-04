@@ -1,6 +1,7 @@
 <!doctype html><html><head>
 <!-- Testes de lógica pura (rode headless; ver CLAUDE.md > Verificação).
      Carrega os js/*.js e chama funções puras com fixtures. NÃO cobre OAuth/OCR/PDF/Drive. -->
+<script src="../lib/fflate.min.js"></script>
 <script src="../js/core.js"></script>
 <script src="../js/render.js"></script>
 <script src="../js/modal.js"></script>
@@ -176,6 +177,27 @@ try {
   chk('fin_ofx_len', po.length, 2);
   chk('fin_ofx_debito', po[0].data + '|' + po[0].valor + '|' + po[0].tipo + '|' + po[0].descricao, '2026-06-05|45.9|despesa|UBER TRIP');
   chk('fin_ofx_credito', po[1].tipo + '|' + po[1].descricao, 'receita|SALARIO');
+
+  // XLSX: serial de data do Excel e matriz genérica (mesma heurística de coluna do CSV)
+  chk('fin_excel_serial', finExcelSerialToISO('46178'), '2026-06-05');       // 46178 = 2026-06-05
+  chk('fin_excel_serial_naodata', finExcelSerialToISO('123,45'), '');        // valor não vira data
+  var mtx = [['Data','Descricao','Valor'], ['46178','MERCADO X','-123,45'], ['2026-06-07','PIX','500,00']];
+  var pm = finRowsFromMatrix(mtx);
+  chk('fin_matrix_len', pm.length, 2);
+  chk('fin_matrix_serial_debito', pm[0].data + '|' + pm[0].valor + '|' + pm[0].tipo, '2026-06-05|123.45|despesa');
+  chk('fin_matrix_credito', pm[1].data + '|' + pm[1].tipo, '2026-06-07|receita');
+
+  // XLSX real: monta um .xlsx mínimo (sharedStrings + sheet1) com fflate e parseia de volta
+  var ss = '<?xml version="1.0"?><sst count="4" uniqueCount="4">'
+    + '<si><t>Data</t></si><si><t>Descricao</t></si><si><t>Valor</t></si><si><t>LOJA &amp; CIA</t></si></sst>';
+  var sheet = '<?xml version="1.0"?><worksheet><sheetData>'
+    + '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c></row>'
+    + '<row r="2"><c r="A2"><v>46178</v></c><c r="B2" t="s"><v>3</v></c><c r="C2"><v>-99.9</v></c></row>'
+    + '</sheetData></worksheet>';
+  var zip = fflate.zipSync({ 'xl/sharedStrings.xml': fflate.strToU8(ss), 'xl/worksheets/sheet1.xml': fflate.strToU8(sheet) });
+  var px = finParseXlsx(zip);
+  chk('fin_xlsx_len', px.length, 1);
+  chk('fin_xlsx_row', px[0].data + '|' + px[0].descricao + '|' + px[0].valor + '|' + px[0].tipo, '2026-06-05|LOJA & CIA|99.9|despesa');
 
   // aprendizado de categoria: casa descrições com números diferentes (código/parcela) e usa a mais frequente
   state.finTx = [
