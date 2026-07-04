@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v40';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v41';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 const EMPRESA = 'Soma Urbanismo S/A';
@@ -47,6 +47,41 @@ function limitsObsText() {
   return parts.length ? ('Os valores máximos reembolsáveis são — ' + parts.join('; ') + '.') : '';
 }
 
+/* Categorias do módulo Finanças (controle pessoal) — separadas das corporativas acima.
+   Configuração efetiva em state.finConfig.categorias (editável, sincroniza como perfil). */
+const FIN_DEFAULT_CATEGORIAS = [
+  { nome: 'Alimentação', tipo: 'despesa' },
+  { nome: 'Mercado', tipo: 'despesa' },
+  { nome: 'Transporte', tipo: 'despesa' },
+  { nome: 'Moradia', tipo: 'despesa' },
+  { nome: 'Contas & Serviços', tipo: 'despesa' },
+  { nome: 'Saúde', tipo: 'despesa' },
+  { nome: 'Educação', tipo: 'despesa' },
+  { nome: 'Lazer', tipo: 'despesa' },
+  { nome: 'Assinaturas', tipo: 'despesa' },
+  { nome: 'Vestuário', tipo: 'despesa' },
+  { nome: 'Viagem', tipo: 'despesa' },
+  { nome: 'Pets', tipo: 'despesa' },
+  { nome: 'Impostos & Taxas', tipo: 'despesa' },
+  { nome: 'Trabalho', tipo: 'despesa' },
+  { nome: 'Pagamento de fatura', tipo: 'despesa' },
+  { nome: 'Outros', tipo: 'despesa' },
+  { nome: 'Salário', tipo: 'receita' },
+  { nome: 'Freelance', tipo: 'receita' },
+  { nome: 'Rendimentos', tipo: 'receita' },
+  { nome: 'Reembolso', tipo: 'receita' },
+  { nome: 'Outras receitas', tipo: 'receita' }
+];
+
+function normalizeFinConfig(cfg) {
+  const arr = (cfg && Array.isArray(cfg.categorias)) ? cfg.categorias : null;
+  const list = (arr && arr.length)
+    ? arr.map((c) => ({ nome: String(c.nome || '').trim(), tipo: c.tipo === 'receita' ? 'receita' : 'despesa' }))
+         .filter((c) => c.nome)
+    : FIN_DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c));
+  return { categorias: list.length ? list : FIN_DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c)) };
+}
+
 /* ---------------- Estado ---------------- */
 function emptyState() {
   return {
@@ -63,7 +98,12 @@ function emptyState() {
     driveFolderId: '',                    // (legado) pasta única dos comprovantes; migra p/ a raiz de reembolso
     driveFolders: { reembolso: '', alelo: '' },  // pastas raiz separadas no Drive (sincronizadas)
     config: { categorias: DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c)) },  // categorias + limites
-    tomb: { reembolso: {}, alelo: {} },   // lápides: id -> updatedAt (deleções)
+    finContas: [],                        // finanças pessoais: contas {id,nome,instituicao,tipo,saldoInicial,arquivada,updatedAt}
+    finCartoes: [],                       // cartões de crédito {id,nome,bandeira,limite,diaFechamento,diaVencimento,arquivado,updatedAt}
+    finTx: [],                            // transações {id,data,descricao,valor,tipo,categoria,contaId,cartaoId,reembolsavel,pagamentoCartaoId,origemImport,updatedAt}
+    finConfig: { categorias: FIN_DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c)) },  // categorias do módulo Finanças
+    finArquivo: {},                       // agregados de anos arquivados: {'2025':{receitas,despesas,porCategoria}}
+    tomb: { reembolso: {}, alelo: {}, finContas: {}, finCartoes: {}, finTx: {} },   // lápides: id -> updatedAt (deleções)
     pending: [],                          // comprovantes no Drive sem lançamento (revisar manualmente)
     driveKnown: {},                       // fileIds já vistos pela varredura (não reprocessa)
     driveDismissed: {},                   // fileIds descartados pelo usuário (não reaparecem)
@@ -103,8 +143,15 @@ function loadState() {
     st.driveKnown = st.driveKnown || {};
     st.driveDismissed = st.driveDismissed || {};
     st.config = normalizeCatConfig(st.config);
+    // migração: módulo Finanças (estados antigos não têm esses ramos)
+    st.finConfig = normalizeFinConfig(st.finConfig);
+    st.finArquivo = st.finArquivo || {};
+    for (const t of ['finContas', 'finCartoes', 'finTx']) {
+      st[t] = Array.isArray(st[t]) ? st[t] : [];
+      st.tomb[t] = st.tomb[t] || {};
+    }
     // migração: garante updatedAt nas entradas e relógio do doc se for estado antigo
-    for (const t of ['reembolso', 'alelo']) {
+    for (const t of ['reembolso', 'alelo', 'finContas', 'finCartoes', 'finTx']) {
       st[t] = (st[t] || []).map((e) => e.updatedAt ? e : Object.assign({}, e, { updatedAt: Date.now() }));
     }
     if (!s.meta) st.meta = { updatedAt: Date.now(), profileUpdatedAt: Date.now() };
@@ -189,7 +236,11 @@ const ICONS = {
   repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
   paperclip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
   camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
-  eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>'
+  eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+  wallet: '<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/>',
+  'credit-card': '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
+  landmark: '<line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>'
 };
 function icon(name, size) {
   const p = ICONS[name]; if (!p) return '';

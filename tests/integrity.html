@@ -14,6 +14,10 @@
 <script src="../js/ui.js"></script>
 <script src="../js/ocr.js"></script>
 <script src="../js/idb.js"></script>
+<script src="../js/fin-core.js"></script>
+<script src="../js/fin-render.js"></script>
+<script src="../js/fin-modal.js"></script>
+<script src="../js/fin-import.js"></script>
 <script src="../js/drive-core.js"></script>
 <script src="../js/drive-scan.js"></script>
 <script src="../js/main.js"></script>
@@ -30,6 +34,10 @@ var checks = {
   'ui':         ['setupNav','setupCatUI','populateCategorySelects','renderCatEditor','setupReportTabs','showReportTab'],
   'ocr':        ['ocrReceipt','ocrReceiptRaw','blobSha256','fillFromOcr','setupAiUI'],
   'idb':        ['idbGet','idbPut','getPhotoBlob','compressImage','saveThumb'],
+  'fin-core':   ['finCompetencia','finFaturasDoCartao','finSaldoConta','finDedupKey','finResumoMes','finArquivarAno'],
+  'fin-render': ['renderFin','renderFinFatura','setupFinTabs','showFinTab'],
+  'fin-modal':  ['openFinTxModal','saveFinTx','openFinContaModal','openFinCartaoModal','setupFinModals','renderFinCatEditor'],
+  'fin-import': ['finParseCsv','finParseOfx','ocrStatement','confirmFinImport','setupFinImportUI'],
   'drive-core': ['gdUpload','gdEnsureFolder','purgeEntryPhoto','flushPendingPhotos','setupGDriveUI','loadGdAccess','saveGdAccess','scheduleGdRefresh'],
   'drive-scan': ['scanDriveForReceipts','gdListReceipts','renderPending','retryPendingOcr','openPendingEntry'],
   'main':       ['init','closeMonthFlow','closeTable','archiveMonthToDrive','setupTheme','bindField']

@@ -11,6 +11,10 @@
 <script src="../js/ui.js"></script>
 <script src="../js/ocr.js"></script>
 <script src="../js/idb.js"></script>
+<script src="../js/fin-core.js"></script>
+<script src="../js/fin-render.js"></script>
+<script src="../js/fin-modal.js"></script>
+<script src="../js/fin-import.js"></script>
 <script src="../js/drive-core.js"></script>
 <script src="../js/drive-scan.js"></script>
 <script src="../js/main.js"></script>
@@ -65,6 +69,60 @@ try {
   var d = doc(NOW, 'C', [], {x: NOW});   // lápide mais nova que o updatedAt, dentro da janela
   var m2 = mergeDocs(c, d);
   chk('merge_tombstone_remove', m2.reembolso.length, 0);
+
+  // ---- Módulo Finanças ----
+  // competência da fatura: compra até o dia de fechamento entra na fatura do mês
+  var K = { id:'k1', diaFechamento:10, diaVencimento:20 };
+  chk('fin_comp_no_fechamento', finCompetencia(K, '2026-06-10'), '2026-06');
+  chk('fin_comp_apos_fechamento', finCompetencia(K, '2026-06-11'), '2026-07');
+  chk('fin_comp_fechamento31_fev', finCompetencia({id:'k2',diaFechamento:31,diaVencimento:7}, '2026-02-28'), '2026-02');
+  chk('fin_venc_apos_fechamento', finVencimentoISO(K, '2026-06'), '2026-06-20');
+  chk('fin_venc_antes_fechamento', finVencimentoISO({id:'k3',diaFechamento:25,diaVencimento:5}, '2026-06'), '2026-07-05');
+
+  // faturas: totais pessoal x reembolsável, pagamento abate e vira 'paga'
+  var finTxs = [
+    { id:'t1', cartaoId:'k1', data:'2026-06-05', valor:100, tipo:'despesa', categoria:'Mercado', reembolsavel:false },
+    { id:'t2', cartaoId:'k1', data:'2026-06-05', valor:50,  tipo:'despesa', categoria:'Trabalho', reembolsavel:true },
+    { id:'t3', contaId:'c1', pagamentoCartaoId:'k1', data:'2026-06-18', valor:150, tipo:'despesa', categoria:'Pagamento de fatura' },
+    { id:'t4', contaId:'c1', data:'2026-06-01', valor:500, tipo:'receita', categoria:'Salário' },
+    { id:'t5', contaId:'c1', data:'2026-06-02', valor:200, tipo:'despesa', categoria:'Lazer' }
+  ];
+  var fats = finFaturasDoCartao(K, finTxs, '2026-06-25');
+  chk('fin_fatura_total', fats[0].total, 150);
+  chk('fin_fatura_pessoal_reemb', fats[0].totalPessoal + '|' + fats[0].totalReembolsavel, '100|50');
+  chk('fin_fatura_paga', fats[0].status, 'paga');
+  chk('fin_fatura_aberta', finFaturasDoCartao(K, finTxs.slice(0,2), '2026-06-08')[0].status, 'aberta');
+
+  // saldo da conta: saldoInicial + receitas - despesas (pagamento de fatura conta como despesa)
+  chk('fin_saldo_conta', finSaldoConta({ id:'c1', saldoInicial:1000 }, finTxs), 1150);
+
+  // resumo do mês: pagamento de fatura fica fora (gasto real já está nos itens do cartão)
+  var res = finResumoMes(finTxs, '2026-06');
+  chk('fin_resumo_mes', res.receitas + '|' + res.despesas, '500|350');
+  chk('fin_resumo_categoria', res.porCategoria['Mercado'], 100);
+
+  // dedupe de importação: mesma data+valor+descrição normalizada
+  chk('fin_dedup_key', finDedupKey({ data:'2026-06-05', valor:12.5, descricao:'  Uber   X ' }), '2026-06-05|1250|uber x');
+  var rows = [
+    { data:'2026-06-05', valor:100, descricao:'MERCADO Y', incluir:true },
+    { data:'2026-06-06', valor:80, descricao:'Novo', incluir:true }
+  ];
+  finMarcarDuplicados(rows, [{ cartaoId:'k1', data:'2026-06-05', valor:100, descricao:'mercado y' }], { cartaoId:'k1' });
+  chk('fin_dedup_marca', rows[0].dup + '|' + rows[0].incluir + '|' + rows[1].dup, 'true|false|false');
+
+  // merge: finTx segue mergeTable (maior updatedAt vence; lápide remove) e finConfig é LWW do perfil
+  var fa2 = doc(100, 'A'); fa2.finConfig = { categorias: [{nome:'CatA', tipo:'despesa'}] };
+  fa2.finTx = [{ id:'z', data:'2026-01-01', valor:10, updatedAt:50 }];
+  fa2.tomb.finTx = {};
+  var fb2 = doc(200, 'B'); fb2.finConfig = { categorias: [{nome:'CatB', tipo:'receita'}] };
+  fb2.finTx = [{ id:'z', data:'2026-01-01', valor:77, updatedAt:90 }];
+  fb2.tomb.finTx = {};
+  var fm = mergeDocs(fa2, fb2);
+  chk('fin_merge_tx_lww', fm.finTx[0].valor, 77);
+  chk('fin_merge_config_lww', fm.finConfig.categorias[0].nome + '|' + fm.finConfig.categorias[0].tipo, 'CatB|receita');
+  var fc2 = doc(NOW, 'C'); fc2.finTx = [{ id:'z', data:'2026-01-01', valor:10, updatedAt:NOW - 5000 }]; fc2.tomb.finTx = {};
+  var fd2 = doc(NOW, 'C'); fd2.finTx = []; fd2.tomb.finTx = { z: NOW };
+  chk('fin_merge_tombstone', mergeDocs(fc2, fd2).finTx.length, 0);
 
   // persistência do token do Drive: round-trip de token válido + rejeição de token expirado
   gdAccess = { token: 'tok123', exp: Date.now() + 100000 };
