@@ -709,6 +709,36 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 [data-theme="dark"] .fin-rev-row .frv-parc { background: #2a2038; color: #c3a3e8; }
 .fin-rev-row .frv-reemb-match { color: var(--ok); font-weight: 700; }
 .fin-rev-row .frv-match { font-size: .66rem; background: var(--ok); color: #fff; border-radius: 5px; padding: 0 5px; }
+.fin-rev-row.estornado .frv-desc, .fin-rev-row.estornado .frv-val { text-decoration: line-through; }
+.fin-rev-row.estornado, .fin-rev-row.pagfat { opacity: .6; }
+.fin-rev-row .frv-estorno { color: #c0392b; font-weight: 700; }
+.fin-rev-row .frv-pagfat { color: #1c5d99; font-weight: 700; }
+
+/* transação estornada: aparece riscada e apagada (fora da soma) */
+.entry.estornado .e-desc, .entry.estornado .e-val { text-decoration: line-through; }
+.entry.estornado { opacity: .58; }
+.fin-tag-estorno {
+  display: inline-block; background: #f7e0dc; color: #c0392b; border-radius: 6px;
+  padding: 1px 6px; font-size: .68rem; font-weight: 700;
+}
+[data-theme="dark"] .fin-tag-estorno { background: #3a201c; color: #e8a598; }
+
+/* barra de limite do cartão */
+.fin-lim { margin-top: 6px; }
+.fin-lim-bar { height: 6px; border-radius: 4px; background: var(--input-bg); overflow: hidden; }
+.fin-lim-fill { display: block; height: 100%; background: var(--ok, #2e7d32); border-radius: 4px; transition: width .3s; }
+.fin-lim-fill.alto { background: var(--red, #c0392b); }
+.fin-lim-txt { font-size: .7rem; color: var(--muted); margin-top: 3px; }
+.fin-lim-txt b { color: var(--text); }
+
+/* % da categoria no resumo do dashboard */
+.cat-chip .cc-pct { font-size: .66rem; color: var(--muted); font-weight: 700; margin-left: 4px; }
+
+/* busca de transações */
+.fin-search { display: flex; align-items: center; gap: 8px; margin: 0 12px 8px;
+  background: var(--input-bg); border: 1px solid var(--line, rgba(0,0,0,.12)); border-radius: 10px; padding: 6px 10px; }
+.fin-search-ic { opacity: .6; flex: 0 0 auto; }
+.fin-search input { flex: 1; border: 0; background: transparent; color: var(--text); font-size: .85rem; outline: none; }
 
 /* tira de meses da fatura (visão multi-mês) */
 .fin-fat-strip { display: flex; gap: 8px; overflow-x: auto; padding: 10px 12px 2px; scroll-snap-type: x proximity; }

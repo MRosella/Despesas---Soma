@@ -315,6 +315,8 @@ async function onFinImportFile(file) {
       })
     };
     const drows = finImportDraft.rows;
+    // fatura de cartão: ignora pagamento da fatura anterior e casa estornos ⇄ compras (antes do dedupe)
+    if (destino.cartaoId) finMarcarPagamentosEstornos(drows);
     finMarcarDuplicados(drows, state.finTx || [], destino);
     // cruza com o reembolso corporativo (só faz sentido em cartão; inclui meses já arquivados) e dedupe de parcelas já lançadas
     if (destino.cartaoId) finMatchReembolsaveis(drows, finReembolsoPool());
@@ -325,8 +327,12 @@ async function onFinImportFile(file) {
     }
     const dups = drows.filter((r) => r.dup).length;
     const casados = drows.filter((r) => r.reembMatch).length;
+    const pagtos = drows.filter((r) => r.pagamentoFatura).length;
+    const estornos = drows.filter((r) => r.estornado).length;
     finImpStatus(rows.length + ' transação(ões) encontrada(s)'
       + (dups ? ' — ' + dups + ' já existente(s) desmarcada(s)' : '')
+      + (pagtos ? ' · ' + pagtos + ' pagamento(s) de fatura ignorado(s)' : '')
+      + (estornos ? ' · ' + estornos + ' estornado(s)' : '')
       + (casados ? ' · ' + casados + ' casada(s) com reembolso' : '')
       + '. Revise abaixo.', 'ok');
     renderFinReview();
@@ -348,7 +354,7 @@ function renderFinReview() {
     const cats = r.tipo === 'receita' ? catsR : catsD;
     const futuras = r.parcela ? (r.parcela.total - r.parcela.atual) : 0;
     return `
-    <div class="fin-rev-row${r.dup ? ' dup' : ''}" data-i="${i}">
+    <div class="fin-rev-row${r.dup ? ' dup' : ''}${r.estornado ? ' estornado' : ''}${r.pagamentoFatura ? ' pagfat' : ''}" data-i="${i}">
       <input type="checkbox" class="frv-inc" data-i="${i}"${r.incluir ? ' checked' : ''} />
       <div class="frv-desc">${escapeHtml(r.descricao)}
         ${r.parcela ? `<span class="frv-parc">parcela ${r.parcela.atual}/${r.parcela.total}${futuras > 0 ? ' · +' + futuras + ' futura' + (futuras > 1 ? 's' : '') : ''}</span>` : ''}
@@ -360,7 +366,9 @@ function renderFinReview() {
           <option value="">Categoria…</option>
           ${cats.map((c) => `<option${r.categoria === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}
         </select>
-        ${isCartao && r.tipo !== 'receita' ? `<label class="${r.reembMatch ? 'frv-reemb-match' : ''}"><input type="checkbox" class="frv-reemb" data-i="${i}"${r.reembolsavel ? ' checked' : ''} /> ↩ reemb.${r.reembMatch ? ' <span class="frv-match">casado</span>' : ''}</label>` : ''}
+        ${isCartao && r.tipo !== 'receita' && !r.estornado ? `<label class="${r.reembMatch ? 'frv-reemb-match' : ''}"><input type="checkbox" class="frv-reemb" data-i="${i}"${r.reembolsavel ? ' checked' : ''} /> ↩ reemb.${r.reembMatch ? ' <span class="frv-match">casado</span>' : ''}</label>` : ''}
+        ${r.pagamentoFatura ? '<span class="frv-pagfat">pagamento — ignorado</span>' : ''}
+        ${r.estornado ? '<span class="frv-estorno">estornado</span>' : ''}
         ${r.dup ? '<span class="frv-dup">já existe</span>' : ''}
       </div>
     </div>`;
@@ -391,13 +399,14 @@ function confirmFinImport() {
       categoria: catFinal,
       contaId: d.contaId || '',
       cartaoId: d.cartaoId || '',
-      reembolsavel: !!(d.cartaoId && r.reembolsavel),
+      reembolsavel: !!(d.cartaoId && r.reembolsavel && !r.estornado),
+      estornado: !!r.estornado,
       pagamentoCartaoId: '',
       origemImport: 'import',
       updatedAt: now
     };
     // parcela: grava a atual e projeta as futuras (uma por mês), sem duplicar as já lançadas
-    if (d.cartaoId && r.parcela && r.parcela.total > 1) {
+    if (d.cartaoId && r.parcela && r.parcela.total > 1 && !r.estornado) {
       const grupo = uid();
       tx.parcela = { atual: r.parcela.atual, total: r.parcela.total, grupo, base: r.parcela.base };
       const rowParc = Object.assign({}, r, { categoria: catFinal, valor: r.valor });

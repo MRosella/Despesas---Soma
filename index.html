@@ -276,6 +276,7 @@
             <button class="fchip" data-ffiltro="despesas">Despesas</button>
             <button class="fchip" data-ffiltro="reembolsaveis">↩ Reembolsáveis</button>
           </div>
+          <div class="fin-search"><span class="fin-search-ic" data-icon="search" data-size="16"></span><input type="search" id="fin-tx-search" placeholder="Buscar por descrição ou categoria…" autocomplete="off" /></div>
           <ul class="entries" id="fin-tx-list"></ul>
           <div class="add-row">
             <button class="add-btn" id="fin-tx-add"><span class="bic" data-icon="plus" data-size="18"></span> Adicionar transação</button>
@@ -669,6 +670,10 @@
       <label class="exp-opt" id="fm-reembolsavel-row" style="display:none">
         <input type="checkbox" id="fm-reembolsavel" />
         <span>↩ Reembolsável (gasto de trabalho no cartão pessoal)</span>
+      </label>
+      <label class="exp-opt" id="fm-estornado-row">
+        <input type="checkbox" id="fm-estornado" />
+        <span>⊘ Estornado / cancelado (não somar — aparece riscado)</span>
       </label>
       <div class="modal-actions">
         <button class="btn btn-danger-text" id="fm-delete" style="display:none">Excluir</button>

@@ -62,7 +62,7 @@ https://mrosella.github.io/Despesas---Soma/
   driveFolders:{reembolso,alelo},    // RAÍZES SEPARADAS no Drive (reembolso × cartão Santander)
   pending:[], driveKnown:{}, driveDismissed:{},  // varredura do Drive: pendentes p/ revisar; ids já vistos; ids descartados
   config:{ categorias:[{nome,limite,grupo}] },  // editável em Configurações
-  finContas:[], finCartoes:[], finTx:[],  // MÓDULO FINANÇAS (pessoal): contas {nome,instituicao,tipo,saldoInicial,arquivada}, cartões {nome,bandeira,limite,diaFechamento,diaVencimento}, transações {data,descricao,valor,tipo:'receita'|'despesa',categoria,subcategoria?,contaId|cartaoId,reembolsavel,pagamentoCartaoId,origemImport, parcela?:{atual,total,grupo,base}}
+  finContas:[], finCartoes:[], finTx:[],  // MÓDULO FINANÇAS (pessoal): contas {nome,instituicao,tipo,saldoInicial,arquivada}, cartões {nome,bandeira,limite,diaFechamento,diaVencimento}, transações {data,descricao,valor,tipo:'receita'|'despesa',categoria,subcategoria?,contaId|cartaoId,reembolsavel,pagamentoCartaoId,origemImport, parcela?:{atual,total,grupo,base}, estornado?:bool (riscada, fora de toda soma)}
   finConfig:{ categorias:[{nome,tipo,icone,subcategorias:[nome]}] },  // categorias PRÓPRIAS de Finanças (≠ config.categorias do reembolso); icone = nome no mapa ICONS (core.js); subcategorias é lista simples de nomes, sem tipo/ícone próprio (herdam da categoria-mãe)
   finArquivo:{},                     // agregados de anos arquivados: {'2025':{receitas,despesas,porCategoria}}
   tomb:{reembolso:{},alelo:{},finContas:{},finCartoes:{},finTx:{}},  // lápides de deleção (id->updatedAt)

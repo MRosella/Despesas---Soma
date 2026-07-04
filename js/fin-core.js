@@ -84,14 +84,15 @@ function finFaturasDoCartao(cartao, txs, hojeISO) {
     competencia: comp,
     fechamentoISO: finDiaEfetivoISO(comp, cartao.diaFechamento),
     vencimentoISO: finVencimentoISO(cartao, comp),
-    itens: [], total: 0, totalPessoal: 0, totalReembolsavel: 0, pagamentos: 0, status: 'aberta'
+    itens: [], total: 0, totalPessoal: 0, totalReembolsavel: 0, totalEstornado: 0, pagamentos: 0, status: 'aberta'
   });
   const pagamentos = [];
   for (const tx of (txs || [])) {
     if (tx.cartaoId === cartao.id) {
       const f = fatura(finCompetencia(cartao, tx.data));
       f.itens.push(tx);
-      const sinal = tx.tipo === 'receita' ? -1 : 1;   // estorno no cartão abate a fatura
+      if (tx.estornado) { f.totalEstornado += tx.valor || 0; continue; }   // estornado: aparece riscado, fora da soma
+      const sinal = tx.tipo === 'receita' ? -1 : 1;   // crédito/estorno lançado abate a fatura
       f.total += sinal * (tx.valor || 0);
       if (tx.reembolsavel) f.totalReembolsavel += sinal * (tx.valor || 0);
       else f.totalPessoal += sinal * (tx.valor || 0);
@@ -134,7 +135,7 @@ function finFaturaDe(cartao, txs, competencia, hojeISO) {
     competencia,
     fechamentoISO: finDiaEfetivoISO(competencia, cartao.diaFechamento),
     vencimentoISO: finVencimentoISO(cartao, competencia),
-    itens: [], total: 0, totalPessoal: 0, totalReembolsavel: 0, pagamentos: 0,
+    itens: [], total: 0, totalPessoal: 0, totalReembolsavel: 0, totalEstornado: 0, pagamentos: 0,
     status: (hojeISO || todayISO()) > finDiaEfetivoISO(competencia, cartao.diaFechamento) ? 'fechada' : 'aberta'
   };
 }
@@ -144,10 +145,25 @@ function finFaturaDe(cartao, txs, competencia, hojeISO) {
 function finSaldoConta(conta, txs) {
   let s = conta.saldoInicial || 0;
   for (const tx of (txs || [])) {
-    if (tx.contaId !== conta.id) continue;
+    if (tx.contaId !== conta.id || tx.estornado) continue;
     s += (tx.tipo === 'receita' ? 1 : -1) * (tx.valor || 0);
   }
   return Math.round(s * 100) / 100;
+}
+
+/* ---------------- Limite do cartão ----------------
+   Quanto do limite está comprometido = soma do que falta pagar em cada fatura
+   não quitada (aberta + fechada não paga). Estornos já saem por finFaturasDoCartao.
+   Retorna {usado, disponivel, limite}. */
+function finLimiteCartao(cartao, txs, hojeISO) {
+  const limite = cartao.limite || 0;
+  let usado = 0;
+  for (const f of finFaturasDoCartao(cartao, txs, hojeISO)) {
+    if (f.status === 'paga') continue;
+    usado += Math.max(0, (f.total || 0) - (f.pagamentos || 0));
+  }
+  usado = Math.round(usado * 100) / 100;
+  return { usado, disponivel: Math.round((limite - usado) * 100) / 100, limite };
 }
 
 /* ---------------- Resumos do mês (dashboard) ----------------
@@ -157,7 +173,7 @@ function finResumoMes(txs, ym) {
   const out = { receitas: 0, despesas: 0, porCategoria: {} };
   for (const tx of (txs || [])) {
     if ((tx.data || '').slice(0, 7) !== ym) continue;
-    if (tx.pagamentoCartaoId) continue;
+    if (tx.pagamentoCartaoId || tx.estornado) continue;
     if (tx.tipo === 'receita') out.receitas += tx.valor || 0;
     else {
       out.despesas += tx.valor || 0;
@@ -235,6 +251,37 @@ function finMatchReembolsaveis(rows, reembList, toleranciaDias) {
     if (hit) { r.reembolsavel = true; r.reembMatch = true; }
   }
   return rows;
+}
+
+/* ---------------- Pagamento de fatura & estornos (importação de cartão) ----------------
+   Numa fatura de cartão, créditos são quase sempre (a) pagamento da fatura anterior
+   ou (b) estorno/devolução de uma compra. Ao importar um CARTÃO:
+   - Pagamento da fatura anterior é reconhecido pela descrição e IGNORADO (o pagamento é
+     modelado à parte, com pagamentoCartaoId — não deve virar receita solta).
+   - Estorno é casado com a compra (débito) de mesmo valor na mesma leva; os dois ficam
+     marcados estornado=true → aparecem riscados e saem da soma da fatura (se anulam). */
+const FIN_PAGAMENTO_FATURA_RE = /\b(pagamento|pagto|pgto)\b|\bpag\.?\s*fatura\b|debito\s+em\s+conta|debito\s+autom|saldo\s+fatura\s+anterior/;
+function finEhPagamentoFatura(descricao) {
+  const d = finNormDesc(descricao);
+  return !!d && FIN_PAGAMENTO_FATURA_RE.test(d);
+}
+/* Marca (in-place) nas linhas importadas de um cartão os pagamentos de fatura (desmarcados
+   por padrão) e os pares estorno⇄compra (estornado=true). Deve rodar só quando destino é cartão. */
+function finMarcarPagamentosEstornos(rows) {
+  const list = rows || [];
+  for (const r of list) {
+    if (r.tipo === 'receita' && finEhPagamentoFatura(r.descricao)) {
+      r.pagamentoFatura = true; r.incluir = false;
+    }
+  }
+  const debs = list.filter((r) => r.tipo === 'despesa' && !r.estornado);
+  for (const cr of list) {
+    if (cr.tipo !== 'receita' || cr.estornado || cr.pagamentoFatura) continue;
+    const cents = Math.round((cr.valor || 0) * 100);
+    const par = debs.find((d) => !d.estornado && Math.round((d.valor || 0) * 100) === cents);
+    if (par) { cr.estornado = true; par.estornado = true; }
+  }
+  return list;
 }
 
 /* ---------------- Parcelamentos ----------------
@@ -318,6 +365,7 @@ function finArquivarAno(ano) {
   if (!doAno.length) return [];
   const agg = { receitas: 0, despesas: 0, porCategoria: {} };
   for (const tx of doAno) {
+    if (tx.estornado) continue;
     if (tx.tipo === 'receita') agg.receitas += tx.valor || 0;
     else {
       agg.despesas += tx.valor || 0;

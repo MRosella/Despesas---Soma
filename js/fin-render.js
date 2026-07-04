@@ -9,6 +9,7 @@ const FIN_TAB_KEY = 'despesas-soma-fintab-v1';
 let finMesAtivo = todayISO().slice(0, 7);   // 'YYYY-MM' exibido no Resumo/Transações
 let finFaturaView = null;                    // {cartaoId, competencia} da fatura aberta
 let finTxFiltro = 'todas';                   // todas | receitas | despesas | reembolsaveis
+let finTxBusca = '';                         // texto de busca nas transações do mês
 let finFatFiltro = 'todas';                  // todas | pessoais | reembolsaveis
 
 /* Selo colorido da categoria (ícone em círculo na cor da categoria + nome + subcategoria). */
@@ -20,6 +21,16 @@ function finCatTagHtml(cat, sub) {
     ? `<span class="ct-ic"${cor ? ` style="background:${cor}"` : ''} data-icon="${ic}" data-size="11"></span>`
     : '';
   return `<span class="cat-tag">${badge}${escapeHtml(cat)}${sub ? ' · ' + escapeHtml(sub) : ''}</span>`;
+}
+
+/* Barra de limite do cartão: usado × disponível (fica vermelha acima de 90%). */
+function finLimiteBarHtml(lim) {
+  const pct = lim.limite > 0 ? Math.min(100, Math.round((lim.usado / lim.limite) * 100)) : 0;
+  const alto = pct >= 90;
+  return `<div class="fin-lim">
+    <div class="fin-lim-bar"><span class="fin-lim-fill${alto ? ' alto' : ''}" style="width:${pct}%"></span></div>
+    <div class="fin-lim-txt">Disponível <b${lim.disponivel < 0 ? ' style="color:var(--red)"' : ''}>${formatMoney(lim.disponivel)}</b> de ${formatMoney(lim.limite)}</div>
+  </div>`;
 }
 
 function finDestinoNome(tx) {
@@ -84,6 +95,7 @@ function renderFinDashboard() {
     if (!cartoes.length) ulK.appendChild(finEmptyLi('Nenhum cartão cadastrado — adicione na aba Contas.'));
     for (const k of cartoes) {
       const f = finFaturaDe(k, txs, finMesAtivo);
+      const lim = finLimiteCartao(k, txs);
       const li = document.createElement('li');
       li.className = 'entry';
       li.innerHTML = `
@@ -94,6 +106,7 @@ function renderFinDashboard() {
             venc. ${fmtDateBR(f.vencimentoISO)}
             ${f.totalReembolsavel ? '<span class="fin-tag-reemb">↩ ' + formatMoney(f.totalReembolsavel) + '</span>' : ''}
           </div>
+          ${lim.limite ? finLimiteBarHtml(lim) : ''}
         </div>
         <div class="e-val">${formatMoney(f.total)}</div>`;
       li.addEventListener('click', () => openFinFatura(k.id, finMesAtivo));
@@ -115,7 +128,7 @@ function renderFinDashboard() {
   if (box) {
     const arr = Object.keys(res.porCategoria).map((c) => [c, res.porCategoria[c]]).sort((a, b) => b[1] - a[1]);
     box.innerHTML = arr.length
-      ? arr.map(([cat, val]) => `<span class="cat-chip">${finCatIcon(cat) ? `<span class="cc-ic"${finCatColor(cat) ? ` style="background:${finCatColor(cat)}"` : ''} data-icon="${finCatIcon(cat)}" data-size="13"></span>` : ''}<span class="cc-name">${escapeHtml(cat)}</span><span class="cc-val">${formatMoney(val)}</span></span>`).join('')
+      ? arr.map(([cat, val]) => { const pct = res.despesas > 0 ? Math.round((val / res.despesas) * 100) : 0; return `<span class="cat-chip">${finCatIcon(cat) ? `<span class="cc-ic"${finCatColor(cat) ? ` style="background:${finCatColor(cat)}"` : ''} data-icon="${finCatIcon(cat)}" data-size="13"></span>` : ''}<span class="cc-name">${escapeHtml(cat)}</span><span class="cc-val">${formatMoney(val)}</span><span class="cc-pct">${pct}%</span></span>`; }).join('')
       : '<span class="cat-empty">Sem despesas neste mês.</span>';
     setupIcons(box);
   }
@@ -125,7 +138,7 @@ function renderFinDashboard() {
 /* ---------------- Transações ---------------- */
 function finTxLi(t) {
   const li = document.createElement('li');
-  li.className = 'entry' + (t.id === lastAddedId ? ' added' : '');
+  li.className = 'entry' + (t.id === lastAddedId ? ' added' : '') + (t.estornado ? ' estornado' : '');
   li.innerHTML = `
     <div class="e-main">
       <div class="e-desc">${escapeHtml(t.descricao || '(sem descrição)')}</div>
@@ -133,6 +146,7 @@ function finTxLi(t) {
         ${finCatTagHtml(t.categoria, t.subcategoria)}
         ${fmtDateBR(t.data)} · ${escapeHtml(finDestinoNome(t))}
         ${t.reembolsavel ? '<span class="fin-tag-reemb">↩ reembolsável</span>' : ''}
+        ${t.estornado ? '<span class="fin-tag-estorno">⊘ estornado</span>' : ''}
       </div>
     </div>
     <div class="e-val" style="color:${t.tipo === 'receita' ? 'var(--ok)' : 'inherit'}">${t.tipo === 'receita' ? '+' : ''}${formatMoney(t.valor)}</div>
@@ -158,15 +172,19 @@ function renderFinTransacoes() {
   if (finTxFiltro === 'receitas') list = list.filter((t) => t.tipo === 'receita');
   else if (finTxFiltro === 'despesas') list = list.filter((t) => t.tipo !== 'receita');
   else if (finTxFiltro === 'reembolsaveis') list = list.filter((t) => t.reembolsavel);
+  if (finTxBusca) {
+    const q = finNormDesc(finTxBusca);
+    list = list.filter((t) => finNormDesc(t.descricao).indexOf(q) >= 0 || finNormDesc(t.categoria).indexOf(q) >= 0);
+  }
   list.sort((a, b) => (b.data || '').localeCompare(a.data || ''));
 
   // separa transações da conta × transações em cartões
   const contasTx = list.filter((t) => !t.cartaoId);
   const cartoesTx = list.filter((t) => t.cartaoId);
-  const somaGrupo = (arr) => arr.reduce((s, t) => s + (t.tipo === 'receita' ? 1 : -1) * (t.valor || 0), 0);
+  const somaGrupo = (arr) => arr.reduce((s, t) => s + (t.estornado ? 0 : (t.tipo === 'receita' ? 1 : -1) * (t.valor || 0)), 0);
 
   ul.innerHTML = '';
-  if (!list.length) { ul.appendChild(finEmptyLi('Nenhuma transação neste mês.')); }
+  if (!list.length) { ul.appendChild(finEmptyLi((finTxBusca || finTxFiltro !== 'todas') ? 'Nenhuma transação encontrada.' : 'Nenhuma transação neste mês.')); }
   if (contasTx.length) {
     ul.appendChild(finTxGroupHead('wallet', 'Contas', somaGrupo(contasTx)));
     for (const t of contasTx) ul.appendChild(finTxLi(t));
@@ -283,7 +301,9 @@ function renderFinFatura() {
       <span class="fsp">Pessoal<b>${formatMoney(f.totalPessoal)}</b></span>
       <span class="fsp">↩ Reembolsável<b>${formatMoney(f.totalReembolsavel)}</b></span>
       <span class="fsp">Em aberto<b>${formatMoney(restante)}</b></span>
-    </div>`;
+      ${f.totalEstornado ? `<span class="fsp">⊘ Estornado<b>${formatMoney(f.totalEstornado)}</b></span>` : ''}
+    </div>
+    ${k.limite ? finLimiteBarHtml(finLimiteCartao(k, state.finTx || [])) : ''}`;
 
   let itens = f.itens;
   if (finFatFiltro === 'pessoais') itens = itens.filter((t) => !t.reembolsavel);
@@ -294,7 +314,7 @@ function renderFinFatura() {
   if (!itens.length) ul.appendChild(finEmptyLi('Nenhuma compra nesta fatura.'));
   for (const t of itens.slice().sort((a, b) => (b.data || '').localeCompare(a.data || ''))) {
     const li = document.createElement('li');
-    li.className = 'entry';
+    li.className = 'entry' + (t.estornado ? ' estornado' : '');
     li.innerHTML = `
       <div class="e-main">
         <div class="e-desc">${escapeHtml(t.descricao || '(sem descrição)')}</div>
@@ -302,9 +322,10 @@ function renderFinFatura() {
           ${finCatTagHtml(t.categoria, t.subcategoria)}
           ${fmtDateBR(t.data)}
           ${t.reembolsavel ? '<span class="fin-tag-reemb">↩ reembolsável</span>' : ''}
+          ${t.estornado ? '<span class="fin-tag-estorno">⊘ estornado</span>' : ''}
         </div>
       </div>
-      <div class="e-val">${formatMoney(t.valor)}</div>`;
+      <div class="e-val">${t.tipo === 'receita' ? '−' : ''}${formatMoney(t.valor)}</div>`;
     li.addEventListener('click', () => openFinTxModal(t.id));
     ul.appendChild(li);
   }
@@ -365,6 +386,9 @@ function setupFinUI() {
   };
   bindChips('fin-tx-filtros', 'ffiltro', (v) => { finTxFiltro = v; });
   bindChips('fin-fat-filtros', 'ffat', (v) => { finFatFiltro = v; });
+
+  const busca = $('fin-tx-search');
+  if (busca) busca.addEventListener('input', () => { finTxBusca = busca.value.trim(); renderFinTransacoes(); });
 
   $('fin-tx-add').addEventListener('click', () => openFinTxModal(null));
   $('fin-conta-add').addEventListener('click', () => openFinContaModal(null));

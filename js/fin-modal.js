@@ -67,6 +67,7 @@ function openFinTxModal(id, prefill) {
   $('fm-subcategoria').value = e.subcategoria || '';
   $('fm-destino').value = e.cartaoId ? ('k:' + e.cartaoId) : (e.contaId ? ('c:' + e.contaId) : '');
   $('fm-reembolsavel').checked = !!e.reembolsavel;
+  if ($('fm-estornado')) $('fm-estornado').checked = !!e.estornado;
   finToggleReembRow();
   $('fm-delete').style.display = isEdit ? '' : 'none';
   $('fin-tx-modal').classList.add('open');
@@ -117,6 +118,7 @@ function saveFinTx() {
     id: id || uid(),
     data, descricao, valor, tipo, categoria, subcategoria, contaId, cartaoId,
     reembolsavel: cartaoId ? $('fm-reembolsavel').checked : false,
+    estornado: !!($('fm-estornado') && $('fm-estornado').checked),
     pagamentoCartaoId,
     origemImport: (old && old.origemImport) || '',
     updatedAt: Date.now()

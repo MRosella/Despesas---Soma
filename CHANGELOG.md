@@ -3,6 +3,22 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v53 — Finanças: estornos, pagamento de fatura ignorado, limite do cartão e busca
+- **Pagamento da fatura anterior ignorado na importação**: `finEhPagamentoFatura` reconhece pela
+  descrição (pagamento/pgto/pagto/débito em conta) os créditos que são quitação da fatura passada e,
+  ao importar um cartão, `finMarcarPagamentosEstornos` os desmarca por padrão (rótulo "pagamento —
+  ignorado") — o pagamento é modelado à parte (`pagamentoCartaoId`), não deve virar receita solta.
+- **Estornos riscados e fora da soma**: na mesma função, cada crédito restante é casado com a compra
+  (débito) de mesmo valor na leva e os dois recebem `estornado:true`. Transação estornada aparece
+  **riscada** (lista, fatura e revisão) e sai da soma da fatura (`finFaturasDoCartao` acumula em
+  `totalEstornado`), do saldo da conta (`finSaldoConta`), do resumo do mês (`finResumoMes`) e do
+  arquivamento anual. Checkbox manual "⊘ Estornado" no modal de transação (`fm-estornado`).
+- **Limite do cartão**: `finLimiteCartao` calcula usado × disponível (soma do que falta pagar nas
+  faturas não quitadas); barra de progresso no card do cartão (Resumo) e na fatura (vermelha ≥90%).
+- **Busca de transações**: campo de busca por descrição/categoria na aba Transações (`fin-tx-search`).
+- **Fatura**: créditos agora aparecem com sinal "−" (abatem a fatura) e % por categoria no resumo do
+  dashboard. Testes novos em `tests/logic.html`. Cache v52→v53.
+
 ## v47 — Finanças: corrige categorização/cruzamento de reembolso na importação
 - **Categoria da IA não batia por acento/maiúscula**: `ocrStatementRaw` comparava `category` da IA
   com a lista de categorias por igualdade EXATA de string — qualquer diferença de acento, caixa ou
