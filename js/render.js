@@ -35,6 +35,7 @@ function render() {
   renderReports();
   if (typeof renderPending === 'function') renderPending();
   if (typeof updateGdPending === 'function') updateGdPending();
+  if (typeof renderFin === 'function') renderFin();
 }
 
 /* ---------------- Histórico de meses ---------------- */

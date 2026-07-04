@@ -265,6 +265,11 @@ function init() {
   setupGDriveUI();
   setupCatUI();
   setupAiUI();
+  setupFinTabs();
+  setupFinUI();
+  setupFinModals();
+  setupFinImportUI();
+  setupFinCatUI();
   updateFooter();
   updateSyncIndicator();
   $('sync-ind').addEventListener('click', () => syncNow(false));

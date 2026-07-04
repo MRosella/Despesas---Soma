@@ -1,6 +1,6 @@
 'use strict';
 /* ---------------- Navegação (menu lateral + telas) ---------------- */
-const VIEW_TITLES = { lancamentos: 'Lançamentos', relatorios: 'Relatórios mensais', config: 'Configurações' };
+const VIEW_TITLES = { lancamentos: 'Lançamentos', relatorios: 'Relatórios mensais', financas: 'Finanças', config: 'Configurações' };
 
 function openDrawer() { $('drawer').classList.add('open'); $('drawer-backdrop').classList.add('show'); }
 function closeDrawer() { $('drawer').classList.remove('open'); $('drawer-backdrop').classList.remove('show'); }
@@ -13,6 +13,7 @@ function showView(name) {
   const nm = $('btn-new-month'); if (nm) nm.style.display = (name === 'lancamentos') ? '' : 'none';
   const ht = $('header-title'); if (ht) ht.textContent = VIEW_TITLES[name];
   if (name === 'relatorios') renderReports();
+  if (name === 'financas' && typeof renderFin === 'function') renderFin();
   window.scrollTo(0, 0);
 }
 

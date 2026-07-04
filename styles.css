@@ -573,3 +573,74 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 #print-root .p-sign-name { margin-top: 6px; font-weight: 700; font-size: 11px; color: #4e3f39; }
 #print-root .p-sign-role { font-size: 9px; color: #6b5c54; }
 #print-root .p-sign-date { margin-top: 10px; text-align: center; font-size: 10px; color: #4e3f39; font-weight: 700; }
+
+/* ===================== Módulo Finanças ===================== */
+/* Abas próprias (.ftab/.fin-panel) — NÃO usam .rtab para não colidir com setupReportTabs */
+.ftab {
+  flex: 1; border: none; background: transparent; color: var(--brown);
+  font-size: .9rem; font-weight: 700; padding: 11px 4px; border-radius: 10px;
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.ftab:active { transform: translateY(1px); }
+.ftab.active { background: linear-gradient(135deg, var(--red), var(--red-dark)); color: #fff; }
+.fin-panel { display: none; }
+.fin-panel.active { display: block; }
+
+/* navegador de mês */
+.fin-month-nav {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: var(--card); border-radius: 14px; padding: 4px 6px; margin: 0 0 14px;
+  box-shadow: var(--shadow);
+}
+.fin-month-nav .icon-btn { font-size: 1.3rem; line-height: 1; }
+.fin-month-label { font-weight: 700; color: var(--text); font-size: .95rem; }
+
+/* chips de filtro (transações / fatura) */
+.fin-filtros { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 14px 2px; }
+.fchip {
+  border: 1px solid var(--line, rgba(0,0,0,.12)); background: transparent; color: var(--muted);
+  font-size: .78rem; font-weight: 700; padding: 6px 10px; border-radius: 999px; cursor: pointer;
+}
+.fchip.active { background: var(--red); border-color: var(--red); color: #fff; }
+
+/* dashboard: receitas x despesas */
+.fin-rxd { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.fin-rxd .frx { background: var(--input-bg); border-radius: 10px; padding: 10px; text-align: center; }
+.fin-rxd .frx .lab { display: block; font-size: .72rem; color: var(--muted); font-weight: 700; }
+.fin-rxd .frx .val { display: block; font-size: .95rem; font-weight: 800; margin-top: 2px; }
+.fin-rxd .frx .val.pos { color: var(--ok); }
+.fin-rxd .frx .val.neg { color: var(--red); }
+
+/* etiquetas nas listas */
+.fin-tag-reemb {
+  display: inline-block; background: #e3f0e4; color: #2e7d32; border-radius: 6px;
+  padding: 1px 6px; font-size: .68rem; font-weight: 700;
+}
+[data-theme="dark"] .fin-tag-reemb { background: #1e3320; color: #8fd694; }
+.fin-tag-status { display: inline-block; border-radius: 6px; padding: 1px 6px; font-size: .68rem; font-weight: 700; }
+.fin-tag-status.aberta { background: #e8f0f7; color: #1c5d99; }
+.fin-tag-status.fechada { background: #f7ecda; color: #9a6b15; }
+.fin-tag-status.paga { background: #e3f0e4; color: #2e7d32; }
+[data-theme="dark"] .fin-tag-status.aberta { background: #17293a; color: #7db5e8; }
+[data-theme="dark"] .fin-tag-status.fechada { background: #362a12; color: #e0b56a; }
+[data-theme="dark"] .fin-tag-status.paga { background: #1e3320; color: #8fd694; }
+
+/* info da fatura (fechamento/vencimento/totais) */
+.fin-fatura-info { padding: 8px 16px 0; font-size: .8rem; color: var(--muted); }
+.fin-fatura-info b { color: var(--text); }
+.fin-fatura-split { display: flex; gap: 8px; margin-top: 6px; }
+.fin-fatura-split .fsp { flex: 1; background: var(--input-bg); border-radius: 8px; padding: 6px 8px; text-align: center; font-size: .74rem; }
+.fin-fatura-split .fsp b { display: block; font-size: .9rem; }
+
+/* revisão de importação */
+.fin-rev-row {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: center;
+  padding: 10px 14px; border-top: 1px solid var(--line, rgba(0,0,0,.08));
+}
+.fin-rev-row .frv-desc { font-size: .85rem; font-weight: 600; }
+.fin-rev-row .frv-meta { grid-column: 2 / 4; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: .74rem; color: var(--muted); }
+.fin-rev-row .frv-meta select { font-size: .74rem; padding: 3px 6px; border-radius: 6px; max-width: 46vw; }
+.fin-rev-row .frv-val { font-weight: 800; white-space: nowrap; }
+.fin-rev-row .frv-val.receita { color: var(--ok); }
+.fin-rev-row.dup { opacity: .55; }
+.fin-rev-row .frv-dup { color: #9a6b15; font-weight: 700; }

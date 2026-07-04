@@ -34,6 +34,7 @@
     <nav class="drawer-nav">
       <button class="nav-item active" data-view="lancamentos"><span class="nav-ic" data-icon="receipt" data-size="22"></span> Lançamentos</button>
       <button class="nav-item" data-view="relatorios"><span class="nav-ic" data-icon="calendar" data-size="22"></span> Relatórios mensais</button>
+      <button class="nav-item" data-view="financas"><span class="nav-ic" data-icon="wallet" data-size="22"></span> Finanças</button>
       <button class="nav-item" data-view="config"><span class="nav-ic" data-icon="settings" data-size="22"></span> Configurações</button>
     </nav>
     <div class="drawer-foot">Despesas para Reembolso<br><span id="ft-version2"></span></div>
@@ -224,6 +225,136 @@
       <div id="reports-tree"></div>
     </section>
 
+    <!-- ===================== TELA: FINANÇAS (controle pessoal) ===================== -->
+    <section class="view" id="view-financas" hidden>
+      <!-- Seletor de abas do módulo (classes próprias .ftab/.fin-panel; NÃO usar .rtab aqui) -->
+      <div class="report-tabs" role="tablist" aria-label="Finanças">
+        <button class="ftab active" data-ftab="dashboard" role="tab" aria-selected="true">Resumo</button>
+        <button class="ftab" data-ftab="transacoes" role="tab" aria-selected="false">Transações</button>
+        <button class="ftab" data-ftab="contas" role="tab" aria-selected="false">Contas</button>
+        <button class="ftab" data-ftab="importar" role="tab" aria-selected="false">Importar</button>
+      </div>
+
+      <!-- Navegador de mês (vale para Resumo e Transações) -->
+      <div class="fin-month-nav" id="fin-month-nav">
+        <button class="icon-btn" id="fin-mes-prev" aria-label="Mês anterior">‹</button>
+        <span class="fin-month-label" id="fin-mes-label"></span>
+        <button class="icon-btn" id="fin-mes-next" aria-label="Próximo mês">›</button>
+      </div>
+
+      <!-- ===== Painel: RESUMO (dashboard) ===== -->
+      <div class="fin-panel active" id="fin-tab-dashboard" data-fpanel="dashboard" role="tabpanel">
+        <section class="card">
+          <div class="card-head"><h2>Contas</h2><span class="sum" id="fin-saldo-total">R$ 0,00</span></div>
+          <ul class="entries" id="fin-dash-contas"></ul>
+        </section>
+        <section class="card">
+          <div class="card-head"><h2>Cartões de crédito</h2></div>
+          <ul class="entries" id="fin-dash-cartoes"></ul>
+        </section>
+        <section class="card report-summary">
+          <div class="card-body">
+            <div class="rs-head"><span class="rs-title">Receitas × Despesas do mês</span></div>
+            <div class="fin-rxd" id="fin-rxd"></div>
+          </div>
+        </section>
+        <section class="card report-summary">
+          <div class="card-body">
+            <div class="rs-head"><span class="rs-title">Gastos por categoria</span><span class="rs-total">Total <b id="fin-gastos-total">R$ 0,00</b></span></div>
+            <div class="cat-summary" id="fin-cat-summary"></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ===== Painel: TRANSAÇÕES ===== -->
+      <div class="fin-panel" id="fin-tab-transacoes" data-fpanel="transacoes" role="tabpanel">
+        <section class="card">
+          <div class="card-head"><h2>Transações do mês</h2><span class="sum" id="fin-tx-sum">R$ 0,00</span></div>
+          <div class="fin-filtros" id="fin-tx-filtros">
+            <button class="fchip active" data-ffiltro="todas">Todas</button>
+            <button class="fchip" data-ffiltro="receitas">Receitas</button>
+            <button class="fchip" data-ffiltro="despesas">Despesas</button>
+            <button class="fchip" data-ffiltro="reembolsaveis">↩ Reembolsáveis</button>
+          </div>
+          <ul class="entries" id="fin-tx-list"></ul>
+          <div class="add-row">
+            <button class="add-btn" id="fin-tx-add"><span class="bic" data-icon="plus" data-size="18"></span> Adicionar transação</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- ===== Painel: CONTAS & CARTÕES ===== -->
+      <div class="fin-panel" id="fin-tab-contas" data-fpanel="contas" role="tabpanel">
+        <section class="card">
+          <div class="card-head"><h2>Contas</h2></div>
+          <ul class="entries" id="fin-contas-list"></ul>
+          <div class="add-row">
+            <button class="add-btn" id="fin-conta-add"><span class="bic" data-icon="plus" data-size="18"></span> Adicionar conta</button>
+          </div>
+        </section>
+        <section class="card">
+          <div class="card-head"><h2>Cartões de crédito</h2></div>
+          <ul class="entries" id="fin-cartoes-list"></ul>
+          <div class="add-row">
+            <button class="add-btn" id="fin-cartao-add"><span class="bic" data-icon="plus" data-size="18"></span> Adicionar cartão</button>
+          </div>
+        </section>
+        <!-- Fatura do cartão selecionado -->
+        <section class="card" id="fin-fatura-box" style="display:none">
+          <div class="card-head"><h2 id="fin-fatura-title">Fatura</h2><span class="sum" id="fin-fatura-total">R$ 0,00</span></div>
+          <div class="fin-month-nav" style="margin:10px 12px 0">
+            <button class="icon-btn" id="fin-fat-prev" aria-label="Fatura anterior">‹</button>
+            <span class="fin-month-label" id="fin-fat-label"></span>
+            <button class="icon-btn" id="fin-fat-next" aria-label="Próxima fatura">›</button>
+          </div>
+          <div class="fin-fatura-info" id="fin-fatura-info"></div>
+          <div class="fin-filtros" id="fin-fat-filtros">
+            <button class="fchip active" data-ffat="todas">Todas</button>
+            <button class="fchip" data-ffat="pessoais">Pessoais</button>
+            <button class="fchip" data-ffat="reembolsaveis">↩ Reembolsáveis</button>
+          </div>
+          <ul class="entries" id="fin-fatura-list"></ul>
+          <div class="add-row">
+            <button class="add-btn" id="fin-fat-pagar"><span class="bic" data-icon="check" data-size="18"></span> Registrar pagamento</button>
+            <button class="add-btn" id="fin-fat-close"><span class="bic" data-icon="x" data-size="18"></span> Fechar</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- ===== Painel: IMPORTAR ===== -->
+      <div class="fin-panel" id="fin-tab-importar" data-fpanel="importar" role="tabpanel">
+        <section class="card">
+          <div class="card-head"><h2>Importar extrato / fatura</h2></div>
+          <div class="card-body">
+            <p class="hint" style="margin-top:0">Envie o <b>PDF</b> da fatura do cartão ou do extrato bancário (a IA extrai
+              as transações) ou um arquivo <b>CSV/OFX</b> exportado pelo banco (leitura direta, sem IA).
+              Você revisa tudo antes de gravar; transações repetidas são detectadas.</p>
+            <div class="field">
+              <label for="fin-imp-destino">Lançar em</label>
+              <select id="fin-imp-destino"></select>
+            </div>
+            <input type="file" id="fin-imp-file" accept=".pdf,.csv,.ofx,application/pdf,text/csv,image/*" style="display:none" />
+            <button class="btn btn-excel" id="fin-imp-btn" type="button" style="width:100%"><span class="bic" data-icon="upload" data-size="18"></span> Escolher arquivo…</button>
+            <p class="sync-status" id="fin-imp-status"></p>
+          </div>
+        </section>
+        <section class="card" id="fin-review-card" style="display:none">
+          <div class="card-head"><h2>Revisar antes de importar</h2><span class="sum" id="fin-review-count"></span></div>
+          <div class="card-body" style="padding-bottom:6px">
+            <div class="sync-actions">
+              <button class="btn btn-ghost" id="fin-rev-all" type="button">Marcar todas</button>
+              <button class="btn btn-ghost" id="fin-rev-none" type="button">Desmarcar todas</button>
+            </div>
+          </div>
+          <div id="fin-review-list"></div>
+          <div class="add-row">
+            <button class="add-btn" id="fin-rev-cancel"><span class="bic" data-icon="x" data-size="18"></span> Cancelar</button>
+            <button class="add-btn" id="fin-rev-confirm"><span class="bic" data-icon="check" data-size="18"></span> Importar marcadas</button>
+          </div>
+        </section>
+      </div>
+    </section>
+
     <!-- ===================== TELA: CONFIGURAÇÕES ===================== -->
     <section class="view" id="view-config" hidden>
       <h2 class="view-title">Configurações</h2>
@@ -341,6 +472,22 @@
         </div>
       </section>
 
+      <!-- Categorias do módulo Finanças -->
+      <section class="card">
+        <div class="card-head"><h2>Finanças — categorias</h2></div>
+        <div class="card-body">
+          <p class="hint" style="margin-top:0">Categorias das suas transações pessoais (tela <b>Finanças</b>),
+            separadas das categorias de reembolso acima. Renomear não altera transações já salvas.</p>
+          <div id="fincat-list"></div>
+          <div class="sync-actions">
+            <button class="btn btn-ghost" id="fincat-add" type="button">Adicionar categoria</button>
+            <button class="btn btn-excel" id="fincat-save" type="button">Salvar categorias</button>
+          </div>
+          <p class="sync-status" id="fincat-status"></p>
+          <button class="btn btn-danger-text" id="fincat-reset" type="button" style="padding:8px 0">Restaurar padrão</button>
+        </div>
+      </section>
+
       <!-- Backup / Restauração -->
       <section class="card">
         <div class="card-head"><h2>Backup / Restaurar</h2></div>
@@ -455,6 +602,128 @@
       <div class="modal-actions">
         <button class="btn btn-ghost" id="exp-cancel">Cancelar</button>
         <button class="btn btn-excel" id="exp-confirm">Exportar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: transação (Finanças) -->
+  <div class="modal-backdrop" id="fin-tx-modal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <h3 id="fin-tx-title">Nova transação</h3>
+      <input type="hidden" id="fm-id" />
+      <input type="hidden" id="fm-pagamento-cartao" />
+      <div class="row2">
+        <div class="field">
+          <label for="fm-tipo">Tipo</label>
+          <select id="fm-tipo">
+            <option value="despesa">Despesa</option>
+            <option value="receita">Receita</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fm-data">Data</label>
+          <input type="date" id="fm-data" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="fm-descricao">Descrição</label>
+        <input type="text" id="fm-descricao" placeholder="Ex.: Mercado, Uber, Salário…" />
+      </div>
+      <div class="field">
+        <label for="fm-valor">Valor (R$)</label>
+        <input type="text" id="fm-valor" inputmode="decimal" placeholder="0,00" />
+      </div>
+      <div class="field">
+        <label for="fm-categoria">Categoria</label>
+        <select id="fm-categoria"></select>
+      </div>
+      <div class="field">
+        <label for="fm-destino">Conta / Cartão</label>
+        <select id="fm-destino"></select>
+      </div>
+      <label class="exp-opt" id="fm-reembolsavel-row" style="display:none">
+        <input type="checkbox" id="fm-reembolsavel" />
+        <span>↩ Reembolsável (gasto de trabalho no cartão pessoal)</span>
+      </label>
+      <div class="modal-actions">
+        <button class="btn btn-danger-text" id="fm-delete" style="display:none">Excluir</button>
+        <button class="btn btn-ghost" id="fm-cancel">Cancelar</button>
+        <button class="btn btn-excel" id="fm-save">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: conta (Finanças) -->
+  <div class="modal-backdrop" id="fin-conta-modal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <h3 id="fin-conta-title">Nova conta</h3>
+      <input type="hidden" id="fc-id" />
+      <div class="field">
+        <label for="fc-nome">Nome da conta</label>
+        <input type="text" id="fc-nome" placeholder="Ex.: Nubank, Carteira…" />
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label for="fc-instituicao">Instituição</label>
+          <input type="text" id="fc-instituicao" placeholder="Banco/corretora" />
+        </div>
+        <div class="field">
+          <label for="fc-tipo">Tipo</label>
+          <select id="fc-tipo">
+            <option value="corrente">Conta corrente</option>
+            <option value="poupanca">Poupança</option>
+            <option value="dinheiro">Dinheiro</option>
+            <option value="investimento">Investimento</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="fc-saldo">Saldo inicial (R$)</label>
+        <input type="text" id="fc-saldo" inputmode="decimal" placeholder="0,00" />
+        <p class="hint">Saldo da conta no dia em que você começa a registrar as transações aqui.</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-danger-text" id="fc-delete" style="display:none">Excluir</button>
+        <button class="btn btn-ghost" id="fc-cancel">Cancelar</button>
+        <button class="btn btn-excel" id="fc-save">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: cartão de crédito (Finanças) -->
+  <div class="modal-backdrop" id="fin-cartao-modal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <h3 id="fin-cartao-title">Novo cartão</h3>
+      <input type="hidden" id="fk-id" />
+      <div class="field">
+        <label for="fk-nome">Nome do cartão</label>
+        <input type="text" id="fk-nome" placeholder="Ex.: Nubank Mastercard" />
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label for="fk-bandeira">Bandeira / banco</label>
+          <input type="text" id="fk-bandeira" placeholder="Visa, Master…" />
+        </div>
+        <div class="field">
+          <label for="fk-limite">Limite (R$)</label>
+          <input type="text" id="fk-limite" inputmode="decimal" placeholder="0,00" />
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label for="fk-fechamento">Dia de fechamento</label>
+          <input type="number" id="fk-fechamento" min="1" max="31" inputmode="numeric" placeholder="1–31" />
+        </div>
+        <div class="field">
+          <label for="fk-vencimento">Dia de vencimento</label>
+          <input type="number" id="fk-vencimento" min="1" max="31" inputmode="numeric" placeholder="1–31" />
+        </div>
+      </div>
+      <p class="hint">Compras até o dia de fechamento entram na fatura do mês; depois dele, na seguinte.</p>
+      <div class="modal-actions">
+        <button class="btn btn-danger-text" id="fk-delete" style="display:none">Excluir</button>
+        <button class="btn btn-ghost" id="fk-cancel">Cancelar</button>
+        <button class="btn btn-excel" id="fk-save">Salvar</button>
       </div>
     </div>
   </div>
