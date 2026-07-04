@@ -222,6 +222,18 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--orange); bo
 }
 .empty-list { padding: 18px 16px; color: var(--muted); font-size: .85rem; text-align: center; }
 
+/* Cabeçalho de grupo na lista de transações (Contas × Cartões) */
+.fin-txgroup {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 16px; border-top: 1px solid var(--line);
+  background: var(--bg);
+  font-size: .74rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted);
+}
+.fin-txgroup .tg-name { display: inline-flex; align-items: center; gap: 6px; }
+.fin-txgroup .tg-ic { opacity: .8; }
+.fin-txgroup .tg-sum { text-transform: none; letter-spacing: 0; font-weight: 700; }
+
 .add-btn {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; padding: 13px;

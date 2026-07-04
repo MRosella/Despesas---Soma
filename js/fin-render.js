@@ -111,6 +111,35 @@ function renderFinDashboard() {
 }
 
 /* ---------------- Transações ---------------- */
+function finTxLi(t) {
+  const li = document.createElement('li');
+  li.className = 'entry' + (t.id === lastAddedId ? ' added' : '');
+  li.innerHTML = `
+    <div class="e-main">
+      <div class="e-desc">${escapeHtml(t.descricao || '(sem descrição)')}</div>
+      <div class="e-meta">
+        <span class="cat-tag">${escapeHtml(t.categoria || '—')}</span>
+        ${fmtDateBR(t.data)} · ${escapeHtml(finDestinoNome(t))}
+        ${t.reembolsavel ? '<span class="fin-tag-reemb">↩ reembolsável</span>' : ''}
+      </div>
+    </div>
+    <div class="e-val" style="color:${t.tipo === 'receita' ? 'var(--ok)' : 'inherit'}">${t.tipo === 'receita' ? '+' : ''}${formatMoney(t.valor)}</div>
+    <div class="e-quick">
+      <button class="qbtn danger" data-q="del" title="Excluir" aria-label="Excluir transação" data-icon="trash-2" data-size="18"></button>
+    </div>`;
+  li.addEventListener('click', (ev) => { if (!ev.target.closest('.e-quick')) openFinTxModal(t.id); });
+  li.querySelector('[data-q=del]').addEventListener('click', () => quickDeleteFinTx(t.id));
+  return li;
+}
+
+function finTxGroupHead(icon, titulo, soma) {
+  const li = document.createElement('li');
+  li.className = 'fin-txgroup';
+  li.innerHTML = `<span class="tg-name"><span class="tg-ic" data-icon="${icon}" data-size="16"></span>${escapeHtml(titulo)}</span>
+    <span class="tg-sum">${formatMoney(soma)}</span>`;
+  return li;
+}
+
 function renderFinTransacoes() {
   const ul = $('fin-tx-list'); if (!ul) return;
   let list = (state.finTx || []).filter((t) => (t.data || '').slice(0, 7) === finMesAtivo);
@@ -119,31 +148,24 @@ function renderFinTransacoes() {
   else if (finTxFiltro === 'reembolsaveis') list = list.filter((t) => t.reembolsavel);
   list.sort((a, b) => (b.data || '').localeCompare(a.data || ''));
 
+  // separa transações da conta × transações em cartões
+  const contasTx = list.filter((t) => !t.cartaoId);
+  const cartoesTx = list.filter((t) => t.cartaoId);
+  const somaGrupo = (arr) => arr.reduce((s, t) => s + (t.tipo === 'receita' ? 1 : -1) * (t.valor || 0), 0);
+
   ul.innerHTML = '';
-  if (!list.length) { ul.appendChild(finEmptyLi('Nenhuma transação neste mês.')); setupIcons(ul); }
-  let net = 0;
-  for (const t of list) {
-    net += (t.tipo === 'receita' ? 1 : -1) * (t.valor || 0);
-    const li = document.createElement('li');
-    li.className = 'entry' + (t.id === lastAddedId ? ' added' : '');
-    li.innerHTML = `
-      <div class="e-main">
-        <div class="e-desc">${escapeHtml(t.descricao || '(sem descrição)')}</div>
-        <div class="e-meta">
-          <span class="cat-tag">${escapeHtml(t.categoria || '—')}</span>
-          ${fmtDateBR(t.data)} · ${escapeHtml(finDestinoNome(t))}
-          ${t.reembolsavel ? '<span class="fin-tag-reemb">↩ reembolsável</span>' : ''}
-        </div>
-      </div>
-      <div class="e-val" style="color:${t.tipo === 'receita' ? 'var(--ok)' : 'inherit'}">${t.tipo === 'receita' ? '+' : ''}${formatMoney(t.valor)}</div>
-      <div class="e-quick">
-        <button class="qbtn danger" data-q="del" title="Excluir" aria-label="Excluir transação" data-icon="trash-2" data-size="18"></button>
-      </div>`;
-    li.addEventListener('click', (ev) => { if (!ev.target.closest('.e-quick')) openFinTxModal(t.id); });
-    li.querySelector('[data-q=del]').addEventListener('click', () => quickDeleteFinTx(t.id));
-    ul.appendChild(li);
+  if (!list.length) { ul.appendChild(finEmptyLi('Nenhuma transação neste mês.')); }
+  if (contasTx.length) {
+    ul.appendChild(finTxGroupHead('wallet', 'Contas', somaGrupo(contasTx)));
+    for (const t of contasTx) ul.appendChild(finTxLi(t));
+  }
+  if (cartoesTx.length) {
+    ul.appendChild(finTxGroupHead('credit-card', 'Cartões', somaGrupo(cartoesTx)));
+    for (const t of cartoesTx) ul.appendChild(finTxLi(t));
   }
   setupIcons(ul);
+
+  const net = somaGrupo(list);
   const s = $('fin-tx-sum');
   if (s) { s.textContent = formatMoney(net); s.style.color = ''; }
 }
