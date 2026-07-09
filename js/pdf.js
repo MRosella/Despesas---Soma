@@ -97,17 +97,18 @@ function buildSantanderPrint(src) {
   const lab = bd + pad + 'font-weight:bold;background:#fff;white-space:nowrap;';
   const val = bd + pad + 'background:#fff;';
   const tdTxt = bd + pad + 'word-break:break-word;';
-  const minRows = 12;
   let rows = '';
-  const nrows = Math.max(list.length, minRows);
+  // linhas dos lançamentos + apenas 2 linhas em branco (com &nbsp; p/ manter a MESMA altura
+  // de uma linha preenchida de uma só linha — evita células vazias "achatadas")
+  const nrows = list.length + 2;
   for (let i = 0; i < nrows; i++) {
     const e = list[i];
     rows += `<tr>
-      <td style="${bd}${pad}text-align:center;white-space:nowrap;">${e ? fmtDateBR(e.data) : ''}</td>
-      <td style="${tdTxt}">${e ? escapeHtml(e.estabelecimento || '') : ''}</td>
-      <td style="${tdTxt}">${e ? escapeHtml(e.descricao || '') : ''}</td>
-      <td style="${bd}${pad}text-align:right;white-space:nowrap;">${e ? formatMoney(e.valor) : ''}</td>
-      <td style="${tdTxt}">${e ? escapeHtml(e.justificativa || '') : ''}</td>
+      <td style="${bd}${pad}text-align:center;white-space:nowrap;">${e ? fmtDateBR(e.data) : '&nbsp;'}</td>
+      <td style="${tdTxt}">${e ? escapeHtml(e.estabelecimento || '') : '&nbsp;'}</td>
+      <td style="${tdTxt}">${e ? escapeHtml(e.descricao || '') : '&nbsp;'}</td>
+      <td style="${bd}${pad}text-align:right;white-space:nowrap;">${e ? formatMoney(e.valor) : '&nbsp;'}</td>
+      <td style="${tdTxt}">${e ? escapeHtml(e.justificativa || '') : '&nbsp;'}</td>
     </tr>`;
   }
   const root = $('print-root');

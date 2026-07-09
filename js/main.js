@@ -78,6 +78,9 @@ async function closeTable(tabela) {
   if (!confirm('Fechar e arquivar a tabela de ' + TABLE_LABELS[tabela] + '?\nOs lançamentos vão para o Histórico e os arquivos do mês são gravados no Drive.')) return;
   if (!validateBeforeExport(state, { reembolso: tabela === 'reembolso', alelo: tabela === 'alelo' })) return;
 
+  // pergunta se os comprovantes (fotos/NFs) devem ser anexados ao final do PDF do mês
+  const incluirAnexos = confirm('Anexar os comprovantes (fotos/NFs) ao final do PDF do mês?\n\nOK = com anexos · Cancelar = PDF sem anexos.');
+
   const now = Date.now();
   // snapshot só da tabela escolhida
   const snapshot = {
@@ -96,7 +99,7 @@ async function closeTable(tabela) {
   };
 
   // arquiva no Drive (zip + Excel + PDF) — best-effort
-  try { await archiveMonthToDrive(tabela, snapshot); }
+  try { await archiveMonthToDrive(tabela, snapshot, incluirAnexos); }
   catch (e) { if (e && e.message === 'cancelado') { toast('Fechamento cancelado.'); return; } throw e; }
 
   // grava o snapshot e limpa só a tabela fechada
@@ -114,7 +117,8 @@ async function closeTable(tabela) {
 
 /* Compacta os comprovantes da tabela num único .zip e grava .zip + Excel + PDF do mês
    na pasta do mês no Drive. Mantém os comprovantes individuais. */
-async function archiveMonthToDrive(tabela, snapshot) {
+async function archiveMonthToDrive(tabela, snapshot, incluirAnexos) {
+  if (incluirAnexos === undefined) incluirAnexos = true;
   if (!gdConfigured()) { toast('Drive não configurado — arquivado só no histórico.'); return; }
   if (!gdConnected()) {
     try { await gdGetToken(true); } catch (e) { console.warn('conexão ao Drive no arquivamento falhou', e); }
@@ -169,7 +173,7 @@ async function archiveMonthToDrive(tabela, snapshot) {
 
     // 3) PDF do mês (com comprovantes anexados)
     scanProgress.status('Gerando PDF…');
-    const pdfBlob = await generatePdfBlob(snapshot, { reembolso: tabela === 'reembolso', alelo: tabela === 'alelo' }, tabela === 'alelo');
+    const pdfBlob = await generatePdfBlob(snapshot, { reembolso: tabela === 'reembolso', alelo: tabela === 'alelo' }, tabela === 'alelo', incluirAnexos);
     const pdfName = (tabela === 'alelo' ? santanderFileBase(snapshot) : reportFileBase(snapshot)) + '.pdf';
     await gdUpload(pdfBlob, pdfName, dateISO, tabela);
     scanProgress.log('✓ PDF enviado', 'ok');
