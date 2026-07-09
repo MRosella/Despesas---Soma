@@ -1,6 +1,6 @@
 'use strict';
 /* ---------------- Navegação (menu lateral + telas) ---------------- */
-const VIEW_TITLES = { lancamentos: 'Lançamentos', relatorios: 'Relatórios mensais', financas: 'Finanças', config: 'Configurações' };
+const VIEW_TITLES = { lancamentos: 'Lançamentos', relatorios: 'Relatórios mensais', config: 'Configurações' };
 
 function openDrawer() { $('drawer').classList.add('open'); $('drawer-backdrop').classList.add('show'); }
 function closeDrawer() { $('drawer').classList.remove('open'); $('drawer-backdrop').classList.remove('show'); }
@@ -13,7 +13,6 @@ function showView(name) {
   const nm = $('btn-new-month'); if (nm) nm.style.display = (name === 'lancamentos') ? '' : 'none';
   const ht = $('header-title'); if (ht) ht.textContent = VIEW_TITLES[name];
   if (name === 'relatorios') renderReports();
-  if (name === 'financas' && typeof renderFin === 'function') renderFin();
   window.scrollTo(0, 0);
 }
 
@@ -42,6 +41,25 @@ function setupReportTabs() {
   let saved = 'reembolso';
   try { saved = localStorage.getItem(REPORT_TAB_KEY) || 'reembolso'; } catch (e) {}
   showReportTab(saved);
+}
+
+/* ---------------- Abas dos Relatórios mensais arquivados (Reembolso | Cartão Santander) ---------------- */
+const HIST_TAB_KEY = 'despesas-soma-histtab-v1';
+function showHistTab(tab) {
+  if (tab !== 'reembolso' && tab !== 'alelo') tab = 'reembolso';
+  document.querySelectorAll('.hist-panel').forEach((p) => p.classList.toggle('active', p.dataset.hpanel === tab));
+  document.querySelectorAll('.htab').forEach((b) => {
+    const on = b.dataset.htab === tab;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  try { localStorage.setItem(HIST_TAB_KEY, tab); } catch (e) { console.warn('salvar aba do histórico falhou', e); }
+}
+function setupHistTabs() {
+  document.querySelectorAll('.htab').forEach((b) => b.addEventListener('click', () => showHistTab(b.dataset.htab)));
+  let saved = 'reembolso';
+  try { saved = localStorage.getItem(HIST_TAB_KEY) || 'reembolso'; } catch (e) {}
+  showHistTab(saved);
 }
 
 /* Preenche os <select> de categoria (modal e filtro) a partir da config.

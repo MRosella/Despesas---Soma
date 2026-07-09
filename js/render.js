@@ -35,7 +35,6 @@ function render() {
   renderReports();
   if (typeof renderPending === 'function') renderPending();
   if (typeof updateGdPending === 'function') updateGdPending();
-  if (typeof renderFin === 'function') renderFin();
 }
 
 /* ---------------- Histórico de meses ---------------- */
@@ -95,27 +94,40 @@ function yearOf(h) {
   return '—';
 }
 
-/* Relatórios mensais — navegação por ano e mês */
+/* Um snapshot pertence à aba `tab` se foi arquivado como aquela tabela (`h.table`)
+   ou, em snapshots legados sem `table`, se tem lançamentos naquela tabela. */
+function histBelongsTo(h, tab) {
+  if (h.table) return h.table === tab;
+  return (h[tab] || []).length > 0;
+}
+
+/* Relatórios mensais — dividido por tipo (Reembolso | Cartão Santander), navegação por ano */
 function renderReports() {
-  const tree = $('reports-tree'); const empty = $('reports-empty');
+  renderReportsPanel('reembolso', 'reports-tree-reembolso', 'reports-empty-reembolso');
+  renderReportsPanel('alelo', 'reports-tree-alelo', 'reports-empty-alelo');
+}
+
+function renderReportsPanel(tab, treeId, emptyId) {
+  const tree = $(treeId); const empty = $(emptyId);
   if (!tree) return;
-  if (!state.history.length) { tree.innerHTML = ''; if (empty) empty.style.display = ''; return; }
+  const hist = (state.history || []).filter((h) => histBelongsTo(h, tab));
+  if (!hist.length) { tree.innerHTML = ''; if (empty) empty.style.display = ''; return; }
   if (empty) empty.style.display = 'none';
 
   const byYear = {};
-  for (const h of state.history) { const y = yearOf(h); (byYear[y] = byYear[y] || []).push(h); }
+  for (const h of hist) { const y = yearOf(h); (byYear[y] = byYear[y] || []).push(h); }
   const years = Object.keys(byYear).sort((a, b) => b.localeCompare(a));
 
   let html = '';
   for (const y of years) {
     const items = byYear[y].sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
-    const yTotal = items.reduce((s, h) => s + sumOf(h.reembolso || []) + sumOf(h.alelo || []), 0);
+    const yTotal = items.reduce((s, h) => s + sumOf(h[tab] || []), 0);
     html += `<details class="card rep-year" open>
       <summary><span class="rep-year-lbl">${escapeHtml(y)}</span><span class="rep-year-meta">${items.length} mês(es) · ${formatMoney(yTotal)}</span></summary>
       <ul class="hist-list">`;
     for (const h of items) {
-      const qtd = (h.reembolso || []).length + (h.alelo || []).length;
-      const total = sumOf(h.reembolso || []) + sumOf(h.alelo || []);
+      const qtd = (h[tab] || []).length;
+      const total = sumOf(h[tab] || []);
       html += `<li class="hist-item" data-id="${h.id}">
         <div class="hist-main">
           <div class="hist-label">${escapeHtml(h.label || 'Mês')}</div>

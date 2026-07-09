@@ -41,8 +41,8 @@ async function ocrReceipt(blob, mime) {
 }
 
 /* Chamada genérica ao Gemini (JSON estruturado) com retentativa/backoff — usada pelo OCR de
-   comprovante (abaixo) e pela importação de extrato/fatura (js/fin-import.js). Recebe as `parts`
-   do conteúdo e o generationConfig; devolve o JSON já parseado. */
+   comprovante (abaixo). Recebe as `parts` do conteúdo e o generationConfig; devolve o JSON já
+   parseado. */
 async function geminiCall(parts, generationConfig) {
   const a = loadAi();
   if (!a.key) throw new Error('Chave do Gemini não configurada.');

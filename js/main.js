@@ -260,6 +260,7 @@ function init() {
   populateCategorySelects();
   setupNav();
   setupReportTabs();
+  setupHistTabs();
   setupTheme();
   setupServiceWorker();
   setupConnectivity();
@@ -269,12 +270,6 @@ function init() {
   setupGDriveUI();
   setupCatUI();
   setupAiUI();
-  setupFinTabs();
-  setupFinUI();
-  setupFinModals();
-  setupFinImportUI();
-  setupFinCatUI();
-  setupFinArquivoUI();
   updateFooter();
   updateSyncIndicator();
   $('sync-ind').addEventListener('click', () => syncNow(false));

@@ -135,17 +135,9 @@ function currentDoc() {
     driveKnown: Object.assign({}, state.driveKnown || {}),
     driveDismissed: Object.assign({}, state.driveDismissed || {}),
     config: { categorias: getCatConfig().map((c) => Object.assign({}, c)) },
-    finContas: (state.finContas || []).map((e) => Object.assign({}, e)),
-    finCartoes: (state.finCartoes || []).map((e) => Object.assign({}, e)),
-    finTx: (state.finTx || []).map((e) => Object.assign({}, e)),
-    finConfig: normalizeFinConfig(state.finConfig),
-    finArquivo: Object.assign({}, state.finArquivo || {}),
     tomb: {
       reembolso: Object.assign({}, state.tomb.reembolso),
-      alelo: Object.assign({}, state.tomb.alelo),
-      finContas: Object.assign({}, state.tomb.finContas || {}),
-      finCartoes: Object.assign({}, state.tomb.finCartoes || {}),
-      finTx: Object.assign({}, state.tomb.finTx || {})
+      alelo: Object.assign({}, state.tomb.alelo)
     },
     meta: Object.assign({ updatedAt: 0, profileUpdatedAt: 0 }, state.meta)
   };
@@ -175,17 +167,9 @@ function applyDoc(doc) {
   state.driveKnown = doc.driveKnown || {};
   state.driveDismissed = doc.driveDismissed || {};
   state.config = normalizeCatConfig(doc.config);
-  state.finContas = Array.isArray(doc.finContas) ? doc.finContas : [];
-  state.finCartoes = Array.isArray(doc.finCartoes) ? doc.finCartoes : [];
-  state.finTx = Array.isArray(doc.finTx) ? doc.finTx : [];
-  state.finConfig = normalizeFinConfig(doc.finConfig);
-  state.finArquivo = doc.finArquivo || {};
   state.tomb = {
     reembolso: (doc.tomb && doc.tomb.reembolso) || {},
-    alelo: (doc.tomb && doc.tomb.alelo) || {},
-    finContas: (doc.tomb && doc.tomb.finContas) || {},
-    finCartoes: (doc.tomb && doc.tomb.finCartoes) || {},
-    finTx: (doc.tomb && doc.tomb.finTx) || {}
+    alelo: (doc.tomb && doc.tomb.alelo) || {}
   };
   state.meta = Object.assign({ updatedAt: 0, profileUpdatedAt: 0 }, doc.meta || {});
   saveState();
@@ -193,8 +177,6 @@ function applyDoc(doc) {
   catDraft = null;
   populateCategorySelects();
   renderCatEditor();
-  if (typeof finCatDraft !== 'undefined') finCatDraft = null;
-  if (typeof renderFinCatEditor === 'function') renderFinCatEditor();
   applyingRemote = false;
 }
 
@@ -250,15 +232,10 @@ function mergeDocs(a, b) {
     santPeriodo: Object.assign({ start: '', end: '' }, p.santPeriodo || {}),
     bank: Object.assign({}, p.bank || {}),
     config: normalizeCatConfig(p.config),
-    finConfig: normalizeFinConfig(p.finConfig),
-    finArquivo: Object.assign({}, p.finArquivo || {}),
-    tomb: { reembolso: {}, alelo: {}, finContas: {}, finCartoes: {}, finTx: {} }
+    tomb: { reembolso: {}, alelo: {} }
   };
   out.reembolso = mergeTable('reembolso', a, b, out.tomb);
   out.alelo = mergeTable('alelo', a, b, out.tomb);
-  out.finContas = mergeTable('finContas', a, b, out.tomb);
-  out.finCartoes = mergeTable('finCartoes', a, b, out.tomb);
-  out.finTx = mergeTable('finTx', a, b, out.tomb);
   const mh = mergeHistory(a, b);
   out.history = mh.list;
   out.histTomb = mh.tomb;

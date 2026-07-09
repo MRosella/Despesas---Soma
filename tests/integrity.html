@@ -14,10 +14,6 @@
 <script src="../js/ui.js"></script>
 <script src="../js/ocr.js"></script>
 <script src="../js/idb.js"></script>
-<script src="../js/fin-core.js"></script>
-<script src="../js/fin-render.js"></script>
-<script src="../js/fin-modal.js"></script>
-<script src="../js/fin-import.js"></script>
 <script src="../js/drive-core.js"></script>
 <script src="../js/drive-scan.js"></script>
 <script src="../js/main.js"></script>
@@ -25,19 +21,15 @@
 <script>
 var checks = {
   'core':       ['formatMoney','loadState','uid','getCatConfig','sumOf'],
-  'render':     ['render','computeSantanderPeriodo','renderList','reopenHistory','monthLabelFor','renderCatSummary'],
+  'render':     ['render','computeSantanderPeriodo','renderList','reopenHistory','monthLabelFor','renderCatSummary','renderReports','renderReportsPanel','histBelongsTo'],
   'modal':      ['openModal','saveEntry','deleteEntry','onPhotoSelected','toggleCartaoFields'],
   'excel':      ['buildXlsx','buildSantanderXlsx','validateBeforeExport','exportExcel','updateExportHint'],
   'pdf':        ['generatePdfBlob','buildSantanderPrint','exportPDF','buildPrint'],
   'sync':       ['syncNow','mergeDocs','mergeTable','mergeHistory','setupSyncUI'],
   'lock':       ['showLock','enableBio','setPin','setupBackupUI'],
-  'ui':         ['setupNav','setupCatUI','populateCategorySelects','renderCatEditor','setupReportTabs','showReportTab'],
+  'ui':         ['setupNav','setupCatUI','populateCategorySelects','renderCatEditor','setupReportTabs','showReportTab','setupHistTabs','showHistTab'],
   'ocr':        ['ocrReceipt','ocrReceiptRaw','blobSha256','fillFromOcr','setupAiUI'],
   'idb':        ['idbGet','idbPut','getPhotoBlob','compressImage','saveThumb'],
-  'fin-core':   ['finCompetencia','finFaturasDoCartao','finSaldoConta','finDedupKey','finResumoMes','finArquivarAno','finMatchReembolsaveis','finParcelasFuturas','finFaturaMeses','finCatIcon','finSubcategorias','finLimiteCartao','finEhPagamentoFatura','finMarcarPagamentosEstornos'],
-  'fin-render': ['renderFin','renderFinFatura','renderFinFatStrip','setupFinTabs','showFinTab'],
-  'fin-modal':  ['openFinTxModal','saveFinTx','openFinContaModal','openFinCartaoModal','setupFinModals','renderFinCatEditor','setupFinArquivoUI'],
-  'fin-import': ['finParseCsv','finParseOfx','finParseXlsx','finRowsFromMatrix','finExcelSerialToISO','finLimparTransacoes','ocrStatement','confirmFinImport','setupFinImportUI'],
   'drive-core': ['gdUpload','gdEnsureFolder','purgeEntryPhoto','flushPendingPhotos','setupGDriveUI','loadGdAccess','saveGdAccess','scheduleGdRefresh'],
   'drive-scan': ['scanDriveForReceipts','gdListReceipts','renderPending','retryPendingOcr','openPendingEntry'],
   'main':       ['init','closeMonthFlow','closeTable','archiveMonthToDrive','setupTheme','bindField']

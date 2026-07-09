@@ -14,23 +14,19 @@ https://mrosella.github.io/Despesas---Soma/
 | Arquivo | Conteúdo |
 |---|---|
 | `js/core.js` | chaves localStorage + `APP_VERSION` (bump!), categorias/config (`getCatConfig`…), estado (`emptyState`/`loadState`/`saveState`/`touchDoc`/`touchProfile`, `let state`), utils (`parseMoney`/`formatMoney`/`todayISO`/`fmtDateBR`/`dateToSerial`/`uid`/`toast`/`sumOf`), ícones |
-| `js/render.js` | `render`, `renderList` (mais recente no topo), histórico (`renderReports`/`reopenHistory`/`deleteHistory`/`monthLabelFor`/`santanderPeriodoText`/`computeSantanderPeriodo`/`yearOf`), `renderCatSummary(tabela,boxId)` (resumo POR relatório), `limitExcedido`, `quickDelete`/`quickDuplicate`, `escapeHtml`, `hydrateThumbs` |
+| `js/render.js` | `render`, `renderList` (mais recente no topo), histórico dividido por tipo (`renderReports`/`renderReportsPanel(tab,treeId,emptyId)`/`histBelongsTo`/`reopenHistory`/`deleteHistory`/`monthLabelFor`/`santanderPeriodoText`/`computeSantanderPeriodo`/`yearOf`), `renderCatSummary(tabela,boxId)` (resumo POR relatório), `limitExcedido`, `quickDelete`/`quickDuplicate`, `escapeHtml`, `hydrateThumbs` |
 | `js/modal.js` | modal (`openModal`/`saveEntry`/`deleteEntry`/`repeatLast`), `toggleCartaoFields`, foto+OCR hook (`renderModalPhoto`/`onPhotoSelected`/`applyModalPhoto`), máscaras, `updateCatHint` |
 | `js/excel.js` | `buildXlsx`, `buildSantanderXlsx`, `exportExcel`, `validateBeforeExport`, `filteredDoc`, `reportFileBase`/`santanderFileBase`, chooser de export, `SANTANDER_NOME/CARGO` |
 | `js/pdf.js` | `buildPrint`, `buildSantanderPrint`, `exportPDF`, `generatePdfBlob` (multipágina por linha), `shareOrDownload`/`downloadBlob` |
 | `js/sync.js` | sync GitHub privado (`ghGetFile`/`ghPutFile`, `currentDoc`/`applyDoc`/`mergeDocs`, `syncNow`, `setupSyncUI`) |
 | `js/lock.js` | bloqueio bio/PIN (`enableBio`/`unlockBio`/`setPin`/`showLock`) + backup (`exportBackup`/`importBackupFile`/`setupBackupUI`) |
-| `js/ui.js` | navegação (`showView`/`setupNav`), **abas dos relatórios** (`setupReportTabs`/`showReportTab`, lembra em `-tab-v1`), `populateCategorySelects`, editor de categorias (`renderCatEditor`/`saveCatEditor`/`setupCatUI`) |
-| `js/ocr.js` | Gemini (`AI_KEY`, `GEMINI_MODEL`, **`geminiCall(parts,generationConfig)`** = chamada genérica com retry/backoff usada também pelo fin-import, `ocrReceipt` = wrapper com **cache por hash**, `ocrReceiptRaw`, `blobSha256`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI`) |
+| `js/ui.js` | navegação (`showView`/`setupNav`), **abas dos relatórios** da Home (`setupReportTabs`/`showReportTab`, lembra em `-tab-v1`), **abas do histórico** por tipo (`setupHistTabs`/`showHistTab`, lembra em `-histtab-v1`), `populateCategorySelects`, editor de categorias (`renderCatEditor`/`saveCatEditor`/`setupCatUI`) |
+| `js/ocr.js` | Gemini (`AI_KEY`, `GEMINI_MODEL`, **`geminiCall(parts,generationConfig)`** = chamada genérica com retry/backoff, `ocrReceipt` = wrapper com **cache por hash**, `ocrReceiptRaw`, `blobSha256`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI`) |
 | `js/idb.js` | IndexedDB (`idb`/`idbPut`/`idbGet`/`idbDel`), `compressImage`, `blobToDataUrl`, `saveThumb`, `getPhotoBlob` (camada de storage local) |
-| `js/fin-core.js` | **Finanças (pessoal), lógica pura**: faturas por competência (`finCompetencia`/`finVencimentoISO`/`finFaturasDoCartao`/`finFaturaDe`), visão multi-mês (`finFaturaMeses`), `finSaldoConta`, `finResumoMes`, dedupe (`finNormDesc`/`finDedupKey`/`finMarcarDuplicados`), cruzamento reembolso (`finMatchReembolsaveis`), parcelamento (`finParcelasFuturas`/`finParcelaJaExiste`/`finParcelaGrupoBase`), aprendizado de categoria (`finDescChave`/`finAprenderCategoria`), `finArquivarAno`, meses (`finMonthAdd`/`finMesLabel`), getters (`finContaById`/`finCartaoById`/`finGetCategorias`/`finCategoriasPorTipo`) |
-| `js/fin-render.js` | Finanças, tela: `renderFin` (+`renderFinDashboard`/`renderFinTransacoes`/`renderFinContasCartoes`/`renderFinFatura`), abas **próprias** `.ftab`/`.fin-panel` (`setupFinTabs`/`showFinTab`, lembra em `-fintab-v1`), `openFinFatura`, filtros (`finTxFiltro`/`finFatFiltro`), navegador de mês (`finMesAtivo`), `setupFinUI` |
-| `js/fin-modal.js` | Finanças, modais: transação (`openFinTxModal`/`saveFinTx`/`deleteFinTx`), conta (`openFinContaModal`…), cartão (`openFinCartaoModal`…), `populateFinSelects`, `setupFinModals`, editor de categorias (`finCatDraft`/`renderFinCatEditor`/`setupFinCatUI`), arquivamento anual (`setupFinArquivoUI`) |
-| `js/fin-import.js` | Finanças, importação: `ocrStatement` (chama `ocrStatementRaw` **sem cache** — reenviar o mesmo arquivo sempre reanalisa), `ocrStatementRaw` (usa `geminiCall`), parsers locais `finParseCsv`/`finParseOfx`, revisão (`finImportDraft`/`onFinImportFile`/`renderFinReview`/`confirmFinImport`), `setupFinImportUI` |
 | `js/drive-core.js` | Drive: auth/token (`gdGetToken`, `GD_SCOPE`), pastas/upload (`gdEnsureFolder`/`gdEnsureMonthFolder`/`gdUpload`), exclusão+fila (`gdDeleteFile`/`flushGdDeletions`/`purgeEntryPhoto`), flush de pendentes, `setupGDriveUI`, conexão (`gdConnectFlow`/`maybePromptDrive`) |
 | `js/drive-scan.js` | Varredura (`scanDriveForReceipts`/`gdListReceipts`/`knownDriveIds`), overlay `scanProgress` (`open(title,icon)`/`status`/`log`/`done`/`close`), pendentes (`renderPending`/`openPendingEntry`/`dismissPending`/`retryPendingOcr`) |
 | `js/main.js` | tema, `bindField`, **fechamento por tabela** (`closeMonthFlow`/`closeTable`/`archiveMonthToDrive`/`chooseCloseTable`), `copyBankData`, `init` (registra todos os `setup*`), SW, conectividade — **carregado por último** |
-| `index.html` | 4 telas (`#view-lancamentos/-relatorios/-financas/-config`); a de Lançamentos tem **abas** `#tab-reembolso`/`#tab-alelo` (`.report-panel`) + seletor `.rtab`; a de Finanças tem abas próprias `.ftab`/`.fin-panel` + modais `#fin-tx-modal`/`#fin-conta-modal`/`#fin-cartao-modal`; carrega `lib/*` e depois `js/*` na ordem (fin-* entre idb e drive-core). |
+| `index.html` | 3 telas (`#view-lancamentos/-relatorios/-config`); a de Lançamentos tem **abas** `#tab-reembolso`/`#tab-alelo` (`.report-panel`) + seletor `.rtab`; a de Relatórios mensais tem **abas por tipo** `#hist-tab-reembolso`/`#hist-tab-alelo` (`.hist-panel`) + seletor `.htab`; carrega `lib/*` e depois `js/*` na ordem. |
 | `styles.css` | tema claro/escuro via variáveis. Reusar `.card/.field/.sync-status/.cat-row/.offline-notice`. |
 | `sw.js` | SW network-first; `CACHE` na **linha 4** + lista `ASSETS` (inclui **cada** `js/*.js`). |
 | `template.xlsx`, `template-santander.xlsx` | modelos Excel (não editar à mão). |
@@ -62,24 +58,20 @@ https://mrosella.github.io/Despesas---Soma/
   driveFolders:{reembolso,alelo},    // RAÍZES SEPARADAS no Drive (reembolso × cartão Santander)
   pending:[], driveKnown:{}, driveDismissed:{},  // varredura do Drive: pendentes p/ revisar; ids já vistos; ids descartados
   config:{ categorias:[{nome,limite,grupo}] },  // editável em Configurações
-  finContas:[], finCartoes:[], finTx:[],  // MÓDULO FINANÇAS (pessoal): contas {nome,instituicao,tipo,saldoInicial,arquivada}, cartões {nome,bandeira,limite,diaFechamento,diaVencimento}, transações {data,descricao,valor,tipo:'receita'|'despesa',categoria,subcategoria?,contaId|cartaoId,reembolsavel,pagamentoCartaoId,origemImport, parcela?:{atual,total,grupo,base}, estornado?:bool (riscada, fora de toda soma)}
-  finConfig:{ categorias:[{nome,tipo,icone,subcategorias:[nome]}] },  // categorias PRÓPRIAS de Finanças (≠ config.categorias do reembolso); icone = nome no mapa ICONS (core.js); subcategorias é lista simples de nomes, sem tipo/ícone próprio (herdam da categoria-mãe)
-  finArquivo:{},                     // agregados de anos arquivados: {'2025':{receitas,despesas,porCategoria}}
-  tomb:{reembolso:{},alelo:{},finContas:{},finCartoes:{},finTx:{}},  // lápides de deleção (id->updatedAt)
+  tomb:{reembolso:{},alelo:{}},      // lápides de deleção (id->updatedAt)
   meta:{updatedAt, profileUpdatedAt} }
 ```
-Merge de sync: `meta.updatedAt` p/ tabelas (`reembolso`/`alelo`/`finContas`/`finCartoes`/`finTx`
-via `mergeTable`); `profileUpdatedAt` (last-write-wins) p/ perfil/banco/**config**/**finConfig**/
-`finArquivo`/`driveFolders`/`reportMonths`. Lápides propagam deleções. `pending` = união
-por `fileId` **menos** os já virados lançamento (`foto.id`) ou descartados; `driveKnown`/
-`driveDismissed` = união (evita reprocessar/ressuscitar).
+Merge de sync: `meta.updatedAt` p/ tabelas (`reembolso`/`alelo` via `mergeTable`);
+`profileUpdatedAt` (last-write-wins) p/ perfil/banco/**config**/`driveFolders`/`reportMonths`.
+Lápides propagam deleções. `pending` = união por `fileId` **menos** os já virados lançamento
+(`foto.id`) ou descartados; `driveKnown`/`driveDismissed` = união (evita reprocessar/ressuscitar).
 
 ## Chaves de localStorage
 `despesas-soma-v1` (estado) · `-sync-v1` (GitHub) · `-gdrive-v1` (Drive config: `clientId`,
 `folderId` legado, `workerUrl` do renovador) · `-gdtok-v1` (token OAuth do Drive, LOCAL, persiste
 entre aberturas; inclui `refresh` quando o renovador está configurado) · `-gddel-v1` (fila de
 exclusões) · `-ai-v1` (Gemini) · `-lock-v1` (bio/PIN) · `-theme-v1` · `-lastsync-v1` · `-dirty-v1` ·
-`-tab-v1` (aba ativa) · `-fintab-v1` (aba ativa de Finanças).
+`-tab-v1` (aba ativa da Home) · `-histtab-v1` (aba ativa dos Relatórios mensais).
 
 ## Verificação (esta máquina — sem Node/python; preview MCP trava)
 Chrome em `C:\Program Files\Google\Chrome\Application\chrome.exe` com `--headless=new
@@ -194,48 +186,17 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
 - Categoria nova fora da validação do `template.xlsx` é gravada mesmo assim (Excel pode avisar
   "valor fora da lista"). Renomear categoria **não** reescreve lançamentos antigos.
 
-- **Módulo Finanças (pessoal, `#view-financas`)**: 4 abas próprias `.ftab`/`.fin-panel` (Resumo/
-  Transações/Contas/Importar; **não** usar `.rtab` — `setupReportTabs` binda todos). Fatura por
-    competência: compra até o dia efetivo de fechamento (`min(dia, diasNoMês)`) entra na fatura que
-  fecha no mês; pagamento = tx com `contaId`+`pagamentoCartaoId` (abate a fatura com vencimento no
-  mês do pagamento; fora dos gastos por categoria). Flag `reembolsavel` só marca/filtra (totais
-  Pessoal × Reembolsável na fatura) — NÃO cria lançamento no reembolso corporativo. **Fatura tem
-  visão multi-mês** (`finFaturaMeses` → tira de chips `#fin-fat-strip`/`renderFinFatStrip`: total
-  projetado de cada mês da competência corrente até a última com tx, destaca meses com parcela;
-  clicar troca a competência aberta). Importação **inteligente**: PDF/imagem → `ocrStatement`
-  (Gemini via `ocrStatementRaw`, **sem cache** — reenviar o mesmo arquivo sempre reanalisa, ao
-  contrário do `ocrReceipt` de comprovantes; guard-rail 15MB) — a IA também **categoriza** (escolhe da lista
-  do módulo; casamento por `finNormDesc` — tolera acento/caixa diferente da IA, grava o nome
-  canônico da lista) e detecta **parcela** (`installmentCurrent`/`Total`); CSV/OFX → `finParseCsv`/
-  `finParseOfx` locais (sem categoria/parcela). Na revisão, `finMatchReembolsaveis` **pré-marca**
-  reembolsável nas linhas que casam (mesmos centavos + data ±5d) com um lançamento de
-  `finReembolsoPool()` (soma `state.reembolso` **+** `state.history[].reembolso`, senão meses de
-  reembolso já fechados/arquivados ficariam invisíveis pro cruzamento); ao confirmar, cada linha
-  parcelada gera as **parcelas futuras reais**
-  (`finParcelasFuturas`, uma por mês, `parcela.grupo` comum), com dedupe por `finParcelaJaExiste`
-  (reimportar o mês seguinte não duplica a série). Excluir uma parcela oferece apagar o grupo todo.
-  Dedupe geral por `finDedupKey` (data|centavos|descrição normalizada) antes de virar `finTx`.
-  Excluir conta/cartão oferece excluir as tx vinculadas (lápides em massa) — nunca deixa tx órfã. Arquivamento anual em
-  Configurações (`finArquivarAno` + backup .json via `downloadBlob`). Backup/sync já incluem os
-  ramos `fin*` (via `currentDoc`/`applyDoc`/`mergeDocs`).
-- **Ícones + subcategorias por categoria** (editor em Configurações, `renderFinCatEditor`/`saveFinCatEditor`
-  em `fin-modal.js`): cada categoria tem `icone` (nome no mapa `ICONS` de `core.js`, escolhido de fábrica em
-  `FIN_DEFAULT_CATEGORIAS` — ex. `utensils` p/ Alimentação, `car` p/ Transporte; categoria nova criada pelo
-  usuário recebe `more-horizontal`, sem picker de ícone) e `subcategorias` (lista simples de nomes, sem tipo
-  próprio — herdam da categoria-mãe), gerenciadas inline no editor ("+ subcategoria", Enter adiciona, ✕
-  remove). `finCatIcon(nome)`/`finSubcategorias(nome)` (`fin-core.js`) leem essas listas. No modal de
-  transação, `#fm-subcategoria-row` só aparece quando a categoria escolhida tem subcategorias cadastradas
-  (`populateFinSubSelect`, chamado ao trocar tipo/categoria); `finTx.subcategoria` é opcional. Exibida junto
-  da categoria (com ícone) na lista de transações, na fatura e no resumo do dashboard — não entra no
-  agrupamento `finResumoMes`/`porCategoria` (que continua só por categoria-mãe) nem na importação/aprendizado
-  de categoria (escopo deliberadamente restrito à categoria).
-- **Aprendizado de categoria por descrição** (`finAprenderCategoria`, sem storage extra — deriva de
-  `state.finTx` a cada chamada): agrupa descrições por `finDescChave` (= `finNormDesc` sem dígitos,
-  p/ casar "UBER *TRIP 1234" com "...5678") e retorna a categoria **mais frequente** já usada nessa
-  chave+tipo — captura correções manuais do usuário (ele edita a categoria uma vez, o app aprende).
-  Aplicado em dois pontos: (1) `onFinImportFile` (`fin-import.js`) — sobrepõe a categoria vinda da
-  IA/CSV/OFX quando há aprendizado; (2) `finSugerirCategoriaAoDigitar` (`fin-modal.js`, no `blur` de
-  `#fm-descricao`) — só em transação **nova** e só se a categoria ainda não foi escolhida.
+- **Relatórios mensais divididos por tipo** (`#view-relatorios`): abas **Reembolso × Cartão
+  Santander** (`.htab`/`.hist-panel`, `setupHistTabs`/`showHistTab`, lembra em `-histtab-v1` — NÃO
+  reusar `.rtab`, que `setupReportTabs` binda). `renderReports` chama `renderReportsPanel(tab,treeId,
+  emptyId)` por aba (`#reports-tree-{reembolso|alelo}` / `#reports-empty-{…}`). `histBelongsTo(h,tab)`
+  decide a aba de cada snapshot: pela marca `h.table` (fechamento por tabela do item v30+); snapshots
+  **legados** sem `table` entram na aba de cada tabela em que têm lançamentos (podem aparecer nas
+  duas). Contagem/total por aba somam **só** `h[tab]`. Export/reabrir seguem tratando `h.table`.
+
+  > **Módulo Finanças removido** (v55, a pedido do usuário). Não existe mais `#view-financas`, os
+  > `js/fin-*.js`, os ramos `fin*` do estado/sync nem as categorias/ícones próprios. Se algum dado
+  > financeiro sobrar no repo privado de sync, é ignorado no próximo merge.
 
 ## Fluxo de trabalho típico (ao editar)
 1. Grep o nome da função → editar o `js/*.js` certo.

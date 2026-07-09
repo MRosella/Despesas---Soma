@@ -3,6 +3,21 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v55 — Relatórios divididos por tipo + remoção do módulo Finanças
+- **Relatórios mensais divididos por tipo**: a tela de Relatórios mensais agora tem abas
+  **Reembolso × Cartão Santander** (classes próprias `.htab`/`.hist-panel`, aba lembrada em
+  `-histtab-v1`). `renderReports` passou a chamar `renderReportsPanel(tab, treeId, emptyId)` por
+  aba; `histBelongsTo(h, tab)` decide onde cada snapshot aparece (por `h.table`; snapshots legados
+  sem `table` entram na aba de cada tabela em que têm lançamentos). Contagem/total por aba usam só
+  os dados daquela tabela.
+- **Módulo Finanças removido**: a pedido do usuário (não seria usado). Apagados `js/fin-core.js`,
+  `js/fin-render.js`, `js/fin-modal.js`, `js/fin-import.js` e todo o HTML/CSS da tela `#view-financas`,
+  seus modais e os cards de Finanças em Configurações. Removidos do estado (`finContas`/`finCartoes`/
+  `finTx`/`finConfig`/`finArquivo` + lápides), do `sync.js` (`currentDoc`/`applyDoc`/`mergeDocs`),
+  do `core.js` (categorias/ícones/`normalizeFinConfig`) e do `init`/nav. Dados financeiros antigos no
+  repo privado de sync são simplesmente ignorados no próximo merge. Harnesses de teste atualizados.
+  Cache v54→v55.
+
 ## v53 — Finanças: estornos, pagamento de fatura ignorado, limite do cartão e busca
 - **Pagamento da fatura anterior ignorado na importação**: `finEhPagamentoFatura` reconhece pela
   descrição (pagamento/pgto/pagto/débito em conta) os créditos que são quitação da fatura passada e,
