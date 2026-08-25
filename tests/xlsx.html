@@ -26,7 +26,6 @@ function chk(name, got, exp){ var ok = String(got) === String(exp); if(!ok) fail
 
 // o harness roda em tests/, então os modelos ficam um nível acima
 MODULOS.forEach(function(m){ if (m.template) m.template = '../' + m.template; });
-MOD.sagestao.excelLogo = false;   // o logo é testado no dispositivo (canvas/fetch de imagem)
 
 function lanc(n, prefixo){
   var l = [];
@@ -127,6 +126,29 @@ function refsForaDoLimite(w, maxRow){
     chk('soma_exp_total', v2.form('E34'), 'E19+E32');
     chk('soma_exp_dimensao', v2.dim(), 'A1:R46');
     chk('soma_exp_refs_validas', refsForaDoLimite(v2, 46).join(','), '');
+
+    // ---------- marca do módulo dentro do .xlsx (cores + troca do logo) ----------
+    var antes = fflate.unzipSync(new Uint8Array(await (await fetch('../template.xlsx')).arrayBuffer()));
+    chk('marca_original_vermelha', new TextDecoder().decode(antes['xl/styles.xml']).indexOf('FFB3262D') >= 0, true);
+    chk('marca_sa_recolorida_styles', new TextDecoder().decode(w.files['xl/styles.xml']).indexOf('FF2E7D32') >= 0, true);
+    chk('marca_sa_sem_vermelho_styles', new TextDecoder().decode(w.files['xl/styles.xml']).indexOf('FFB3262D') >= 0, false);
+    chk('marca_sa_recolorida_desenho', new TextDecoder().decode(w.files['xl/drawings/drawing1.xml']).indexOf('2E7D32') >= 0, true);
+    chk('marca_soma_intacta', new TextDecoder().decode(v.files['xl/styles.xml']).indexOf('FFB3262D') >= 0, true);
+
+    // troca do logo: usa o da Soma como substituto (o da SA pode ainda não existir).
+    // O que importa é o resultado ser um PNG válido, na MESMA dimensão do original.
+    function dimPng(b){ var dv = new DataView(b.buffer, b.byteOffset, b.byteLength); return dv.getUint32(16)+'x'+dv.getUint32(20); }
+    function ehPng(b){ return b[0]===0x89 && b[1]===0x50 && b[2]===0x4E && b[3]===0x47; }
+    var modLogo = Object.assign({}, MOD.sagestao, { excelLogo:true, logo:'../assets/soma-logo.png' });
+    var w3 = abrir(await buildXlsx({ sagestao: lanc(1,'SA'), bank:{} }, modLogo));
+    chk('logo_e_png_valido', ehPng(w3.files['xl/media/image3.png']), true);
+    chk('logo_mantem_dimensao', dimPng(w3.files['xl/media/image3.png']), dimPng(antes['xl/media/image3.png']));
+    chk('logo_outras_midias_intactas', !!w3.files['xl/media/image1.png'] && !!w3.files['xl/media/image2.svg'], true);
+    // logo inexistente não pode derrubar a geração (mantém o do modelo)
+    var modSemLogo = Object.assign({}, MOD.sagestao, { excelLogo:true, logo:'../assets/nao-existe.png' });
+    var w4 = abrir(await buildXlsx({ sagestao: lanc(1,'SA'), bank:{} }, modSemLogo));
+    chk('logo_ausente_nao_quebra', w4.txt('C9'), 'SA 0');
+    chk('logo_ausente_mantem_original', dimPng(w4.files['xl/media/image3.png']), dimPng(antes['xl/media/image3.png']));
 
     // ---------- Prestação de Contas (cartão) ----------
     var p = abrir(await buildPrestacaoXlsx({ alelo:[{data:'2026-07-05',estabelecimento:'Posto X',descricao:'Combustível',valor:150,justificativa:'Viagem'}], history:[] }, MOD.alelo));
