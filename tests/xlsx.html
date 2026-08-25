@@ -135,11 +135,11 @@ function refsForaDoLimite(w, maxRow){
     chk('marca_sa_recolorida_desenho', new TextDecoder().decode(w.files['xl/drawings/drawing1.xml']).indexOf('2E7D32') >= 0, true);
     chk('marca_soma_intacta', new TextDecoder().decode(v.files['xl/styles.xml']).indexOf('FFB3262D') >= 0, true);
 
-    // troca do logo: usa o da Soma como substituto (o da SA pode ainda não existir).
-    // O que importa é o resultado ser um PNG válido, na MESMA dimensão do original.
+    // troca do logo pelo da SA: o resultado tem de ser um PNG válido, na MESMA dimensão
+    // do original (letterbox mantém a proporção do logo quadrado, sem distorcer).
     function dimPng(b){ var dv = new DataView(b.buffer, b.byteOffset, b.byteLength); return dv.getUint32(16)+'x'+dv.getUint32(20); }
     function ehPng(b){ return b[0]===0x89 && b[1]===0x50 && b[2]===0x4E && b[3]===0x47; }
-    var modLogo = Object.assign({}, MOD.sagestao, { excelLogo:true, logo:'../assets/soma-logo.png' });
+    var modLogo = Object.assign({}, MOD.sagestao, { excelLogo:true, logo:'../assets/sa-logo.png' });
     var w3 = abrir(await buildXlsx({ sagestao: lanc(1,'SA'), bank:{} }, modLogo));
     chk('logo_e_png_valido', ehPng(w3.files['xl/media/image3.png']), true);
     chk('logo_mantem_dimensao', dimPng(w3.files['xl/media/image3.png']), dimPng(antes['xl/media/image3.png']));
