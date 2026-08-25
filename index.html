@@ -413,13 +413,26 @@
           </div>
           <button class="btn btn-ghost" id="gd-flush" type="button" style="display:none; width:100%; margin-top:8px">Enviar comprovantes pendentes</button>
 
+          <div class="field">
+            <label for="gd-apikey">Chave de API do Google (para o seletor de pastas)</label>
+            <input type="password" id="gd-apikey" placeholder="AIza..." autocapitalize="off" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="field">
+            <label for="gd-appid">Número do projeto (Google Cloud)</label>
+            <input type="text" id="gd-appid" placeholder="Ex.: 123456789012" inputmode="numeric" autocomplete="off" spellcheck="false" />
+            <p class="hint">No <b>mesmo</b> projeto do Client ID: “APIs e serviços → Credenciais → Criar chave de API”
+              (ative a <b>Google Picker API</b>) e o número do projeto fica no painel inicial. Servem só para abrir o
+              seletor de pastas — a permissão do app continua restrita ao que ele cria e ao que você escolher.</p>
+          </div>
+
           <div class="gd-folders-box">
             <div class="gd-folders-title">Pastas dos relatórios</div>
             <div id="gd-folders"></div>
-            <button class="btn btn-ghost" id="gd-folders-make" type="button" style="width:100%; margin-top:8px">Criar as pastas agora</button>
-            <p class="hint" style="margin:6px 2px 0">Cada relatório tem sua pasta. Crie-as aqui, abra cada uma
-              e <b>mova para onde quiser</b> no seu Drive — o app guarda o identificador da pasta, então mover
-              (ou renomear) não interrompe os envios.</p>
+            <button class="btn btn-ghost" id="gd-folders-make" type="button" style="width:100%; margin-top:8px">Criar as pastas que faltam</button>
+            <p class="hint" style="margin:6px 2px 0">Cada relatório grava numa pasta própria. Use <b>Escolher pasta</b>
+              para apontar o relatório a qualquer pasta já existente do seu Drive — a partir daí os comprovantes vão
+              para lá, em subpastas <b>Ano/Mês</b>. Sem escolher, o app cria a pasta padrão na raiz do Drive (e você
+              pode movê-la depois: o app guarda o identificador, não o caminho).</p>
           </div>
           <p class="hint" style="margin:6px 2px 0">O botão <b>Procurar comprovantes no Drive</b> fica na tela de Lançamentos. Ele reconhece arquivos subidos manualmente à pasta (pede permissão de <b>leitura</b> na 1ª vez e usa a IA).</p>
           <p class="sync-status" id="gd-status">Não configurado.</p>

@@ -355,11 +355,14 @@ body.locked { overflow: hidden; }
 /* pastas dos relatórios no Drive (Configurações) */
 .gd-folders-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .gd-folders-title { font-size: .8rem; font-weight: 700; color: var(--brown); margin-bottom: 8px; }
-.gd-folder-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: .82rem; }
+.gd-folder-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; font-size: .82rem; border-top: 1px solid var(--line); }
+.gd-folder-row:first-child { border-top: none; }
 .gd-folder-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
-.gd-folder-name { flex: 1; min-width: 0; color: var(--text); word-break: break-word; }
+.gd-folder-name { flex: 1; min-width: 0; color: var(--text); word-break: break-word; line-height: 1.35; }
+.gd-folder-path { color: var(--muted); font-size: .76rem; }
 .gd-folder-row a { color: var(--red); font-weight: 700; white-space: nowrap; }
-.gd-folder-pend { color: var(--muted); white-space: nowrap; }
+.gd-folder-pend { color: var(--muted); white-space: nowrap; font-size: .76rem; }
+.gd-folder-pick { white-space: nowrap; flex: 0 0 auto; }
 
 /* cabeçalho do card de dados do relatório — segue a cor do módulo ativo */
 .card.mod-card .card-head {

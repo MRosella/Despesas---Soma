@@ -34,7 +34,8 @@ function saveGdAccess() {
 }
 let gdAccess = loadGdAccess();   // reaproveita o token entre aberturas (sem popup se ainda válido)
 
-function loadGd() { try { return Object.assign({ clientId: '', folderId: '', workerUrl: '' }, JSON.parse(localStorage.getItem(GDRIVE_KEY) || '{}')); } catch (e) { return { clientId: '', folderId: '', workerUrl: '' }; } }
+const GD_CFG_PADRAO = { clientId: '', folderId: '', workerUrl: '', apiKey: '', appId: '', folderNames: {} };
+function loadGd() { try { return Object.assign({}, GD_CFG_PADRAO, JSON.parse(localStorage.getItem(GDRIVE_KEY) || '{}')); } catch (e) { return Object.assign({}, GD_CFG_PADRAO); } }
 function saveGd(c) { try { localStorage.setItem(GDRIVE_KEY, JSON.stringify(c)); } catch (e) { console.warn('saveGd falhou', e); } }
 function gdConfigured() { return !!loadGd().clientId; }
 function gdConnected() { return !!gdAccess.token && Date.now() < gdAccess.exp; }
@@ -52,6 +53,84 @@ function gdLoadGis() {
     document.head.appendChild(s);
   });
   return gdGisLoading;
+}
+
+/* ---- Seletor de pasta do Google (Picker) ----
+   É o caminho OFICIAL para o app gravar dentro de uma pasta que já existe no seu Drive:
+   escolher a pasta no Picker concede ao app acesso `drive.file` àquela pasta, sem precisar
+   ampliar a permissão para o Drive inteiro. Exige, no MESMO projeto do Client ID, uma
+   API Key (chave de API) e o número do projeto (appId). */
+let gdPickerLoading = null;
+function gdPickerReady() { return !!(window.google && google.picker && google.picker.PickerBuilder); }
+function gdLoadPicker() {
+  if (gdPickerReady()) return Promise.resolve();
+  if (gdPickerLoading) return gdPickerLoading;
+  gdPickerLoading = new Promise((resolve, reject) => {
+    const done = () => {
+      if (!window.gapi) { reject(new Error('Falha ao carregar o seletor do Google.')); return; }
+      gapi.load('picker', { callback: () => (gdPickerReady() ? resolve() : reject(new Error('Seletor do Google indisponível.'))) });
+    };
+    if (window.gapi) { done(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://apis.google.com/js/api.js'; s.async = true; s.defer = true;
+    s.onload = done;
+    s.onerror = () => reject(new Error('Falha ao carregar o seletor do Google (você está online?).'));
+    document.head.appendChild(s);
+  });
+  return gdPickerLoading;
+}
+
+/* Abre o Picker e devolve {id, name} da pasta escolhida (ou null se o usuário cancelar). */
+async function gdPickFolder() {
+  const cfg = loadGd();
+  if (!cfg.apiKey || !cfg.appId) throw new Error('Preencha a Chave de API e o Número do projeto nas Configurações.');
+  const token = await gdGetToken(true);
+  await gdLoadPicker();
+  return new Promise((resolve, reject) => {
+    try {
+      const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+        .setIncludeFolders(true)
+        .setSelectFolderEnabled(true)
+        .setMimeTypes('application/vnd.google-apps.folder');
+      const picker = new google.picker.PickerBuilder()
+        .setTitle('Escolha a pasta dos comprovantes')
+        .setOAuthToken(token)
+        .setDeveloperKey(cfg.apiKey)
+        .setAppId(cfg.appId)
+        .addView(view)
+        .enableFeature(google.picker.Feature.SUPPORT_DRIVES)
+        .setCallback((data) => {
+          const act = data[google.picker.Response.ACTION];
+          if (act === google.picker.Action.PICKED) {
+            const d = (data[google.picker.Response.DOCUMENTS] || [])[0];
+            resolve(d ? { id: d[google.picker.Document.ID], name: d[google.picker.Document.NAME] || '' } : null);
+          } else if (act === google.picker.Action.CANCEL) { resolve(null); }
+        })
+        .build();
+      picker.setVisible(true);
+    } catch (e) { reject(e); }
+  });
+}
+
+/* Aponta um relatório para uma pasta existente escolhida no Picker. */
+async function chooseDriveFolder(tabela) {
+  const mod = modOf(tabela);
+  try {
+    setGdStatus('Abrindo o seletor de pastas do Google…');
+    const escolha = await gdPickFolder();
+    if (!escolha) { refreshGdStatus(); return; }
+    setDriveFolder(tabela, escolha.id);
+    const cfg = loadGd();
+    cfg.folderNames = Object.assign({}, cfg.folderNames || {});
+    cfg.folderNames[tabela] = escolha.name;
+    saveGd(cfg);
+    renderDriveFolders();
+    setGdStatus(mod.tabLabel + ': comprovantes vão para “' + escolha.name + '”.', 'ok');
+    toast(mod.tabLabel + ' → pasta “' + escolha.name + '”.');
+  } catch (e) {
+    console.error(e);
+    setGdStatus('Erro ao escolher a pasta: ' + e.message, 'err');
+  }
 }
 
 function gdInitClient(cfg) {
@@ -312,14 +391,22 @@ function driveFolderUrl(id) { return 'https://drive.google.com/drive/folders/' +
 
 function renderDriveFolders() {
   const box = $('gd-folders'); if (!box) return;
+  const nomes = (loadGd().folderNames) || {};
   box.innerHTML = MODULOS.map((m) => {
     const id = (state.driveFolders || {})[m.key] || '';
+    const nome = nomes[m.key] || m.driveRoot;
     const alvo = id
-      ? '<a href="' + driveFolderUrl(id) + '" target="_blank" rel="noopener">abrir no Drive</a>'
+      ? '<a href="' + driveFolderUrl(id) + '" target="_blank" rel="noopener">abrir</a>'
       : '<span class="gd-folder-pend">ainda não criada</span>';
-    return '<div class="gd-folder-row"><span class="gd-folder-dot" style="background:' + m.accent + '"></span>' +
-      '<span class="gd-folder-name">' + escapeHtml(m.driveRoot) + '</span>' + alvo + '</div>';
+    return '<div class="gd-folder-row">' +
+      '<span class="gd-folder-dot" style="background:' + m.accent + '"></span>' +
+      '<span class="gd-folder-name"><b>' + escapeHtml(m.tabLabel) + '</b><br><span class="gd-folder-path">' + escapeHtml(nome) + '</span></span>' +
+      alvo +
+      '<button type="button" class="hist-btn gd-folder-pick" data-t="' + m.key + '">Escolher pasta</button>' +
+      '</div>';
   }).join('');
+  box.querySelectorAll('.gd-folder-pick').forEach((b) =>
+    b.addEventListener('click', () => chooseDriveFolder(b.dataset.t)));
   const btn = $('gd-folders-make');
   if (btn) btn.style.display = MODULOS.every((m) => (state.driveFolders || {})[m.key]) ? 'none' : '';
 }
@@ -403,6 +490,8 @@ function setupGDriveUI() {
   const cfg = loadGd();
   if ($('gd-client')) $('gd-client').value = cfg.clientId || '';
   if ($('gd-worker')) $('gd-worker').value = cfg.workerUrl || '';
+  if ($('gd-apikey')) $('gd-apikey').value = cfg.apiKey || '';
+  if ($('gd-appid')) $('gd-appid').value = cfg.appId || '';
   refreshGdStatus();
   if (gdConnected()) scheduleGdRefresh();   // token persistido ainda válido → mantém renovando sozinho
   // ao voltar o foco p/ o app (ou reconectar a internet), tenta reconexão silenciosa se o token estiver perto de vencer
@@ -424,6 +513,12 @@ function setupGDriveUI() {
   if ($('gd-worker')) $('gd-worker').addEventListener('change', () => {
     const c = loadGd(); c.workerUrl = ($('gd-worker').value || '').trim();
     saveGd(c); refreshGdStatus();
+  });
+  if ($('gd-apikey')) $('gd-apikey').addEventListener('change', () => {
+    const c = loadGd(); c.apiKey = ($('gd-apikey').value || '').trim(); saveGd(c);
+  });
+  if ($('gd-appid')) $('gd-appid').addEventListener('change', () => {
+    const c = loadGd(); c.appId = ($('gd-appid').value || '').trim(); saveGd(c);
   });
   $('gd-connect').addEventListener('click', () => gdConnectFlow());
   $('gd-flush').addEventListener('click', async () => {

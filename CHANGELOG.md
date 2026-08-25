@@ -3,6 +3,21 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v58 — Escolher a pasta de cada relatório no Drive (Google Picker)
+- **Botão "Escolher pasta" por relatório** (`chooseDriveFolder`): abre o **Google Picker** e o
+  relatório passa a gravar os comprovantes dentro da pasta escolhida (subpastas `Ano/Mês` são
+  criadas lá dentro). Resolve o pedido de ter a pasta da SA Ambiental num **local diferente** das
+  pastas da Soma, em vez de todas nascerem na raiz do Drive.
+- **Por que o Picker e não ampliar a permissão**: o escopo `drive.file` só dá acesso ao que o app
+  cria — mas escolher uma pasta no Picker "abre" essa pasta para o app, que passa a poder gravar
+  nela. É o mecanismo desenhado pelo Google exatamente para isso, e mantém o app **sem** acesso ao
+  resto do Drive (o que aconteceria com o escopo `drive` completo).
+- **Duas credenciais novas** nas Configurações (`#gd-apikey`, `#gd-appid`), no mesmo projeto do
+  Client ID e com a **Google Picker API** ativada; ficam só no aparelho, como as demais.
+  `gdLoadPicker` carrega `apis.google.com/js/api.js` sob demanda, no mesmo padrão do `gdLoadGis`.
+- A escolha grava em `state.driveFolders[key]`, que **já era sincronizado** entre aparelhos — o
+  outro dispositivo passa a gravar na mesma pasta sem reconfigurar.
+
 ## v57 — Pastas dos relatórios no Drive sob demanda
 - **Card "Pastas dos relatórios"** em Configurações → Comprovantes (Google Drive): lista a raiz de
   cada módulo com a cor da empresa e um **link direto** para ela no Drive, ou "ainda não criada".

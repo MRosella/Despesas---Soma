@@ -81,7 +81,8 @@ Lápides propagam deleções. `pending` = união por `fileId` **menos** os já v
 
 ## Chaves de localStorage
 `despesas-soma-v1` (estado) · `-sync-v1` (GitHub) · `-gdrive-v1` (Drive config: `clientId`,
-`folderId` legado, `workerUrl` do renovador) · `-gdtok-v1` (token OAuth do Drive, LOCAL, persiste
+`folderId` legado, `workerUrl` do renovador, `apiKey` + `appId` do **Picker**, `folderNames`
+= nomes das pastas escolhidas, só p/ exibir) · `-gdtok-v1` (token OAuth do Drive, LOCAL, persiste
 entre aberturas; inclui `refresh` quando o renovador está configurado) · `-gddel-v1` (fila de
 exclusões) · `-ai-v1` (Gemini) · `-lock-v1` (bio/PIN) · `-theme-v1` · `-lastsync-v1` · `-dirty-v1` ·
 `-tab-v1` (aba ativa da Home) · `-histtab-v1` (aba ativa dos Relatórios mensais).
@@ -143,9 +144,19 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
   `state.driveFolders[key]` guarda o id (sincronizado; `driveFolderId` legado migra p/ reembolso).
   Chave desconhecida agora **lança erro** em vez de cair silenciosamente na pasta do reembolso.
   O app guarda o **ID** da pasta, nunca o caminho: mover/renomear a pasta no Drive não quebra nada.
-  Configurações → Drive tem o card **"Pastas dos relatórios"** (`renderDriveFolders`) com link
-  direto para cada raiz e o botão **"Criar as pastas agora"** (`ensureAllDriveFolders`), que cria
-  todas as raízes sem precisar lançar despesa — é assim que o usuário posiciona cada pasta no Drive.
+  Configurações → Drive tem o card **"Pastas dos relatórios"** (`renderDriveFolders`): uma linha
+  por módulo com o nome da pasta em uso, link para abri-la, botão **"Escolher pasta"** e o botão
+  **"Criar as pastas que faltam"** (`ensureAllDriveFolders`, cria as raízes sem precisar lançar
+  despesa).
+- **Escolher uma pasta QUE JÁ EXISTE no Drive** (`chooseDriveFolder` → `gdPickFolder`): usa o
+  **Google Picker** — o caminho oficial para o escopo `drive.file` ganhar acesso de escrita a uma
+  pasta que o app não criou (escolher no Picker "abre" a pasta para o app). **Não** ampliamos o
+  escopo para `drive` (Drive inteiro). O Picker exige, no MESMO projeto do Client ID, uma
+  **API Key** e o **número do projeto** (`appId`), guardados em `-gdrive-v1` (campos `#gd-apikey`
+  e `#gd-appid`) e com a **Google Picker API** ativada. `gdLoadPicker` carrega
+  `https://apis.google.com/js/api.js` sob demanda (mesmo padrão de `gdLoadGis`); offline falha com
+  mensagem. A escolha grava o id em `state.driveFolders[key]` (sincronizado) via `setDriveFolder`,
+  então `gdEnsureFolder` para de criar pasta por nome para aquele módulo.
   `gdUpload(blob,name,dateISO,tabela)`/`gdEnsureMonthFolder(dateISO,tabela)` recebem a tabela.
 - **Comprovantes vão p/ subpastas `{Ano}/{Mês}`** dentro da raiz **da tabela** (resolvidas por
   nome, idempotente). O mês é o **`reportMonth`** (campo "Mês de referência", `reportFolderDateISO`)
