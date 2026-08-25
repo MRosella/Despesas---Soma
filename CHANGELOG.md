@@ -3,6 +3,16 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v57 — Pastas dos relatórios no Drive sob demanda
+- **Card "Pastas dos relatórios"** em Configurações → Comprovantes (Google Drive): lista a raiz de
+  cada módulo com a cor da empresa e um **link direto** para ela no Drive, ou "ainda não criada".
+- **Botão "Criar as pastas agora"** (`ensureAllDriveFolders`): cria/localiza a raiz de todos os
+  módulos **sem precisar lançar uma despesa antes**. Resolve o problema prático de só conseguir
+  posicionar a pasta no Drive depois do primeiro comprovante — agora dá para criar, abrir e
+  **arrastar cada pasta para o lugar desejado** de uma vez. Como o app guarda o **ID** da pasta
+  (sincronizado entre aparelhos), mover ou renomear no Drive não interrompe os envios.
+- `setDriveFolder` re-renderiza a lista quando uma pasta nasce durante um upload.
+
 ## v56 — Terceiro relatório (SA Ambiental) + generalização para N módulos
 - **Registry de módulos (`js/modules.js`, novo)**: um array `MODULOS` descreve cada relatório
   (rótulo, empresa, logo, cores do app/PDF/Excel, pasta raiz no Drive, template + layout, campos do

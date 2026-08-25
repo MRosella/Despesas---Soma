@@ -412,6 +412,15 @@
             <button class="btn btn-excel" id="gd-connect" type="button">Conectar Google</button>
           </div>
           <button class="btn btn-ghost" id="gd-flush" type="button" style="display:none; width:100%; margin-top:8px">Enviar comprovantes pendentes</button>
+
+          <div class="gd-folders-box">
+            <div class="gd-folders-title">Pastas dos relatórios</div>
+            <div id="gd-folders"></div>
+            <button class="btn btn-ghost" id="gd-folders-make" type="button" style="width:100%; margin-top:8px">Criar as pastas agora</button>
+            <p class="hint" style="margin:6px 2px 0">Cada relatório tem sua pasta. Crie-as aqui, abra cada uma
+              e <b>mova para onde quiser</b> no seu Drive — o app guarda o identificador da pasta, então mover
+              (ou renomear) não interrompe os envios.</p>
+          </div>
           <p class="hint" style="margin:6px 2px 0">O botão <b>Procurar comprovantes no Drive</b> fica na tela de Lançamentos. Ele reconhece arquivos subidos manualmente à pasta (pede permissão de <b>leitura</b> na 1ª vez e usa a IA).</p>
           <p class="sync-status" id="gd-status">Não configurado.</p>
           <button class="btn btn-danger-text" id="gd-clear" type="button" style="padding:8px 0">Desconectar Google deste aparelho</button>

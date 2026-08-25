@@ -142,6 +142,10 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
   Despesas Soma` (`alelo`) e `Comprovantes - SA Ambiental` (`sagestao`).
   `state.driveFolders[key]` guarda o id (sincronizado; `driveFolderId` legado migra p/ reembolso).
   Chave desconhecida agora **lança erro** em vez de cair silenciosamente na pasta do reembolso.
+  O app guarda o **ID** da pasta, nunca o caminho: mover/renomear a pasta no Drive não quebra nada.
+  Configurações → Drive tem o card **"Pastas dos relatórios"** (`renderDriveFolders`) com link
+  direto para cada raiz e o botão **"Criar as pastas agora"** (`ensureAllDriveFolders`), que cria
+  todas as raízes sem precisar lançar despesa — é assim que o usuário posiciona cada pasta no Drive.
   `gdUpload(blob,name,dateISO,tabela)`/`gdEnsureMonthFolder(dateISO,tabela)` recebem a tabela.
 - **Comprovantes vão p/ subpastas `{Ano}/{Mês}`** dentro da raiz **da tabela** (resolvidas por
   nome, idempotente). O mês é o **`reportMonth`** (campo "Mês de referência", `reportFolderDateISO`)

@@ -352,6 +352,15 @@ body.locked { overflow: hidden; }
 .rs-total b { font-size: 1.1rem; color: var(--text); margin-left: 4px; }
 .cat-empty { font-size: .82rem; color: var(--muted); }
 
+/* pastas dos relatórios no Drive (Configurações) */
+.gd-folders-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.gd-folders-title { font-size: .8rem; font-weight: 700; color: var(--brown); margin-bottom: 8px; }
+.gd-folder-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: .82rem; }
+.gd-folder-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.gd-folder-name { flex: 1; min-width: 0; color: var(--text); word-break: break-word; }
+.gd-folder-row a { color: var(--red); font-weight: 700; white-space: nowrap; }
+.gd-folder-pend { color: var(--muted); white-space: nowrap; }
+
 /* cabeçalho do card de dados do relatório — segue a cor do módulo ativo */
 .card.mod-card .card-head {
   background: linear-gradient(135deg, var(--mod-accent, var(--red)), var(--mod-accent-dark, var(--red-dark)));

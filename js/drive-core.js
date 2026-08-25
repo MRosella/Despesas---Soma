@@ -172,6 +172,7 @@ function setDriveFolder(tabela, id) {
   state.driveFolders[tabela] = id;
   if (tabela === TABELA_PADRAO) state.driveFolderId = id;   // mantém o campo legado coerente
   touchDoc(); saveState();                                   // propaga via dados.json
+  if (typeof renderDriveFolders === 'function') renderDriveFolders();
 }
 
 /* Raiz separada por módulo (uma pasta por relatório/empresa). */
@@ -303,6 +304,41 @@ async function purgeEntryPhoto(entry) {
   }
 }
 
+/* ---- pastas dos relatórios no Drive (uma por módulo) ----
+   Lista as raízes com link direto. Criar antes do primeiro comprovante permite
+   ARRASTAR cada pasta para o lugar que você quiser no Drive de uma vez — o app
+   guarda o ID, então mover não quebra os envios seguintes. */
+function driveFolderUrl(id) { return 'https://drive.google.com/drive/folders/' + id; }
+
+function renderDriveFolders() {
+  const box = $('gd-folders'); if (!box) return;
+  box.innerHTML = MODULOS.map((m) => {
+    const id = (state.driveFolders || {})[m.key] || '';
+    const alvo = id
+      ? '<a href="' + driveFolderUrl(id) + '" target="_blank" rel="noopener">abrir no Drive</a>'
+      : '<span class="gd-folder-pend">ainda não criada</span>';
+    return '<div class="gd-folder-row"><span class="gd-folder-dot" style="background:' + m.accent + '"></span>' +
+      '<span class="gd-folder-name">' + escapeHtml(m.driveRoot) + '</span>' + alvo + '</div>';
+  }).join('');
+  const btn = $('gd-folders-make');
+  if (btn) btn.style.display = MODULOS.every((m) => (state.driveFolders || {})[m.key]) ? 'none' : '';
+}
+
+/* Cria (ou localiza) a pasta raiz de CADA relatório, sem precisar lançar despesa antes. */
+async function ensureAllDriveFolders() {
+  if (!gdConfigured()) { setGdStatus('Cole o Client ID e conecte o Google primeiro.', 'warn'); return; }
+  setGdStatus('Preparando as pastas no Drive…');
+  try {
+    await gdGetToken(true);
+    for (const m of MODULOS) await gdEnsureFolder(m.key);
+    renderDriveFolders();
+    setGdStatus('Pastas prontas. Abra cada uma e mova para onde quiser no Drive — o app continua achando.', 'ok');
+  } catch (e) {
+    console.error(e);
+    setGdStatus('Erro ao preparar as pastas: ' + e.message, 'err');
+  }
+}
+
 /* ---- envia fotos que ficaram pendentes (offline) quando reconectar ---- */
 function countPendingPhotos() {
   let n = 0;
@@ -402,6 +438,8 @@ function setupGDriveUI() {
     } catch (e) { console.error(e); setGdStatus('Erro: ' + e.message, 'err'); }
   });
   if ($('gd-scan-main')) $('gd-scan-main').addEventListener('click', () => scanDriveForReceipts());
+  if ($('gd-folders-make')) $('gd-folders-make').addEventListener('click', () => ensureAllDriveFolders());
+  renderDriveFolders();
   updateGdPending();
   $('gd-clear').addEventListener('click', () => {
     if (!confirm('Desconectar o Google Drive deste aparelho?')) return;
