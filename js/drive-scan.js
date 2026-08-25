@@ -6,8 +6,8 @@
 function knownDriveIds() {
   const s = new Set();
   const add = (arr) => { for (const e of (arr || [])) if (e.foto && e.foto.id) s.add(e.foto.id); };
-  add(state.reembolso); add(state.alelo);
-  for (const h of (state.history || [])) { add(h.reembolso); add(h.alelo); }
+  for (const t of TABELAS) add(state[t]);
+  for (const h of (state.history || [])) for (const t of TABELAS) add(h[t]);
   for (const k of Object.keys(state.driveKnown || {})) s.add(k);
   for (const k of Object.keys(state.driveDismissed || {})) s.add(k);
   for (const p of (state.pending || [])) if (p && p.fileId) s.add(p.fileId);
@@ -16,15 +16,14 @@ function knownDriveIds() {
 
 /* Arquivos GERADOS no fechamento do mês (zip de comprovantes + Excel + PDF do relatório).
    Nunca são comprovantes enviados pelo usuário — a varredura os ignora. Nomes vêm de
-   archiveMonthToDrive ('NFs - {Mês} {Ano}.zip') e reportFileBase/santanderFileBase. */
+   archiveMonthToDrive ('NFs - {Mês} {Ano}.zip') e do prefixo `fileBase` de cada módulo. */
 function isGeneratedArtifact(f) {
   const name = f.name || '';
   const mime = f.mimeType || '';
   if (mime === 'application/zip' || /\.zip$/i.test(name)) return true;
   if (mime.indexOf('spreadsheet') >= 0 || /\.xlsx?$/i.test(name)) return true;
   if (/^NFs - /i.test(name)) return true;                 // zip dos comprovantes
-  if (/^Relatorio_Despesas_/i.test(name)) return true;    // Excel/PDF do reembolso
-  if (/^Prestacao_Contas_Cartao_/i.test(name)) return true; // Excel/PDF do cartão Santander
+  for (const m of MODULOS) if (name.toLowerCase().indexOf(m.fileBase.toLowerCase() + '_') === 0) return true;   // Excel/PDF gerados
   return false;
 }
 
@@ -130,8 +129,9 @@ async function scanDriveForReceipts() {
     }
     const known = knownDriveIds();
     let novos = 0, pend = 0, erros = 0, jaLanc = 0, total = 0, lidos = 0, dups = 0;
-    const LBL = { reembolso: 'Reembolso', alelo: 'Cartão Santander' };
-    for (const tabela of ['reembolso', 'alelo']) {
+    const LBL = {};
+    for (const m of MODULOS) LBL[m.key] = m.tabLabel;
+    for (const tabela of TABELAS) {
       scanProgress.status('Listando pasta de ' + LBL[tabela] + '…');
       let files = [];
       try { files = await gdListReceipts(tabela); }
@@ -158,7 +158,9 @@ async function scanDriveForReceipts() {
             categoria: ocr.category, valor: ocr.total, updatedAt: Date.now(),
             foto: { id: f.id, name: f.name }
           };
-          if (tabela === 'alelo') { entry.estabelecimento = ocr.establishment || ''; entry.justificativa = ''; }
+          const cmp = (MOD[tabela] || {}).campos || {};
+          if (cmp.estabelecimento) entry.estabelecimento = ocr.establishment || '';
+          if (cmp.justificativa) entry.justificativa = '';
           state[tabela].push(entry);
           state[tabela].sort((a, b) => (a.data || '').localeCompare(b.data || ''));
           novos++;
@@ -233,7 +235,7 @@ function renderPending() {
   list.forEach((p) => {
     const li = document.createElement('li');
     li.className = 'pending-item';
-    const tabelaLbl = p.tabela === 'alelo' ? 'Cartão Santander' : 'Reembolso';
+    const tabelaLbl = modOf(p.tabela).tabLabel;
     const hint = (p.ocr && p.ocr.total != null)
       ? (formatMoney(p.ocr.total) + (p.ocr.dateISO ? ' · ' + fmtDateBR(p.ocr.dateISO) : ''))
       : 'sem leitura automática';
@@ -274,7 +276,9 @@ async function retryPendingOcr(fileId, btn) {
         categoria: ocr.category, valor: ocr.total, updatedAt: Date.now(),
         foto: { id: p.fileId, name: p.name }
       };
-      if (p.tabela === 'alelo') { entry.estabelecimento = ocr.establishment || ''; entry.justificativa = ''; }
+      const cmp = (MOD[p.tabela] || {}).campos || {};
+      if (cmp.estabelecimento) entry.estabelecimento = ocr.establishment || '';
+      if (cmp.justificativa) entry.justificativa = '';
       state[p.tabela].push(entry);
       state[p.tabela].sort((a, b) => (a.data || '').localeCompare(b.data || ''));
       state.pending = (state.pending || []).filter((x) => x.fileId !== fileId);

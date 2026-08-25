@@ -1,11 +1,12 @@
 /* Service Worker — cache do app para funcionar offline.
    Estratégia: network-first (online sempre pega a versão nova; cache é
    só fallback offline). Isso evita o app ficar "preso" numa versão antiga. */
-const CACHE = 'despesas-soma-v55';
+const CACHE = 'despesas-soma-v56';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
+  './js/modules.js',
   './js/core.js',
   './js/render.js',
   './js/modal.js',
@@ -25,6 +26,7 @@ const ASSETS = [
   './template.xlsx',
   './template-santander.xlsx',
   './assets/soma-logo.png',
+  './assets/sa-logo.png',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -36,8 +38,12 @@ self.addEventListener('install', (e) => {
     // {cache:'reload'} força baixar da REDE, ignorando o cache HTTP do navegador.
     // Sem isso, o GitHub Pages serve assets com max-age=600 e o precache poderia
     // gravar a versão ANTIGA do app.js, deixando o PWA preso numa versão velha.
+    // addAll é "tudo ou nada": um único asset ausente (ex.: logo ainda não enviado)
+    // derrubaria a instalação inteira. Guardamos um a um e ignoramos as falhas.
     caches.open(CACHE)
-      .then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
+      .then((c) => Promise.all(ASSETS.map((u) =>
+        c.add(new Request(u, { cache: 'reload' })).catch((e) => console.warn('SW: asset ignorado', u, e))
+      )))
       .then(() => self.skipWaiting())
   );
 });

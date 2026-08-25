@@ -2,6 +2,7 @@
 <!-- Testes de lógica pura (rode headless; ver CLAUDE.md > Verificação).
      Carrega os js/*.js e chama funções puras com fixtures. NÃO cobre OAuth/OCR/PDF/Drive. -->
 <script src="../lib/fflate.min.js"></script>
+<script src="../js/modules.js"></script>
 <script src="../js/core.js"></script>
 <script src="../js/render.js"></script>
 <script src="../js/modal.js"></script>
@@ -49,14 +50,21 @@ try {
 
   // mergeDocs: perfil last-write-wins (profileUpdatedAt) + tabela por maior updatedAt
   function doc(profTs, func, reemb, tombReemb, reportMonths){
-    return { meta:{profileUpdatedAt:profTs, updatedAt:profTs}, funcionario:func, dataSolicitacao:'', referente:'',
-      reportMonths:reportMonths||{reembolso:'',alelo:''}, bank:{}, config:{categorias:[]}, reembolso:reemb||[], alelo:[],
-      tomb:{reembolso:tombReemb||{}, alelo:{}}, history:[], histTomb:{}, driveFolders:{}, driveKnown:{}, driveDismissed:{}, pending:[] };
+    var d = { meta:{profileUpdatedAt:profTs, updatedAt:profTs}, funcionario:func, dataSolicitacao:'', referente:'',
+      reportMonths:reportMonths||mapPorTabela(function(){return '';}), bank:{}, config:{categorias:[]},
+      tomb:mapPorTabela(function(){return {};}), history:[], histTomb:{}, driveFolders:{}, driveKnown:{}, driveDismissed:{}, pending:[] };
+    TABELAS.forEach(function(t){ d[t] = []; });
+    d.reembolso = reemb || [];
+    d.tomb.reembolso = tombReemb || {};
+    return d;
   }
-  var a = doc(100, 'A', [{id:'x',data:'2026-01-01',valor:10,updatedAt:50}], {}, {reembolso:'2026-05',alelo:'2026-05'});
-  var b = doc(200, 'B', [{id:'x',data:'2026-01-01',valor:99,updatedAt:80}], {}, {reembolso:'2026-06',alelo:'2026-07'});
+  var a = doc(100, 'A', [{id:'x',data:'2026-01-01',valor:10,updatedAt:50}], {}, {reembolso:'2026-05',alelo:'2026-05',sagestao:''});
+  var b = doc(200, 'B', [{id:'x',data:'2026-01-01',valor:99,updatedAt:80}], {}, {reembolso:'2026-06',alelo:'2026-07',sagestao:'2026-08'});
   var m = mergeDocs(a, b);
   chk('merge_perfil_lww', m.funcionario, 'B');                 // 200 > 100
+  chk('merge_perfis_por_modulo', m.perfis.reembolso.funcionario + '|' + m.perfis.sagestao.funcionario, 'B|');
+  chk('merge_reportMonths_terceiro', m.reportMonths.sagestao, '2026-08');
+  chk('merge_terceira_tabela', Array.isArray(m.sagestao) + '|' + m.sagestao.length, 'true|0');
   chk('merge_tabela_maior_updatedAt', m.reembolso[0].valor, 99); // 80 > 50
   chk('merge_reportMonths_lww', m.reportMonths.reembolso + '|' + m.reportMonths.alelo, '2026-06|2026-07'); // perfil mais novo (b) vence
 
@@ -72,6 +80,59 @@ try {
   chk('hist_belongs_table_alelo', histBelongsTo({ table:'alelo', reembolso:[], alelo:[{}] }, 'alelo') + '|' + histBelongsTo({ table:'alelo', reembolso:[], alelo:[{}] }, 'reembolso'), 'true|false');
   chk('hist_belongs_legado', histBelongsTo({ reembolso:[{}], alelo:[{}] }, 'reembolso') + '|' + histBelongsTo({ reembolso:[{}], alelo:[{}] }, 'alelo'), 'true|true');
   chk('hist_belongs_legado_so_reemb', histBelongsTo({ reembolso:[{}], alelo:[] }, 'alelo'), 'false');
+  chk('hist_belongs_sagestao', histBelongsTo({ table:'sagestao', sagestao:[{}] }, 'sagestao') + '|' + histBelongsTo({ table:'sagestao', sagestao:[{}] }, 'reembolso'), 'true|false');
+
+  // registry: chaves e módulos
+  chk('registry_tabelas', TABELAS.join(','), 'reembolso,alelo,sagestao');
+  chk('registry_modOf_fallback', modOf('inexistente').key, 'reembolso');
+  chk('registry_pastas_distintas', new Set(MODULOS.map(function(m){return m.driveRoot;})).size, 3);
+  chk('registry_prefixos_distintos', new Set(MODULOS.map(function(m){return m.fileBase;})).size, 3);
+
+  // docForModule: achata o perfil do módulo na raiz (e deixa snapshot legado intacto)
+  var comPerfis = { perfis:{ reembolso:{funcionario:'R', dataSolicitacao:'2026-06-01', referente:'', bank:{nome:'BR'}, santPeriodo:{start:'',end:''}},
+                             sagestao:{funcionario:'S', dataSolicitacao:'2026-07-02', referente:'', bank:{nome:'BS'}, santPeriodo:{start:'',end:''}} } };
+  chk('docForModule_reembolso', docForModule(comPerfis,'reembolso').funcionario + '|' + docForModule(comPerfis,'reembolso').bank.nome, 'R|BR');
+  chk('docForModule_sagestao', docForModule(comPerfis,'sagestao').funcionario + '|' + docForModule(comPerfis,'sagestao').dataSolicitacao, 'S|2026-07-02');
+  chk('docForModule_legado', docForModule({funcionario:'L'},'reembolso').funcionario, 'L');
+
+  // resolveExport: um módulo -> formato dele; reembolso+cartão -> relatório combinado; empresas diferentes -> erro
+  chk('export_so_cartao', resolveExport({alelo:true}).mod.key, 'alelo');
+  chk('export_so_reembolso', resolveExport({reembolso:true}).mod.key, 'reembolso');
+  chk('export_combinado', resolveExport({reembolso:true, alelo:true}).mod.key, 'reembolso');
+  chk('export_so_sagestao', resolveExport({sagestao:true}).mod.key, 'sagestao');
+  chk('export_mistura_invalida', !!resolveExport({reembolso:true, sagestao:true}).erro, 'true');
+  chk('export_vazio', !!resolveExport({}).erro, 'true');
+
+  // fileBaseOf usa o prefixo do módulo (reconhecido por isGeneratedArtifact)
+  var dref = { funcionario:'Murilo Rosella', dataSolicitacao:'2026-07-31' };
+  chk('filebase_reembolso', fileBaseOf(dref, MOD.reembolso), 'Relatorio_Despesas_Murilo_Rosella_2026-07-31');
+  chk('filebase_cartao', fileBaseOf(dref, MOD.alelo), 'Prestacao_Contas_Cartao_Murilo_Rosella_2026-07-31');
+  chk('filebase_sagestao', fileBaseOf(dref, MOD.sagestao), 'Relatorio_Despesas_SA_Murilo_Rosella_2026-07-31');
+  chk('artefato_gerado_sagestao', isGeneratedArtifact({name:'Relatorio_Despesas_SA_Murilo_2026-07-31.pdf', mimeType:'application/pdf'}), 'true');
+  chk('artefato_comprovante_nao', isGeneratedArtifact({name:'NF 12.07.2026.jpg', mimeType:'image/jpeg'}), 'false');
+
+  // validação por módulo: SA Ambiental exige categoria (como o reembolso), não estabelecimento
+  chk('valida_sagestao_ok',
+    validateBeforeExport({ sagestao:[{data:'2026-07-01',valor:10,categoria:'Almoço'}] }, {sagestao:true}), 'true');
+  chk('valida_sagestao_falha',
+    validateBeforeExport({ sagestao:[{data:'2026-07-01',valor:10,categoria:''}] }, {sagestao:true}), 'false');
+
+  // filteredDoc zera as tabelas não selecionadas
+  var fd = filteredDoc({ reembolso:[{id:1}], alelo:[{id:2}], sagestao:[{id:3}] }, {sagestao:true});
+  chk('filteredDoc', fd.reembolso.length + '|' + fd.alelo.length + '|' + fd.sagestao.length, '0|0|1');
+
+  // migração de estado legado (cabeçalho/banco na raiz) -> perfis por módulo
+  localStorage.setItem(STORE_KEY, JSON.stringify({
+    funcionario:'Legado', dataSolicitacao:'2026-03-10', referente:'Demandas operacionais',
+    bank:{nome:'Conta Legado', cpf:'123'}, santPeriodo:{start:'2026-03-01', end:'2026-03-31'},
+    reembolso:[{id:'a',data:'2026-03-05',valor:5}], alelo:[], meta:{updatedAt:1, profileUpdatedAt:1}
+  }));
+  var mig = loadState();
+  chk('migra_perfil_reembolso', mig.perfis.reembolso.funcionario + '|' + mig.perfis.reembolso.bank.nome, 'Legado|Conta Legado');
+  chk('migra_periodo_cartao', mig.perfis.alelo.santPeriodo.start, '2026-03-01');
+  chk('migra_terceira_tabela_vazia', Array.isArray(mig.sagestao) + '|' + mig.perfis.sagestao.funcionario, 'true|');
+  chk('migra_sem_campos_na_raiz', (mig.funcionario === undefined) + '|' + (mig.bank === undefined), 'true|true');
+  try { localStorage.removeItem(STORE_KEY); } catch(e){}
 
   // persistência do token do Drive: round-trip de token válido + rejeição de token expirado
   gdAccess = { token: 'tok123', exp: Date.now() + 100000 };

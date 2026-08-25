@@ -125,7 +125,7 @@ function importBackupFile(file) {
   reader.onload = () => {
     try {
       const imported = JSON.parse(reader.result);
-      if (!imported || (!imported.reembolso && !imported.history)) { toast('Arquivo de backup inválido.'); return; }
+      if (!imported || (!TABELAS.some((t) => imported[t]) && !imported.history)) { toast('Arquivo de backup inválido.'); return; }
       if (!confirm('Importar este backup e MESCLAR com os dados atuais?\n(Lançamentos mais recentes prevalecem; nada é perdido.)')) return;
       const merged = mergeDocs(currentDoc(), imported);
       applyDoc(merged);

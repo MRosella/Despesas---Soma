@@ -4,6 +4,7 @@
      funções. Um SyntaxError/redeclaração pula o arquivo inteiro → a função some e vira FAIL.
      OBS: só checa `function` (vai p/ window); const/let de topo (scanProgress, MESES, $) não vão. -->
 <script>window.__errs=[]; window.onerror=function(m,s,l){window.__errs.push(m+' @'+(s||'')+':'+l);};</script>
+<script src="../js/modules.js"></script>
 <script src="../js/core.js"></script>
 <script src="../js/render.js"></script>
 <script src="../js/modal.js"></script>
@@ -20,17 +21,18 @@
 </head><body><pre id="out">PENDING</pre>
 <script>
 var checks = {
+  'modules':    ['modOf','mapPorTabela','perfilVazio','normalizePerfil','perfilDe','docForModule','modulosSelecionados'],
   'core':       ['formatMoney','loadState','uid','getCatConfig','sumOf'],
-  'render':     ['render','computeSantanderPeriodo','renderList','reopenHistory','monthLabelFor','renderCatSummary','renderReports','renderReportsPanel','histBelongsTo'],
-  'modal':      ['openModal','saveEntry','deleteEntry','onPhotoSelected','toggleCartaoFields'],
-  'excel':      ['buildXlsx','buildSantanderXlsx','validateBeforeExport','exportExcel','updateExportHint'],
-  'pdf':        ['generatePdfBlob','buildSantanderPrint','exportPDF','buildPrint'],
-  'sync':       ['syncNow','mergeDocs','mergeTable','mergeHistory','setupSyncUI'],
+  'render':     ['render','computeSantanderPeriodo','renderList','reopenHistory','monthLabelFor','allEntriesOf','renderCatSummary','renderReports','renderReportsPanel','histBelongsTo'],
+  'modal':      ['openModal','saveEntry','deleteEntry','onPhotoSelected','toggleCamposModulo'],
+  'excel':      ['buildXlsx','buildPrestacaoXlsx','buildXlsxFor','sheetTools','fileBaseOf','filteredDoc','resolveExport','docParaExport','validateBeforeExport','exportExcel','updateExportHint','recolorHex','pngSize','applyBrandToXlsx'],
+  'pdf':        ['generatePdfBlob','buildPrestacaoPrint','exportPDF','buildPrint','buildPrintTable','buildSignatureBlock','applyPrintTheme'],
+  'sync':       ['syncNow','mergeDocs','mergeTable','mergeHistory','setupSyncUI','perfisFromDoc','currentDoc','applyDoc'],
   'lock':       ['showLock','enableBio','setPin','setupBackupUI'],
-  'ui':         ['setupNav','setupCatUI','populateCategorySelects','renderCatEditor','setupReportTabs','showReportTab','setupHistTabs','showHistTab'],
+  'ui':         ['setupNav','setupCatUI','populateCategorySelects','renderCatEditor','setupReportTabs','showReportTab','setupHistTabs','showHistTab','applyModuleAccent'],
   'ocr':        ['ocrReceipt','ocrReceiptRaw','blobSha256','fillFromOcr','setupAiUI'],
   'idb':        ['idbGet','idbPut','getPhotoBlob','compressImage','saveThumb'],
-  'drive-core': ['gdUpload','gdEnsureFolder','purgeEntryPhoto','flushPendingPhotos','setupGDriveUI','loadGdAccess','saveGdAccess','scheduleGdRefresh'],
+  'drive-core': ['gdUpload','gdEnsureFolder','gdRootName','purgeEntryPhoto','flushPendingPhotos','setupGDriveUI','loadGdAccess','saveGdAccess','scheduleGdRefresh'],
   'drive-scan': ['scanDriveForReceipts','gdListReceipts','renderPending','retryPendingOcr','openPendingEntry'],
   'main':       ['init','closeMonthFlow','closeTable','archiveMonthToDrive','setupTheme','bindField']
 };

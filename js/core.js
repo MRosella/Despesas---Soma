@@ -9,10 +9,10 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v55';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v56';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
-const EMPRESA = 'Soma Urbanismo S/A';
+/* Empresa, logo, cores e pastas ficam por MÓDULO em js/modules.js (MODULOS/MOD). */
 
 /* Categorias e limites — padrão de fábrica. A configuração efetiva fica em
    state.config.categorias (editável em Configurações e sincronizada como o perfil). */
@@ -47,28 +47,26 @@ function limitsObsText() {
   return parts.length ? ('Os valores máximos reembolsáveis são — ' + parts.join('; ') + '.') : '';
 }
 
-/* ---------------- Estado ---------------- */
+/* ---------------- Estado ----------------
+   Tudo que é "por relatório" é indexado pela chave do módulo (js/modules.js):
+   perfis / reportMonths / driveFolders / tomb + a própria lista de lançamentos. */
 function emptyState() {
-  return {
-    funcionario: '',
-    dataSolicitacao: '',
-    referente: '',
-    reportMonths: { reembolso: '', alelo: '' },  // mês de referência (YYYY-MM) por relatório: pasta dos comprovantes no Drive
-    santPeriodo: { start: '', end: '' },  // Período de Prestação do Cartão Santander (datas ISO escolhidas pelo usuário)
-    bank: { nome: '', cpf: '', banco: '', agencia: '', conta: '', pix: '' },
-    reembolso: [],
-    alelo: [],
+  const st = {
+    perfis: mapPorTabela(() => perfilVazio()),   // cabeçalho + dados bancários + período POR módulo
+    reportMonths: mapPorTabela(() => ''),        // mês de referência (YYYY-MM): pasta dos comprovantes no Drive
     history: [],                          // meses arquivados (snapshots)
     histTomb: {},                         // lápides do histórico: id -> ts
     driveFolderId: '',                    // (legado) pasta única dos comprovantes; migra p/ a raiz de reembolso
-    driveFolders: { reembolso: '', alelo: '' },  // pastas raiz separadas no Drive (sincronizadas)
+    driveFolders: mapPorTabela(() => ''), // pastas raiz separadas no Drive (sincronizadas)
     config: { categorias: DEFAULT_CATEGORIAS.map((c) => Object.assign({}, c)) },  // categorias + limites
-    tomb: { reembolso: {}, alelo: {} },   // lápides: id -> updatedAt (deleções)
+    tomb: mapPorTabela(() => ({})),       // lápides: id -> updatedAt (deleções)
     pending: [],                          // comprovantes no Drive sem lançamento (revisar manualmente)
     driveKnown: {},                       // fileIds já vistos pela varredura (não reprocessa)
     driveDismissed: {},                   // fileIds descartados pelo usuário (não reaparecem)
     meta: { updatedAt: 0, profileUpdatedAt: 0 }
   };
+  for (const t of TABELAS) st[t] = [];    // listas de lançamentos
+  return st;
 }
 
 let state = loadState();
@@ -81,31 +79,43 @@ function loadState() {
     const s = JSON.parse(raw);
     const base = emptyState();
     const st = Object.assign(base, s, {
-      bank: Object.assign(base.bank, s.bank || {}),
       tomb: Object.assign(base.tomb, s.tomb || {}),
-      meta: Object.assign(base.meta, s.meta || {}),
-      santPeriodo: Object.assign(base.santPeriodo, s.santPeriodo || {})
+      meta: Object.assign(base.meta, s.meta || {})
     });
-    st.tomb.reembolso = st.tomb.reembolso || {};
-    st.tomb.alelo = st.tomb.alelo || {};
     st.history = Array.isArray(st.history) ? st.history : [];
     st.histTomb = st.histTomb || {};
     st.driveFolderId = st.driveFolderId || '';
-    st.driveFolders = Object.assign({ reembolso: '', alelo: '' }, st.driveFolders || {});
-    if (!st.driveFolders.reembolso && st.driveFolderId) st.driveFolders.reembolso = st.driveFolderId;   // migração: raiz legada vira a de reembolso
-    st.reportMonths = Object.assign({ reembolso: '', alelo: '' }, st.reportMonths || {});
-    if (typeof s.reportMonth === 'string' && s.reportMonth) {   // migração: mês único legado → ambos os relatórios
-      if (!st.reportMonths.reembolso) st.reportMonths.reembolso = s.reportMonth;
-      if (!st.reportMonths.alelo) st.reportMonths.alelo = s.reportMonth;
+    st.driveFolders = Object.assign(mapPorTabela(() => ''), st.driveFolders || {});
+    if (!st.driveFolders[TABELA_PADRAO] && st.driveFolderId) st.driveFolders[TABELA_PADRAO] = st.driveFolderId;   // migração: raiz legada vira a de reembolso
+    st.reportMonths = Object.assign(mapPorTabela(() => ''), st.reportMonths || {});
+    if (typeof s.reportMonth === 'string' && s.reportMonth) {   // migração: mês único legado → os relatórios que já existiam
+      for (const t of ['reembolso', 'alelo']) if (!st.reportMonths[t]) st.reportMonths[t] = s.reportMonth;
     }
     delete st.reportMonth;
+    // perfis por módulo; migração do cabeçalho/banco/período que ficavam na raiz
+    st.perfis = Object.assign(mapPorTabela(() => perfilVazio()), st.perfis || {});
+    for (const t of TABELAS) st.perfis[t] = normalizePerfil(st.perfis[t]);
+    if (!s.perfis) {
+      const p = st.perfis[TABELA_PADRAO];
+      p.funcionario = s.funcionario || '';
+      p.dataSolicitacao = s.dataSolicitacao || '';
+      p.referente = s.referente || '';
+      p.bank = Object.assign(p.bank, s.bank || {});
+      if (st.perfis.alelo) {
+        st.perfis.alelo.funcionario = s.funcionario || '';   // o cartão usava o mesmo funcionário
+        st.perfis.alelo.santPeriodo = Object.assign(st.perfis.alelo.santPeriodo, s.santPeriodo || {});
+      }
+    }
+    delete st.funcionario; delete st.dataSolicitacao; delete st.referente;
+    delete st.bank; delete st.santPeriodo;
     st.pending = Array.isArray(st.pending) ? st.pending : [];
     st.driveKnown = st.driveKnown || {};
     st.driveDismissed = st.driveDismissed || {};
     st.config = normalizeCatConfig(st.config);
     // migração: garante updatedAt nas entradas e relógio do doc se for estado antigo
-    for (const t of ['reembolso', 'alelo']) {
-      st[t] = (st[t] || []).map((e) => e.updatedAt ? e : Object.assign({}, e, { updatedAt: Date.now() }));
+    for (const t of TABELAS) {
+      st.tomb[t] = st.tomb[t] || {};
+      st[t] = (Array.isArray(st[t]) ? st[t] : []).map((e) => e.updatedAt ? e : Object.assign({}, e, { updatedAt: Date.now() }));
     }
     if (!s.meta) st.meta = { updatedAt: Date.now(), profileUpdatedAt: Date.now() };
     return st;

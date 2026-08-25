@@ -317,22 +317,32 @@ body.locked { overflow: hidden; }
 .total-card .lbl { font-size: .85rem; opacity: .9; }
 .total-card .val { font-size: 1.5rem; font-weight: 800; }
 
-/* ---------- Abas dos relatórios (Reembolso | Cartão Santander) ---------- */
+/* ---------- Abas dos relatórios (uma por módulo) ----------
+   A cor do módulo ativo entra por --mod-accent (applyModuleAccent em js/ui.js). */
 .global-scan .card-body { padding: 12px 16px; }
 .report-tabs {
   display: flex; gap: 6px; background: var(--card); border-radius: 14px;
   padding: 6px; margin: 0 0 14px; box-shadow: var(--shadow);
+  overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
 }
+.report-tabs::-webkit-scrollbar { display: none; }
 .rtab, .htab {
-  flex: 1; border: none; background: transparent; color: var(--brown);
-  font-size: .95rem; font-weight: 700; padding: 11px 8px; border-radius: 10px;
+  flex: 1 0 auto; min-width: 0; border: none; background: transparent; color: var(--brown);
+  font-size: .9rem; font-weight: 700; padding: 9px 10px; border-radius: 10px;
   cursor: pointer; transition: background .15s, color .15s;
+  display: flex; flex-direction: column; align-items: center; gap: 1px; white-space: nowrap;
 }
 .rtab:active, .htab:active { transform: translateY(1px); }
-.rtab.active, .htab.active { background: linear-gradient(135deg, var(--red), var(--red-dark)); color: #fff; }
-#rtab-alelo.active, .htab[data-htab="alelo"].active { background: linear-gradient(135deg, #C00000, #8f0000); }
+.rtab.active, .htab.active {
+  background: linear-gradient(135deg, var(--mod-accent, var(--red)), var(--mod-accent-dark, var(--red-dark)));
+  color: #fff;
+}
+.rtab-lbl { line-height: 1.15; }
+.rtab-badge { font-size: .68rem; font-weight: 600; opacity: .78; line-height: 1.1; min-height: 12px; }
 .report-panel, .hist-panel { display: none; }
 .report-panel.active, .hist-panel.active { display: block; }
+/* botões do diálogo "fechar mês" — um por módulo, na cor dele */
+.btn-mod { color: #fff; }
 
 /* faixa de resumo por relatório */
 .report-summary .card-body { padding: 12px 16px; }
@@ -342,8 +352,10 @@ body.locked { overflow: hidden; }
 .rs-total b { font-size: 1.1rem; color: var(--text); margin-left: 4px; }
 .cat-empty { font-size: .82rem; color: var(--muted); }
 
-/* cabeçalho read-only do Cartão Santander */
-.card.santander .card-head { background: linear-gradient(135deg, #C00000, #8f0000); }
+/* cabeçalho do card de dados do relatório — segue a cor do módulo ativo */
+.card.mod-card .card-head {
+  background: linear-gradient(135deg, var(--mod-accent, var(--red)), var(--mod-accent-dark, var(--red-dark)));
+}
 .ro-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
 .ro-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ro-label { font-size: .72rem; color: var(--muted); font-weight: 600; }
@@ -559,7 +571,16 @@ details.card[open] summary .chev { transform: rotate(180deg); }
   }
 }
 
+/* Paleta do relatório impresso — sobrescrita por módulo em applyPrintTheme (js/pdf.js) */
 #print-root {
+  --p-accent: #b3262d;
+  --p-accent-dark: #8f1e24;
+  --p-accent-mid: #7a1a21;
+  --p-accent-deep: #4a0e11;
+  --p-ink: #4e3f39;
+  --p-ink-soft: #6b5c54;
+  --p-paper: #f8f4f2;
+  --p-subtotal: #ffff00;
   font-family: Arial, Helvetica, sans-serif;
   color: #2e2622;
   font-size: 11px;
@@ -570,54 +591,54 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 #print-root .p-logo { width: 92px; display: flex; align-items: center; justify-content: center; }
 #print-root .p-logo img { max-width: 100%; max-height: 80px; }
 #print-root .p-title {
-  flex: 1; background: linear-gradient(135deg, #b3262d, #8f1e24); color: #f8f4f2;
+  flex: 1; background: linear-gradient(135deg, var(--p-accent), var(--p-accent-dark)); color: var(--p-paper);
   border-radius: 10px; display: flex; align-items: center; justify-content: center;
   font-weight: 700; font-size: 17px; text-align: center; padding: 10px;
 }
 #print-root .p-info { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
-#print-root .p-info td { border: 1px solid #4e3f39; padding: 5px 8px; }
-#print-root .p-info .lab { background: #fff; font-weight: 700; color: #4e3f39; width: 23%; white-space: nowrap; }
-#print-root .p-info .val { color: #4e3f39; }
+#print-root .p-info td { border: 1px solid var(--p-ink); padding: 5px 8px; }
+#print-root .p-info .lab { background: #fff; font-weight: 700; color: var(--p-ink); width: 23%; white-space: nowrap; }
+#print-root .p-info .val { color: var(--p-ink); }
 #print-root .p-section {
-  background: #fff; color: #4e3f39;
-  border: 1px solid #4e3f39;
+  background: #fff; color: var(--p-ink);
+  border: 1px solid var(--p-ink);
   font-weight: 700; text-align: center; padding: 7px;
   margin: 14px 0 0; font-size: 13px;
 }
 #print-root table.p-tbl { width: 100%; border-collapse: collapse; }
 #print-root table.p-tbl th {
-  background: #fff; color: #4e3f39; border: 1px solid #4e3f39; padding: 6px 8px;
+  background: #fff; color: var(--p-ink); border: 1px solid var(--p-ink); padding: 6px 8px;
   font-size: 11px; font-weight: 700;
 }
-#print-root table.p-tbl td { border: 1px solid #4e3f39; padding: 5px 8px; height: 20px; }
+#print-root table.p-tbl td { border: 1px solid var(--p-ink); padding: 5px 8px; height: 20px; }
 #print-root table.p-tbl .c-data { text-align: center; white-space: nowrap; width: 14%; }
 #print-root table.p-tbl .c-cat { text-align: center; width: 26%; }
 #print-root table.p-tbl .c-val { text-align: right; white-space: nowrap; width: 19%; }
-#print-root tr.p-subtotal td { font-weight: 700; color: #4e3f39; background: #ffff00; }
+#print-root tr.p-subtotal td { font-weight: 700; color: var(--p-ink); background: var(--p-subtotal); }
 #print-root tr.p-subtotal td.sub-lbl { text-align: right; }
 #print-root tr.p-subtotal td.sub-val { text-align: right; }
 #print-root .p-total {
   display: flex; justify-content: space-between; align-items: center;
-  background: #fff; color: #4e3f39; border: 1px solid #4e3f39;
+  background: #fff; color: var(--p-ink); border: 1px solid var(--p-ink);
   padding: 7px 8px;
   font-weight: 700; font-size: 12px; margin-top: 6px;
 }
 #print-root .p-obs {
   margin-top: 10px; border-radius: 8px; padding: 10px 12px;
-  font-size: 10px; color: #f8f4f2; font-weight: 700;
-  background: linear-gradient(160deg, #4a0e11, #7a1a21, #b3262d);
+  font-size: 10px; color: var(--p-paper); font-weight: 700;
+  background: linear-gradient(160deg, var(--p-accent-deep), var(--p-accent-mid), var(--p-accent));
 }
-#print-root .p-obs b { color: #f8f4f2; }
+#print-root .p-obs b { color: var(--p-paper); }
 #print-root .p-bank-title {
-  background: linear-gradient(135deg, #b3262d, #8f1e24); color: #f8f4f2;
+  background: linear-gradient(135deg, var(--p-accent), var(--p-accent-dark)); color: var(--p-paper);
   font-weight: 700; text-align: center; padding: 6px; border-radius: 8px; margin: 16px 0 0; font-size: 12px;
 }
 #print-root table.p-bank { width: 100%; border-collapse: collapse; }
-#print-root table.p-bank td { border: 1px solid #4e3f39; padding: 5px 8px; }
-#print-root table.p-bank .lab { font-weight: 700; color: #4e3f39; white-space: nowrap; width: 14%; }
+#print-root table.p-bank td { border: 1px solid var(--p-ink); padding: 5px 8px; }
+#print-root table.p-bank .lab { font-weight: 700; color: var(--p-ink); white-space: nowrap; width: 14%; }
 #print-root .p-sign { display: flex; gap: 24px; margin-top: 22px; }
 #print-root .p-sign-box { flex: 1; text-align: center; }
-#print-root .p-sign-line { height: 34px; border-bottom: 1px solid #4e3f39; }
-#print-root .p-sign-name { margin-top: 6px; font-weight: 700; font-size: 11px; color: #4e3f39; }
-#print-root .p-sign-role { font-size: 9px; color: #6b5c54; }
-#print-root .p-sign-date { margin-top: 10px; text-align: center; font-size: 10px; color: #4e3f39; font-weight: 700; }
+#print-root .p-sign-line { height: 34px; border-bottom: 1px solid var(--p-ink); }
+#print-root .p-sign-name { margin-top: 6px; font-weight: 700; font-size: 11px; color: var(--p-ink); }
+#print-root .p-sign-role { font-size: 9px; color: var(--p-ink-soft); }
+#print-root .p-sign-date { margin-top: 10px; text-align: center; font-size: 10px; color: var(--p-ink); font-weight: 700; }

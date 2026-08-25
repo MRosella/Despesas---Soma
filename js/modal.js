@@ -18,7 +18,7 @@ function openModal(tabela, id, prefill) {
   $('m-valor').value = entry.valor ? formatMoneyInput(entry.valor) : '';
   if ($('m-estabelecimento')) $('m-estabelecimento').value = entry.estabelecimento || '';
   if ($('m-justificativa')) $('m-justificativa').value = entry.justificativa || '';
-  toggleCartaoFields(tabela);
+  toggleCamposModulo(tabela);
   updateCatHint();
 
   resetModalPhoto(isEdit ? (entry.foto || null) : null);
@@ -30,11 +30,14 @@ function openModal(tabela, id, prefill) {
 
 function closeModal() { $('modal').classList.remove('open'); linkedPendingId = null; }
 
-/* Estabelecimento e Justificativa só aparecem no cartão Santander (tabela `alelo`) */
-function toggleCartaoFields(tabela) {
-  const show = tabela === 'alelo' ? '' : 'none';
-  if ($('m-estabelecimento-field')) $('m-estabelecimento-field').style.display = show;
-  if ($('m-justificativa-field')) $('m-justificativa-field').style.display = show;
+/* Campos extras (estabelecimento / justificativa) aparecem conforme MOD[tabela].campos */
+const CAMPOS_EXTRA = ['estabelecimento', 'justificativa'];
+function toggleCamposModulo(tabela) {
+  const campos = (MOD[tabela] || {}).campos || {};
+  for (const k of CAMPOS_EXTRA) {
+    const f = $('m-' + k + '-field');
+    if (f) f.style.display = campos[k] ? '' : 'none';
+  }
 }
 
 /* ---- comprovante no modal ---- */
@@ -111,18 +114,24 @@ function repeatLast(tabela) {
   const list = state[tabela];
   if (!list.length) { toast('Nenhum lançamento para repetir nesta seção.'); return; }
   const last = list[list.length - 1];
-  openModal(tabela, null, { data: todayISO(), descricao: last.descricao, categoria: last.categoria, valor: last.valor });
+  const prefill = { data: todayISO(), descricao: last.descricao, categoria: last.categoria, valor: last.valor };
+  const campos = (MOD[tabela] || {}).campos || {};
+  for (const k of CAMPOS_EXTRA) if (campos[k]) prefill[k] = last[k] || '';
+  openModal(tabela, null, prefill);
 }
 
 /* Duplicar: abre um NOVO lançamento com os mesmos dados do que está no modal */
 function duplicateInModal() {
   const tabela = $('m-tabela').value;
-  openModal(tabela, null, {
+  const prefill = {
     data: $('m-data').value || todayISO(),
     descricao: $('m-descricao').value,
     categoria: $('m-categoria').value,
     valor: parseMoney($('m-valor').value)
-  });
+  };
+  const campos = (MOD[tabela] || {}).campos || {};
+  for (const k of CAMPOS_EXTRA) if (campos[k]) prefill[k] = (($('m-' + k) || {}).value || '').trim();
+  openModal(tabela, null, prefill);
 }
 
 /* ---------------- Máscaras de entrada ---------------- */
@@ -174,22 +183,18 @@ async function saveEntry() {
   const dup = state[tabela].some((x) => x.id !== id && x.data === data && x.categoria === categoria && Math.round((x.valor || 0) * 100) === cents);
   if (dup && !confirm('Já existe um lançamento com a mesma data, categoria e valor. Adicionar mesmo assim?')) return;
 
-  // campos extras só do cartão Santander (tabela `alelo`)
-  const cartao = tabela === 'alelo';
-  const estabelecimento = cartao ? ($('m-estabelecimento').value || '').trim() : '';
-  const justificativa = cartao ? ($('m-justificativa').value || '').trim() : '';
+  // campos extras declarados pelo módulo (ex.: estabelecimento/justificativa do cartão)
+  const campos = (MOD[tabela] || {}).campos || {};
+  const extras = {};
+  for (const k of CAMPOS_EXTRA) if (campos[k]) extras[k] = (($('m-' + k) || {}).value || '').trim();
 
   const now = Date.now();
   let entry;
   if (id) {
     entry = state[tabela].find((x) => x.id === id);
-    if (entry) {
-      Object.assign(entry, { data, descricao, categoria, valor, updatedAt: now });
-      if (cartao) { entry.estabelecimento = estabelecimento; entry.justificativa = justificativa; }
-    }
+    if (entry) Object.assign(entry, { data, descricao, categoria, valor, updatedAt: now }, extras);
   } else {
-    entry = { id: uid(), data, descricao, categoria, valor, updatedAt: now };
-    if (cartao) { entry.estabelecimento = estabelecimento; entry.justificativa = justificativa; }
+    entry = Object.assign({ id: uid(), data, descricao, categoria, valor, updatedAt: now }, extras);
     state[tabela].push(entry);
     lastAddedId = entry.id;
   }

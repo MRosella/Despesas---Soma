@@ -1,0 +1,145 @@
+<!doctype html><html><head>
+<!-- Teste do gerador de Excel (rode headless; ver CLAUDE.md > Verificação).
+     Gera de verdade as duas variantes do template.xlsx — 2 blocos (Reembolso + Cartão) e
+     1 bloco (SA Ambiental, com o 2º bloco REMOVIDO por removeRows) — descompacta o
+     resultado e confere linhas, fórmulas, merges e validações. É o teste que pega
+     um .xlsx que abriria com aviso de "reparo". -->
+<script src="../lib/fflate.min.js"></script>
+<script src="../js/modules.js"></script>
+<script src="../js/core.js"></script>
+<script src="../js/render.js"></script>
+<script src="../js/modal.js"></script>
+<script src="../js/excel.js"></script>
+<script src="../js/pdf.js"></script>
+<script src="../js/sync.js"></script>
+<script src="../js/lock.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/ocr.js"></script>
+<script src="../js/idb.js"></script>
+<script src="../js/drive-core.js"></script>
+<script src="../js/drive-scan.js"></script>
+<script src="../js/main.js"></script>
+</head><body><pre id="out">PENDING</pre>
+<script>
+var out = [], fail = 0;
+function chk(name, got, exp){ var ok = String(got) === String(exp); if(!ok) fail++; out.push((ok?'PASS ':'FAIL ')+name+' => got['+got+'] exp['+exp+']'); }
+
+// o harness roda em tests/, então os modelos ficam um nível acima
+MODULOS.forEach(function(m){ if (m.template) m.template = '../' + m.template; });
+MOD.sagestao.excelLogo = false;   // o logo é testado no dispositivo (canvas/fetch de imagem)
+
+function lanc(n, prefixo){
+  var l = [];
+  for (var i = 0; i < n; i++) l.push({ id:'e'+i, data:'2026-07-0'+((i%9)+1), descricao:prefixo+' '+i, categoria:'Almoço', valor:10+i });
+  return l;
+}
+
+function abrir(bytes){
+  var files = fflate.unzipSync(bytes);
+  var xml = new TextDecoder().decode(files['xl/worksheets/sheet1.xml']);
+  var doc = new DOMParser().parseFromString(xml, 'application/xml');
+  var NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  function rows(){ return Array.from(doc.getElementsByTagNameNS(NS,'row')).map(function(r){ return parseInt(r.getAttribute('r'),10); }); }
+  function cell(ref){
+    var cs = Array.from(doc.getElementsByTagNameNS(NS,'c'));
+    for (var i=0;i<cs.length;i++) if (cs[i].getAttribute('r') === ref) return cs[i];
+    return null;
+  }
+  function txt(ref){ var c = cell(ref); if(!c) return null; var t = c.getElementsByTagNameNS(NS,'t')[0]; return t ? t.textContent : ''; }
+  function form(ref){ var c = cell(ref); if(!c) return null; var f = c.getElementsByTagNameNS(NS,'f')[0]; return f ? f.textContent : ''; }
+  // <v> cru — nas células intocadas do modelo é o ÍNDICE da string compartilhada
+  function val(ref){ var c = cell(ref); if(!c) return null; var v = c.getElementsByTagNameNS(NS,'v')[0]; return v ? v.textContent : ''; }
+  function merges(){ return Array.from(doc.getElementsByTagNameNS(NS,'mergeCell')).map(function(m){ return m.getAttribute('ref'); }); }
+  function sqrefs(){ return Array.from(doc.getElementsByTagNameNS(NS,'dataValidation')).map(function(d){ return d.getAttribute('sqref'); }); }
+  function dim(){ var d = doc.getElementsByTagNameNS(NS,'dimension')[0]; return d ? d.getAttribute('ref') : ''; }
+  function mergeCount(){ var m = doc.getElementsByTagNameNS(NS,'mergeCells')[0]; return m ? m.getAttribute('count') : ''; }
+  function temTexto(s){ return xml.indexOf(s) >= 0; }
+  return { files:files, xml:xml, rows:rows, txt:txt, val:val, form:form, merges:merges, sqrefs:sqrefs, dim:dim, mergeCount:mergeCount, temTexto:temTexto };
+}
+
+/* nenhum merge / validação pode apontar para uma linha que não existe mais */
+function refsForaDoLimite(w, maxRow){
+  var ruins = [];
+  w.merges().forEach(function(ref){
+    ref.split(':').forEach(function(p){ if (parseInt(p.match(/\d+/)[0],10) > maxRow) ruins.push('merge ' + ref); });
+  });
+  w.sqrefs().forEach(function(sq){
+    (sq||'').split(/\s+/).forEach(function(rng){
+      rng.split(':').forEach(function(p){ if (parseInt(p.match(/\d+/)[0],10) > maxRow) ruins.push('dv ' + sq); });
+    });
+  });
+  return ruins;
+}
+
+(async function(){
+  try {
+    // ---------- 1 bloco: SA Ambiental (2º bloco removido) ----------
+    var dSA = { sagestao: lanc(3,'SA'), funcionario:'Murilo Rosella', dataSolicitacao:'2026-07-31',
+                referente:'Demandas operacionais', bank:{nome:'N',cpf:'C',banco:'B',agencia:'A',conta:'CT',pix:'P'} };
+    var w = abrir(await buildXlsx(dSA, MOD.sagestao));
+
+    chk('sa_empresa', w.txt('C4'), 'SA Gestão de Serviços Especializados S/A');
+    chk('sa_funcionario', w.txt('C5'), 'Murilo Rosella');
+    chk('sa_titulo_tabela', w.txt('B7'), 'DESPESAS PARA REEMBOLSO');
+    chk('sa_primeiro_lancamento', w.txt('C9'), 'SA 0');
+    chk('sa_subtotal_label', w.txt('B16'), 'SUBTOTAL DESPESAS PARA REEMBOLSO:');
+    chk('sa_subtotal_formula', w.form('E16'), 'SUM(E9:E15)');
+    chk('sa_total_formula', w.form('E18'), 'E16');
+    chk('sa_banco_nome', w.txt('C22'), 'N');
+    chk('sa_banco_pix', w.txt('E24'), 'P');
+    chk('sa_dimensao', w.dim(), 'A1:R30');
+    // strings do modelo: 7 = "DESPESAS CARTÃO SANTANDER - SOMA", 9 = "TOTAL DOS GASTOS"
+    chk('sa_linha18_virou_total', w.val('B18'), '9');
+    chk('sa_sem_titulo_do_cartao', w.rows().some(function(r){ return w.val('B'+r) === '7'; }), false);
+    chk('sa_sem_linhas_orfas', w.rows().filter(function(r){ return r > 30; }).length, 0);
+    chk('sa_merge_count_bate', w.mergeCount(), String(w.merges().length));
+    chk('sa_refs_validas', refsForaDoLimite(w, 30).join(','), '');
+    chk('sa_sem_calcchain', !!w.files['xl/calcChain.xml'], false);
+
+    // 1 bloco com expansão (12 lançamentos → 5 linhas extras)
+    var w2 = abrir(await buildXlsx({ sagestao: lanc(12,'SA'), bank:{} }, MOD.sagestao));
+    chk('sa_exp_subtotal', w2.form('E21'), 'SUM(E9:E20)');
+    chk('sa_exp_total', w2.form('E23'), 'E21');
+    chk('sa_exp_ultimo', w2.txt('C20'), 'SA 11');
+    chk('sa_exp_dimensao', w2.dim(), 'A1:R35');
+    chk('sa_exp_refs_validas', refsForaDoLimite(w2, 35).join(','), '');
+
+    // ---------- 2 blocos: relatório combinado da Soma (não pode ter regredido) ----------
+    var dSoma = { reembolso: lanc(3,'R'), alelo: lanc(2,'A'), funcionario:'Murilo Rosella',
+                  dataSolicitacao:'2026-07-31', bank:{nome:'N',cpf:'C',banco:'B',agencia:'A',conta:'CT',pix:'P'} };
+    var v = abrir(await buildXlsx(dSoma, MOD.reembolso));
+    chk('soma_empresa', v.txt('C4'), 'Soma Urbanismo S/A');
+    chk('soma_bloco1', v.txt('C9'), 'R 0');
+    chk('soma_bloco2', v.txt('C20'), 'A 0');
+    chk('soma_subtotal1', v.form('E16'), 'SUM(E9:E15)');
+    chk('soma_subtotal2', v.form('E27'), 'SUM(E20:E26)');
+    chk('soma_total', v.form('E29'), 'E16+E27');
+    chk('soma_banco', v.txt('C33') + '|' + v.txt('E35'), 'N|P');
+    chk('soma_dimensao', v.dim(), 'A1:R41');
+    chk('soma_titulo_bloco2', v.val('B18'), '7');     // bloco do cartão continua na linha 18
+    chk('soma_linha_total', v.val('B29'), '9');
+    chk('soma_refs_validas', refsForaDoLimite(v, 41).join(','), '');
+
+    // 2 blocos com expansão nos dois (10 + 9 lançamentos → +3 e +2)
+    var v2 = abrir(await buildXlsx({ reembolso: lanc(10,'R'), alelo: lanc(9,'A'), bank:{} }, MOD.reembolso));
+    chk('soma_exp_subtotal1', v2.form('E19'), 'SUM(E9:E18)');
+    chk('soma_exp_subtotal2', v2.form('E32'), 'SUM(E23:E31)');
+    chk('soma_exp_total', v2.form('E34'), 'E19+E32');
+    chk('soma_exp_dimensao', v2.dim(), 'A1:R46');
+    chk('soma_exp_refs_validas', refsForaDoLimite(v2, 46).join(','), '');
+
+    // ---------- Prestação de Contas (cartão) ----------
+    var p = abrir(await buildPrestacaoXlsx({ alelo:[{data:'2026-07-05',estabelecimento:'Posto X',descricao:'Combustível',valor:150,justificativa:'Viagem'}], history:[] }, MOD.alelo));
+    chk('cartao_nome', p.txt('E4'), MOD.alelo.assinante);
+    chk('cartao_cargo', p.txt('E5'), MOD.alelo.assinanteCargo);
+    chk('cartao_estabelecimento', p.txt('C17'), 'Posto X');
+    chk('cartao_justificativa', p.txt('K17'), 'Viagem');
+    chk('cartao_total', p.form('J35'), 'SUM(J17:J34)');
+    chk('cartao_e8', p.form('E8'), 'J35');
+  } catch(e){ fail++; out.push('THREW ' + (e && e.message ? e.message : e)); }
+
+  out.push(fail ? 'RESULT: FAIL (' + fail + ')' : 'RESULT: PASS');
+  document.getElementById('out').textContent = out.join('\n');
+})();
+</script>
+</body></html>

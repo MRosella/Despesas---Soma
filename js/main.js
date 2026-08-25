@@ -33,27 +33,27 @@ function setupTheme() {
 /* ---------------- Persistência de campos ---------------- */
 function bindField(id, getter, setter) {
   const el = $(id);
+  if (!el) return;   // campo não existe neste módulo (ex.: período só no cartão)
   el.addEventListener('input', () => { setter(el.value); touchProfile(); saveState(); });
   el.addEventListener('change', () => { setter(el.value); touchProfile(); saveState(); render(); });
 }
 
-const TABLE_LABELS = { reembolso: 'Reembolso', alelo: 'Cartão Santander' };
-
-/* Chooser: o usuário escolhe QUAL tabela fechar (a outra continua aberta). */
+/* Chooser: o usuário escolhe QUAL relatório fechar (os outros continuam abertos). */
 function chooseCloseTable() {
   return new Promise((resolve) => {
-    const nR = state.reembolso.length, nA = state.alelo.length;
+    const botoes = MODULOS.map((m) =>
+      `<button class="btn btn-mod" data-t="${m.key}" style="background:${m.accent}">${escapeHtml(m.tabLabel)} (${(state[m.key] || []).length})</button>`
+    ).join('');
     const div = document.createElement('div');
     div.className = 'offline-notice';
     div.innerHTML = `
       <div class="offline-card">
         <div class="offline-icon">📦</div>
         <h3>Fechar e arquivar mês</h3>
-        <p>Escolha a tabela a fechar. Os comprovantes dela no Drive serão compactados (.zip) e o
-        Excel + PDF do mês ficam guardados na pasta. A outra tabela continua aberta.</p>
+        <p>Escolha o relatório a fechar. Os comprovantes dele no Drive serão compactados (.zip) e o
+        Excel + PDF do mês ficam guardados na pasta. Os outros relatórios continuam abertos.</p>
         <div class="notice-actions">
-          <button class="btn btn-excel" data-t="reembolso">Reembolso (${nR})</button>
-          <button class="btn btn-pdf" data-t="alelo">Cartão Santander (${nA})</button>
+          ${botoes}
           <button class="btn btn-ghost" data-t="">Cancelar</button>
         </div>
       </div>`;
@@ -74,29 +74,31 @@ async function closeMonthFlow() {
 /* Fecha SOMENTE a tabela escolhida: arquiva snapshot, compacta os comprovantes no Drive,
    guarda Excel + PDF do mês na pasta e limpa a tabela. A outra permanece aberta. */
 async function closeTable(tabela) {
-  if (!state[tabela].length) { toast('A tabela de ' + TABLE_LABELS[tabela] + ' está vazia.'); return; }
-  if (!confirm('Fechar e arquivar a tabela de ' + TABLE_LABELS[tabela] + '?\nOs lançamentos vão para o Histórico e os arquivos do mês são gravados no Drive.')) return;
-  if (!validateBeforeExport(state, { reembolso: tabela === 'reembolso', alelo: tabela === 'alelo' })) return;
+  const mod = modOf(tabela);
+  if (!(state[tabela] || []).length) { toast('O relatório de ' + mod.tabLabel + ' está vazio.'); return; }
+  if (!confirm('Fechar e arquivar o relatório de ' + mod.tabLabel + '?\nOs lançamentos vão para o Histórico e os arquivos do mês são gravados no Drive.')) return;
+  const sections = mapPorTabela((t) => t === tabela);
+  if (!validateBeforeExport(state, sections)) return;
 
   // pergunta se os comprovantes (fotos/NFs) devem ser anexados ao final do PDF do mês
   const incluirAnexos = confirm('Anexar os comprovantes (fotos/NFs) ao final do PDF do mês?\n\nOK = com anexos · Cancelar = PDF sem anexos.');
 
   const now = Date.now();
-  // snapshot só da tabela escolhida
+  const perfil = perfilDe(tabela);
+  // snapshot só do relatório escolhido — o perfil vai ACHATADO na raiz (formato do histórico)
   const snapshot = {
     id: uid(),
     archivedAt: now,
     table: tabela,
-    label: monthLabelFor(state) + ' · ' + TABLE_LABELS[tabela],
-    funcionario: state.funcionario,
-    dataSolicitacao: state.dataSolicitacao,
-    referente: state.referente,
+    label: monthLabelFor(docForModule(state, tabela)) + ' · ' + mod.tabLabel,
+    funcionario: perfil.funcionario,
+    dataSolicitacao: perfil.dataSolicitacao,
+    referente: perfil.referente,
     reportMonth: (state.reportMonths || {})[tabela] || '',
-    santPeriodo: tabela === 'alelo' ? Object.assign({}, state.santPeriodo) : undefined,
-    bank: Object.assign({}, state.bank),
-    reembolso: tabela === 'reembolso' ? state.reembolso.map((e) => Object.assign({}, e)) : [],
-    alelo: tabela === 'alelo' ? state.alelo.map((e) => Object.assign({}, e)) : []
+    santPeriodo: mod.periodo ? Object.assign({}, perfil.santPeriodo) : undefined,
+    bank: Object.assign({}, perfil.bank)
   };
+  for (const t of TABELAS) snapshot[t] = (t === tabela) ? (state[t] || []).map((e) => Object.assign({}, e)) : [];
 
   // arquiva no Drive (zip + Excel + PDF) — best-effort
   try { await archiveMonthToDrive(tabela, snapshot, incluirAnexos); }
@@ -106,13 +108,13 @@ async function closeTable(tabela) {
   state.history.unshift(snapshot);
   for (const e of state[tabela]) state.tomb[tabela][e.id] = now;   // lápides p/ a sincronização
   state[tabela] = [];
-  state.reportMonths[tabela] = '';   // o mês de referência daquela tabela zera ao fechá-la
-  if (tabela === 'reembolso') state.dataSolicitacao = '';
-  if (tabela === 'alelo') state.santPeriodo = { start: '', end: '' };   // período de prestação zera ao fechar o Santander
+  state.reportMonths[tabela] = '';   // o mês de referência daquele relatório zera ao fechá-lo
+  perfil.dataSolicitacao = '';
+  if (mod.periodo) perfil.santPeriodo = { start: '', end: '' };   // período de prestação zera ao fechar
   touchProfile(); touchDoc();
   saveState();
   render();
-  toast(TABLE_LABELS[tabela] + ': mês arquivado.');
+  toast(mod.tabLabel + ': mês arquivado.');
 }
 
 /* Compacta os comprovantes da tabela num único .zip e grava .zip + Excel + PDF do mês
@@ -135,7 +137,9 @@ async function archiveMonthToDrive(tabela, snapshot, incluirAnexos) {
   const ano = m ? m[1] : '';
   const baseNome = (mesNome && ano) ? mesNome + ' ' + ano : monthLabelFor(snapshot);
 
-  const LBL = TABLE_LABELS[tabela] || tabela;
+  const mod = modOf(tabela);
+  const LBL = mod.tabLabel;
+  const D = docForModule(snapshot, tabela);   // perfil do módulo achatado p/ os builders
   scanProgress.open('Arquivando ' + LBL, '📦');
   try {
     // 1) zip dos comprovantes
@@ -165,16 +169,17 @@ async function archiveMonthToDrive(tabela, snapshot, incluirAnexos) {
 
     // 2) Excel do mês
     scanProgress.status('Gerando Excel…');
-    const xlsxBytes = tabela === 'alelo' ? await buildSantanderXlsx(snapshot) : await buildXlsx(snapshot);
+    const sections = mapPorTabela((t) => t === tabela);
+    const xlsxBytes = await buildXlsxFor(D, mod);
     const xlsxBlob = new Blob([xlsxBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const xlsxName = (tabela === 'alelo' ? santanderFileBase(snapshot) : reportFileBase(snapshot)) + '.xlsx';
+    const xlsxName = fileBaseOf(D, mod) + '.xlsx';
     await gdUpload(xlsxBlob, xlsxName, dateISO, tabela);
     scanProgress.log('✓ Excel enviado', 'ok');
 
     // 3) PDF do mês (com comprovantes anexados)
     scanProgress.status('Gerando PDF…');
-    const pdfBlob = await generatePdfBlob(snapshot, { reembolso: tabela === 'reembolso', alelo: tabela === 'alelo' }, tabela === 'alelo', incluirAnexos);
-    const pdfName = (tabela === 'alelo' ? santanderFileBase(snapshot) : reportFileBase(snapshot)) + '.pdf';
+    const pdfBlob = await generatePdfBlob(D, sections, mod, incluirAnexos);
+    const pdfName = fileBaseOf(D, mod) + '.pdf';
     await gdUpload(pdfBlob, pdfName, dateISO, tabela);
     scanProgress.log('✓ PDF enviado', 'ok');
 
@@ -189,8 +194,8 @@ async function archiveMonthToDrive(tabela, snapshot, incluirAnexos) {
 }
 
 /* copia os dados bancários formatados (p/ colar no e-mail de reembolso) */
-async function copyBankData() {
-  const b = state.bank || {};
+async function copyBankData(tabela) {
+  const b = perfilDe(MOD[tabela] ? tabela : TABELA_PADRAO).bank || {};
   const linhas = [
     ['Nome', b.nome], ['CPF', b.cpf], ['Banco', b.banco],
     ['Agência', b.agencia], ['Conta', b.conta], ['Chave Pix', b.pix]
@@ -210,22 +215,30 @@ function init() {
   render();
 
   maskCurrencyEl($('m-valor'));
-  maskCpfEl($('bk-cpf'));
 
-  bindField('funcionario', null, (v) => state.funcionario = v);
-  bindField('dataSolicitacao', null, (v) => state.dataSolicitacao = v);
-  bindField('referente', null, (v) => state.referente = v);
-  if ($('reportMonth-reembolso')) bindField('reportMonth-reembolso', null, (v) => state.reportMonths.reembolso = v);
-  if ($('reportMonth-alelo')) bindField('reportMonth-alelo', null, (v) => state.reportMonths.alelo = v);
-  if ($('sant-periodo-inicio')) bindField('sant-periodo-inicio', null, (v) => state.santPeriodo.start = v);
-  if ($('sant-periodo-fim')) bindField('sant-periodo-fim', null, (v) => state.santPeriodo.end = v);
-  bindField('bk-nome', null, (v) => state.bank.nome = v);
-  bindField('bk-cpf', null, (v) => state.bank.cpf = v);
-  bindField('bk-banco', null, (v) => state.bank.banco = v);
-  bindField('bk-agencia', null, (v) => state.bank.agencia = v);
-  bindField('bk-conta', null, (v) => state.bank.conta = v);
-  bindField('bk-pix', null, (v) => state.bank.pix = v);
-  if ($('bk-copy')) $('bk-copy').addEventListener('click', copyBankData);
+  // cabeçalho, período e dados bancários: um conjunto de campos POR módulo
+  for (const mod of MODULOS) {
+    const t = mod.key;
+    const p = perfilDe(t);
+    bindField('reportMonth-' + t, null, (v) => state.reportMonths[t] = v);
+    if (mod.header === 'reembolso') {
+      bindField('funcionario-' + t, null, (v) => p.funcionario = v);
+      bindField('dataSolicitacao-' + t, null, (v) => p.dataSolicitacao = v);
+      bindField('referente-' + t, null, (v) => p.referente = v);
+    }
+    if (mod.periodo) {
+      bindField('sant-periodo-inicio-' + t, null, (v) => p.santPeriodo.start = v);
+      bindField('sant-periodo-fim-' + t, null, (v) => p.santPeriodo.end = v);
+    }
+    if (mod.bank) {
+      maskCpfEl($('bk-cpf-' + t));
+      for (const k of ['nome', 'cpf', 'banco', 'agencia', 'conta', 'pix']) {
+        bindField('bk-' + k + '-' + t, null, (v) => p.bank[k] = v);
+      }
+      const cp = $('bk-copy-' + t);
+      if (cp) cp.addEventListener('click', () => copyBankData(t));
+    }
+  }
 
   document.querySelectorAll('[data-add]').forEach((btn) =>
     btn.addEventListener('click', () => openModal(btn.dataset.add, null)));
@@ -252,8 +265,6 @@ function init() {
 
   $('exp-cancel').addEventListener('click', closeExportModal);
   $('exp-confirm').addEventListener('click', confirmExport);
-  $('exp-reembolso').addEventListener('change', updateExportHint);
-  $('exp-alelo').addEventListener('change', updateExportHint);
   $('export-modal').addEventListener('click', (e) => { if (e.target === $('export-modal')) closeExportModal(); });
 
   setupIcons();

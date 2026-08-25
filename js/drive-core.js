@@ -6,9 +6,8 @@ const GDRIVE_KEY = 'despesas-soma-gdrive-v1';
 const GDDEL_KEY = 'despesas-soma-gddel-v1';   // fila de fileIds a excluir no Drive (retry ao reconectar)
 const GDTOK_KEY = 'despesas-soma-gdtok-v1';   // token OAuth (LOCAL; nunca sincroniza). Persistir evita reautenticar a cada reabertura dentro de ~1h. Apagado no "Desconectar".
 const GD_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly';   // drive.file p/ criar/apagar o que o app envia; drive.readonly p/ ler arquivos subidos manualmente (varredura)
-const GD_FOLDER_NAME = 'Comprovantes - Despesas Soma';                 // raiz do reembolso (= nome legado, mantém os antigos)
-const GD_FOLDER_SANTANDER = 'Comprovantes Cartao Santander - Despesas Soma';
-const GD_ROOT_NAMES = { reembolso: GD_FOLDER_NAME, alelo: GD_FOLDER_SANTANDER };
+/* Uma pasta raiz POR MÓDULO — os nomes vêm de MODULOS[].driveRoot (js/modules.js). */
+function gdRootName(tabela) { return modOf(tabela).driveRoot; }
 let gdTokenClient = null;
 let gdCodeClient = null;
 let gdGisLoading = null;
@@ -168,26 +167,27 @@ async function gdEmail() {
 }
 
 function setDriveFolder(tabela, id) {
-  if (!state.driveFolders) state.driveFolders = { reembolso: '', alelo: '' };
+  if (!state.driveFolders) state.driveFolders = mapPorTabela(() => '');
   if (state.driveFolders[tabela] === id) return;
   state.driveFolders[tabela] = id;
-  if (tabela === 'reembolso') state.driveFolderId = id;   // mantém o campo legado coerente
-  touchDoc(); saveState();                                 // propaga via dados.json
+  if (tabela === TABELA_PADRAO) state.driveFolderId = id;   // mantém o campo legado coerente
+  touchDoc(); saveState();                                   // propaga via dados.json
 }
 
-/* Raiz separada por tabela: 'reembolso' e 'alelo' (cartão Santander). */
+/* Raiz separada por módulo (uma pasta por relatório/empresa). */
 async function gdEnsureFolder(tabela) {
-  tabela = tabela || 'reembolso';
+  tabela = tabela || TABELA_PADRAO;
+  if (!MOD[tabela]) throw new Error('Relatório desconhecido: ' + tabela);
   // 1) id sincronizado entre dispositivos tem prioridade
   const known = state.driveFolders && state.driveFolders[tabela];
   if (known) return known;
   // 2) reembolso: aproveita o id legado / cache local (antes da separação de pastas)
-  if (tabela === 'reembolso') {
+  if (tabela === TABELA_PADRAO) {
     const legacy = state.driveFolderId || (loadGd().folderId || '');
-    if (legacy) { setDriveFolder('reembolso', legacy); return legacy; }
+    if (legacy) { setDriveFolder(TABELA_PADRAO, legacy); return legacy; }
   }
   // 3) procura por nome; se não achar, cria — e guarda o id (sincronizado)
-  const name = GD_ROOT_NAMES[tabela] || GD_FOLDER_NAME;
+  const name = gdRootName(tabela);
   const t = await gdGetToken(false);
   const q = `mimeType='application/vnd.google-apps.folder' and name='${name}' and trashed=false`;
   let r = await fetch('https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(q) + '&fields=files(id,name)', { headers: { Authorization: 'Bearer ' + t } });
@@ -306,7 +306,7 @@ async function purgeEntryPhoto(entry) {
 /* ---- envia fotos que ficaram pendentes (offline) quando reconectar ---- */
 function countPendingPhotos() {
   let n = 0;
-  for (const t of ['reembolso', 'alelo']) for (const e of state[t]) if (e.foto && e.foto.pending) n++;
+  for (const t of TABELAS) for (const e of (state[t] || [])) if (e.foto && e.foto.pending) n++;
   return n;
 }
 /* pendências do Drive = fotos a enviar + exclusões a propagar (gate do pop-up) */
@@ -325,8 +325,8 @@ function updateGdPending() {
 async function flushPendingPhotos(report) {
   if (!gdConfigured() || !gdConnected()) { if (report) setGdStatus('Conecte o Google para enviar os pendentes.', 'warn'); return { sent: 0, failed: 0 }; }
   let sent = 0, failed = 0, lastErr = '';
-  for (const tabela of ['reembolso', 'alelo']) {
-    for (const e of state[tabela]) {
+  for (const tabela of TABELAS) {
+    for (const e of (state[tabela] || [])) {
       if (e.foto && e.foto.pending) {
         try {
           const rec = await idbGet('p_' + e.foto.pending);

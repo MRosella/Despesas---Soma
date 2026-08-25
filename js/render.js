@@ -1,37 +1,42 @@
 'use strict';
 /* ---------------- Renderização ---------------- */
 function render() {
-  $('funcionario').value = state.funcionario;
-  $('dataSolicitacao').value = state.dataSolicitacao;
-  $('referente').value = state.referente;
-  const rm = state.reportMonths || {};
-  if ($('reportMonth-reembolso')) $('reportMonth-reembolso').value = rm.reembolso || '';
-  if ($('reportMonth-alelo')) $('reportMonth-alelo').value = rm.alelo || '';
-  $('bk-nome').value = state.bank.nome;
-  $('bk-cpf').value = state.bank.cpf;
-  $('bk-banco').value = state.bank.banco;
-  $('bk-agencia').value = state.bank.agencia;
-  $('bk-conta').value = state.bank.conta;
-  $('bk-pix').value = state.bank.pix;
-
-  // cabeçalho do Cartão Santander: tudo fixo/automático (read-only)
-  if ($('sant-nome') && typeof SANTANDER_NOME === 'string') $('sant-nome').textContent = SANTANDER_NOME;
-  if ($('sant-cargo') && typeof SANTANDER_CARGO === 'string') $('sant-cargo').textContent = SANTANDER_CARGO;
-  const sp = state.santPeriodo || {};
-  if ($('sant-periodo-inicio')) $('sant-periodo-inicio').value = sp.start || '';
-  if ($('sant-periodo-fim')) $('sant-periodo-fim').value = sp.end || '';
-  if ($('sant-entrega')) $('sant-entrega').textContent = fmtDateBR(todayISO());
-
-  renderList('reembolso', $('list-reembolso'));
-  renderList('alelo', $('list-alelo'));
-
-  const s1 = sumOf(state.reembolso), s2 = sumOf(state.alelo);
+  const setVal = (id, v) => { const el = $(id); if (el) el.value = v || ''; };
+  const setTxt = (id, v) => { const el = $(id); if (el) el.textContent = v || ''; };
   const setMoney = (id, v) => { const el = $(id); if (el) el.textContent = formatMoney(v); };
-  setMoney('sum-reembolso', s1); setMoney('tot-reembolso', s1);
-  setMoney('sum-alelo', s2); setMoney('tot-alelo', s2);
+  const rm = state.reportMonths || {};
 
-  renderCatSummary('reembolso', 'cat-summary-reembolso');
-  renderCatSummary('alelo', 'cat-summary-alelo');
+  for (const mod of MODULOS) {
+    const t = mod.key;
+    const p = perfilDe(t);
+    setVal('reportMonth-' + t, rm[t]);
+
+    if (mod.header === 'reembolso') {
+      setVal('funcionario-' + t, p.funcionario);
+      setVal('dataSolicitacao-' + t, p.dataSolicitacao);
+      setVal('referente-' + t, p.referente);
+    }
+    if (mod.header === 'prestacao') {
+      setTxt('sant-nome-' + t, mod.assinante);
+      setTxt('sant-cargo-' + t, mod.assinanteCargo);
+      setTxt('sant-entrega-' + t, fmtDateBR(todayISO()));
+    }
+    if (mod.periodo) {
+      setVal('sant-periodo-inicio-' + t, p.santPeriodo.start);
+      setVal('sant-periodo-fim-' + t, p.santPeriodo.end);
+    }
+    if (mod.bank) {
+      for (const k of ['nome', 'cpf', 'banco', 'agencia', 'conta', 'pix']) setVal('bk-' + k + '-' + t, p.bank[k]);
+    }
+
+    const ul = $('list-' + t);
+    if (ul) renderList(t, ul);
+    const s = sumOf(state[t] || []);
+    setMoney('sum-' + t, s); setMoney('tot-' + t, s);
+    renderCatSummary(t, 'cat-summary-' + t);
+    setTxt('rtab-badge-' + t, (state[t] || []).length ? ((state[t] || []).length + ' · ' + formatMoney(s)) : '');
+  }
+
   renderReports();
   if (typeof renderPending === 'function') renderPending();
   if (typeof updateGdPending === 'function') updateGdPending();
@@ -39,11 +44,17 @@ function render() {
 
 /* ---------------- Histórico de meses ---------------- */
 const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+/* junta os lançamentos de TODAS as tabelas de um documento/snapshot */
+function allEntriesOf(src) {
+  let all = [];
+  for (const t of TABELAS) all = all.concat(src[t] || []);
+  return all;
+}
 function monthLabelFor(src) {
   let iso = src.dataSolicitacao;
+  if (!iso && src.perfis) { for (const t of TABELAS) { const d = (src.perfis[t] || {}).dataSolicitacao; if (d) { iso = d; break; } } }
   if (!iso) {
-    const all = (src.reembolso || []).concat(src.alelo || []);
-    const datas = all.map((e) => e.data).filter(Boolean).sort();
+    const datas = allEntriesOf(src).map((e) => e.data).filter(Boolean).sort();
     iso = datas[0] || '';
   }
   if (iso) {
@@ -57,16 +68,17 @@ function monthLabelFor(src) {
    usuário ainda não escolheu as datas): vai do último lançamento do relatório Santander
    anterior (snapshot mais recente do histórico com `alelo`) até o último lançamento do
    relatório atual. Sem histórico, usa o 1º lançamento atual. */
-function computeSantanderPeriodo(src) {
+function computeSantanderPeriodo(src, key) {
   const D = src || state;
+  const t = key || 'alelo';
   const maxData = (list) => (list || []).map((e) => e && e.data).filter(Boolean).sort().pop() || '';
   const minData = (list) => (list || []).map((e) => e && e.data).filter(Boolean).sort().shift() || '';
-  const end = maxData(D.alelo);
+  const end = maxData(D[t]);
   let start = '';
   for (const h of (D.history || [])) {   // history vem do mais novo p/ o mais antigo
-    if (h && (h.alelo || []).length) { start = maxData(h.alelo); break; }
+    if (h && (h[t] || []).length) { start = maxData(h[t]); break; }
   }
-  if (!start) start = minData(D.alelo);
+  if (!start) start = minData(D[t]);
   if (!start && !end) return '';
   if (!start) start = end;
   if (!end) return fmtDateBR(start);
@@ -74,20 +86,21 @@ function computeSantanderPeriodo(src) {
 }
 
 /* Texto final do Período Prestação usado no Excel/PDF: prioriza as datas escolhidas pelo
-   usuário (`state.santPeriodo`); sem escolha, cai no cálculo automático acima. */
-function santanderPeriodoText(src) {
+   usuário (`state.perfis[tabela].santPeriodo`); sem escolha, cai no cálculo automático acima. */
+function santanderPeriodoText(src, key) {
   const D = src || state;
-  const sp = D.santPeriodo || {};
+  const t = key || 'alelo';
+  const perfil = D.perfis && D.perfis[t];
+  const sp = (perfil && perfil.santPeriodo) || D.santPeriodo || {};
   if (sp.start && sp.end) return fmtDateBR(sp.start) + ' a ' + fmtDateBR(sp.end);
   if (sp.start || sp.end) return fmtDateBR(sp.start || sp.end);
-  return computeSantanderPeriodo(D);
+  return computeSantanderPeriodo(D, t);
 }
 
 function yearOf(h) {
   let iso = h.dataSolicitacao;
   if (!iso) {
-    const all = (h.reembolso || []).concat(h.alelo || []);
-    iso = all.map((e) => e.data).filter(Boolean).sort()[0] || '';
+    iso = allEntriesOf(h).map((e) => e.data).filter(Boolean).sort()[0] || '';
   }
   if (iso) return iso.slice(0, 4);
   if (h.archivedAt) return String(new Date(h.archivedAt).getFullYear());
@@ -103,8 +116,7 @@ function histBelongsTo(h, tab) {
 
 /* Relatórios mensais — dividido por tipo (Reembolso | Cartão Santander), navegação por ano */
 function renderReports() {
-  renderReportsPanel('reembolso', 'reports-tree-reembolso', 'reports-empty-reembolso');
-  renderReportsPanel('alelo', 'reports-tree-alelo', 'reports-empty-alelo');
+  for (const t of TABELAS) renderReportsPanel(t, 'reports-tree-' + t, 'reports-empty-' + t);
 }
 
 function renderReportsPanel(tab, treeId, emptyId) {
@@ -156,24 +168,28 @@ function renderReportsPanel(tab, treeId, emptyId) {
 
 function reopenHistory(id) {
   const h = state.history.find((x) => x.id === id); if (!h) return;
-  // snapshot por tabela (item v30) reabre só a tabela dele; sem marca, reabre as duas (legado)
-  const tabs = h.table ? [h.table] : ['reembolso', 'alelo'];
-  if (tabs.some((t) => state[t].length)) {
+  // snapshot por tabela (item v30) reabre só a tabela dele; sem marca, reabre as legadas
+  const tabs = h.table ? [h.table] : TABELAS.filter((t) => (h[t] || []).length);
+  if (!tabs.length) { toast('Este relatório arquivado está vazio.'); return; }
+  if (tabs.some((t) => (state[t] || []).length)) {
     if (!confirm('Reabrir este mês vai SUBSTITUIR os lançamentos atuais (que não foram arquivados). Continuar?')) return;
   }
   const now = Date.now();
   for (const t of tabs) {
-    for (const e of state[t]) state.tomb[t][e.id] = now;
+    for (const e of (state[t] || [])) state.tomb[t][e.id] = now;
     // novos ids p/ não colidir com o snapshot nem com lápides antigas
     state[t] = (h[t] || []).map((e) => Object.assign({}, e, { id: uid(), updatedAt: now }));
   }
-  state.funcionario = h.funcionario || state.funcionario;
-  state.dataSolicitacao = h.dataSolicitacao || '';
-  state.referente = h.referente || state.referente;
-  if (!state.reportMonths) state.reportMonths = { reembolso: '', alelo: '' };
-  for (const t of tabs) state.reportMonths[t] = h.reportMonth || '';   // restaura o mês só da(s) tabela(s) reaberta(s)
-  if (tabs.includes('alelo')) state.santPeriodo = Object.assign({ start: '', end: '' }, h.santPeriodo || {});
-  state.bank = Object.assign(emptyState().bank, h.bank || {});
+  if (!state.reportMonths) state.reportMonths = mapPorTabela(() => '');
+  for (const t of tabs) {
+    const p = perfilDe(t);
+    p.funcionario = h.funcionario || p.funcionario;
+    p.dataSolicitacao = h.dataSolicitacao || '';
+    p.referente = h.referente || p.referente;
+    p.bank = Object.assign(perfilVazio().bank, h.bank || {});
+    if (MOD[t] && MOD[t].periodo) p.santPeriodo = Object.assign({ start: '', end: '' }, h.santPeriodo || {});
+    state.reportMonths[t] = h.reportMonth || '';   // restaura o mês só da(s) tabela(s) reaberta(s)
+  }
   touchProfile(); touchDoc();
   saveState(); render();
   showView('lancamentos');
@@ -264,6 +280,8 @@ function quickDuplicate(tabela, id) {
   const e = state[tabela].find((x) => x.id === id); if (!e) return;
   const now = Date.now();
   const copy = { id: uid(), data: todayISO(), descricao: e.descricao, categoria: e.categoria, valor: e.valor, updatedAt: now };
+  const campos = (MOD[tabela] || {}).campos || {};   // campos próprios do módulo (ex.: cartão) também são copiados
+  for (const k in campos) if (campos[k]) copy[k] = e[k] || '';
   state[tabela].push(copy);
   state[tabela].sort((a, b) => (a.data || '').localeCompare(b.data || ''));
   lastAddedId = copy.id;

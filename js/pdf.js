@@ -1,26 +1,44 @@
 'use strict';
-/* ---------------- Geração do PDF (impressão) ---------------- */
-const APROVADOR_NOME = 'Gustavo Barbeitos da Gama';
-const APROVADOR_CARGO = 'Presidente';
+/* ---------------- Geração do PDF (impressão) ----------------
+   Dois layouts, escolhidos pelo módulo (js/modules.js):
+   - layout 'reembolso' → buildPrint (retrato), 1 ou 2 seções de despesas + banco
+   - layout 'prestacao' → buildPrestacaoPrint (paisagem), Prestação de Contas
+   Logo, empresa, títulos e cores vêm todos de `mod`. */
 
-function buildSignatureBlock() {
+/* aplica a paleta do módulo no #print-root (styles.css lê essas variáveis) */
+function applyPrintTheme(mod) {
+  const root = $('print-root');
+  const p = (mod && mod.pdf) || {};
+  const set = (k, v) => { if (v) root.style.setProperty(k, v); };
+  set('--p-accent', p.accent);
+  set('--p-accent-dark', p.accentDark);
+  set('--p-accent-mid', p.accentMid);
+  set('--p-accent-deep', p.accentDeep);
+  set('--p-ink', p.ink);
+  set('--p-ink-soft', p.inkSoft);
+  set('--p-paper', p.paper);
+  set('--p-subtotal', p.subtotal);
+}
+
+function buildSignatureBlock(mod) {
+  const m = mod || MOD[TABELA_PADRAO];
   return `
     <div class="p-sign">
       <div class="p-sign-box">
         <div class="p-sign-line"></div>
-        <div class="p-sign-name">${escapeHtml(SANTANDER_NOME)}</div>
-        <div class="p-sign-role">${escapeHtml(SANTANDER_CARGO)}</div>
+        <div class="p-sign-name">${escapeHtml(m.assinante)}</div>
+        <div class="p-sign-role">${escapeHtml(m.assinanteCargo)}</div>
       </div>
       <div class="p-sign-box">
         <div class="p-sign-line"></div>
-        <div class="p-sign-name">${escapeHtml(APROVADOR_NOME)}</div>
-        <div class="p-sign-role">${escapeHtml(APROVADOR_CARGO)}</div>
+        <div class="p-sign-name">${escapeHtml(m.aprovador)}</div>
+        <div class="p-sign-role">${escapeHtml(m.aprovadorCargo)}</div>
       </div>
     </div>
     <div class="p-sign-date">Data: ${fmtDateBR(todayISO())}</div>`;
 }
 
-function buildPrintTable(title, list, minRows) {
+function buildPrintTable(title, list, minRows, subLabel) {
   let rows = '';
   const n = Math.max(list.length, minRows);
   for (let i = 0; i < n; i++) {
@@ -34,7 +52,7 @@ function buildPrintTable(title, list, minRows) {
   }
   const sub = sumOf(list);
   return `
-    <div class="p-section">${title}</div>
+    <div class="p-section">${escapeHtml(title)}</div>
     <table class="p-tbl">
       <thead><tr>
         <th class="c-data">DATA DA COMPRA</th><th>DESCRIÇÃO</th>
@@ -42,34 +60,45 @@ function buildPrintTable(title, list, minRows) {
       </tr></thead>
       <tbody>${rows}
         <tr class="p-subtotal">
-          <td colspan="3" class="sub-lbl">${title === 'DESPESAS PARA REEMBOLSO' ? 'SUBTOTAL DESPESAS PARA REEMBOLSO:' : 'SUBTOTAL DESPESAS CARTÃO SANTANDER - SOMA:'}</td>
+          <td colspan="3" class="sub-lbl">${escapeHtml(subLabel)}</td>
           <td class="sub-val">${formatMoney(sub)}</td>
         </tr>
       </tbody>
     </table>`;
 }
 
-function buildPrint(src, sections) {
+function buildPrint(src, sections, mod) {
+  mod = mod || MOD[TABELA_PADRAO];
   const D = src || state;
-  const inc = sections || { reembolso: true, alelo: true };
-  const s1 = inc.reembolso ? sumOf(D.reembolso) : 0;
-  const s2 = inc.alelo ? sumOf(D.alelo) : 0;
-  const b = D.bank;
+  const blocos = (mod.blocos && mod.blocos.length) ? mod.blocos : [TABELA_PADRAO];
+  const inc = sections || mapPorTabela(() => true);
+  const b = D.bank || {};
   const root = $('print-root');
+  applyPrintTheme(mod);
+
+  let total = 0;
+  let tabelas = '';
+  for (const bloco of blocos) {
+    if (!inc[bloco]) continue;
+    const bm = modOf(bloco);
+    const list = D[bloco] || [];
+    total += sumOf(list);
+    tabelas += buildPrintTable(bm.tituloTabela, list, 5, bm.subtotalLabel);
+  }
+
   root.innerHTML = `
     <div class="p-top">
-      <div class="p-logo"><img src="assets/soma-logo.png" alt="Soma"></div>
-      <div class="p-title">RELATÓRIO DE DESPESAS PARA REEMBOLSO</div>
+      <div class="p-logo"><img src="${mod.logo}" alt="${escapeHtml(mod.empresa)}"></div>
+      <div class="p-title">${escapeHtml(mod.tituloPdf)}</div>
     </div>
     <table class="p-info">
-      <tr><td class="lab">Empresa:</td><td class="val">${EMPRESA}</td>
+      <tr><td class="lab">Empresa:</td><td class="val">${escapeHtml(mod.empresa)}</td>
           <td class="lab">Data da Solicitação:</td><td class="val">${fmtDateBR(D.dataSolicitacao)}</td></tr>
       <tr><td class="lab">Funcionário:</td><td class="val">${escapeHtml(D.funcionario)}</td>
           <td class="lab">Reembolso Referente à:</td><td class="val">${escapeHtml(D.referente)}</td></tr>
     </table>
-    ${inc.reembolso ? buildPrintTable('DESPESAS PARA REEMBOLSO', D.reembolso, 5) : ''}
-    ${inc.alelo ? buildPrintTable('DESPESAS CARTÃO SANTANDER - SOMA', D.alelo, 5) : ''}
-    <div class="p-total"><span>TOTAL DOS GASTOS</span><span>${formatMoney(s1 + s2)}</span></div>
+    ${tabelas}
+    <div class="p-total"><span>TOTAL DOS GASTOS</span><span>${formatMoney(total)}</span></div>
     <div class="p-bank-title">Dados Bancários (Se Aplicável)</div>
     <table class="p-bank">
       <tr><td class="lab">Nome:</td><td>${escapeHtml(b.nome)}</td><td class="lab">Banco:</td><td>${escapeHtml(b.banco)}</td></tr>
@@ -81,19 +110,22 @@ function buildPrint(src, sections) {
       Enviar junto a este relatório os cupons das despesas. Em caso de gasto reembolsável,
       informar os dados da conta bancária para o recebimento.
     </div>
-    ${buildSignatureBlock()}`;
+    ${buildSignatureBlock(mod)}`;
 }
 
-/* PDF exclusivo do Cartão Santander — replica o VISUAL do modelo "Prestação de Contas"
-   (barra vermelha #C00000 + logo, info à esquerda, declaração à direita, checklist, tabela
-   com cabeçalho vermelho e total cinza #D8D8D8). Gerado em paisagem por generatePdfBlob. */
-function buildSantanderPrint(src) {
+/* PDF de Prestação de Contas (cartão) — replica o VISUAL do modelo:
+   barra colorida + logo, info à esquerda, declaração à direita, checklist,
+   tabela com cabeçalho colorido e total cinza. Gerado em paisagem. */
+function buildPrestacaoPrint(src, mod) {
+  mod = mod || MOD.alelo;
   const D = src || state;
-  const list = D.alelo || [];
+  const chave = (mod.blocos && mod.blocos[0]) || 'alelo';
+  const list = D[chave] || [];
   const total = sumOf(list);
-  const RED = '#C00000', GRAY = '#D8D8D8';
+  const P = mod.pdf || {};
+  const COR = P.accent || '#C00000', GRAY = P.gray || P.subtotal || '#D8D8D8';
   const bd = 'border:1px solid #000;', pad = 'padding:5px 7px;';
-  const th = bd + pad + 'color:#fff;background:' + RED + ';font-weight:bold;text-align:center;';
+  const th = bd + pad + 'color:#fff;background:' + COR + ';font-weight:bold;text-align:center;';
   const lab = bd + pad + 'font-weight:bold;background:#fff;white-space:nowrap;';
   const val = bd + pad + 'background:#fff;';
   const tdTxt = bd + pad + 'word-break:break-word;';
@@ -112,17 +144,18 @@ function buildSantanderPrint(src) {
     </tr>`;
   }
   const root = $('print-root');
+  applyPrintTheme(mod);
   root.innerHTML = `
   <div style="font-family:Calibri,'Segoe UI',Arial,sans-serif;color:#000;background:#fff;font-size:13px;">
-    <div style="background:${RED};color:#fff;display:flex;align-items:center;gap:14px;padding:9px 14px;">
-      <img src="assets/soma-logo.png" alt="Soma" style="height:44px;background:#fff;padding:3px 6px;border-radius:3px;">
-      <div style="font-weight:bold;font-size:21px;letter-spacing:.5px;">PRESTAÇÃO DE CONTAS - CARTÃO DE CRÉDITO</div>
+    <div style="background:${COR};color:#fff;display:flex;align-items:center;gap:14px;padding:9px 14px;">
+      <img src="${mod.logo}" alt="${escapeHtml(mod.empresa)}" style="height:44px;background:#fff;padding:3px 6px;border-radius:3px;">
+      <div style="font-weight:bold;font-size:21px;letter-spacing:.5px;">${escapeHtml(mod.tituloPdf)}</div>
     </div>
     <div style="display:flex;gap:12px;margin-top:12px;align-items:stretch;">
       <table style="border-collapse:collapse;width:46%;font-size:14px;">
-        <tr><td style="${lab}width:38%;">Nome:</td><td style="${val}">${escapeHtml(SANTANDER_NOME)}</td></tr>
-        <tr><td style="${lab}">Cargo:</td><td style="${val}">${escapeHtml(SANTANDER_CARGO)}</td></tr>
-        <tr><td style="${lab}">Período Prestação:</td><td style="${val}">${escapeHtml(santanderPeriodoText(D))}</td></tr>
+        <tr><td style="${lab}width:38%;">Nome:</td><td style="${val}">${escapeHtml(mod.assinante)}</td></tr>
+        <tr><td style="${lab}">Cargo:</td><td style="${val}">${escapeHtml(mod.assinanteCargo)}</td></tr>
+        <tr><td style="${lab}">Período Prestação:</td><td style="${val}">${escapeHtml(santanderPeriodoText(D, chave))}</td></tr>
         <tr><td style="${lab}">Data de Entrega:</td><td style="${val}">${fmtDateBR(todayISO())}</td></tr>
         <tr><td style="${lab}">Total da Despesas:</td><td style="${bd}${pad}background:${GRAY};font-weight:bold;">${formatMoney(total)}</td></tr>
       </table>
@@ -156,17 +189,18 @@ function buildSantanderPrint(src) {
 }
 
 async function exportPDF(src, sections, includeAttachments) {
-  const inc = sections || { reembolso: true, alelo: true };
-  const D = src || state;
-  const has = (inc.reembolso && D.reembolso.length) || (inc.alelo && D.alelo.length);
+  const inc = sections || mapPorTabela(() => true);
+  const base = src || state;
+  const has = TABELAS.some((t) => inc[t] && (base[t] || []).length);
   if (!has) { toast('Nada para exportar com a seleção.'); return; }
-  if (!validateBeforeExport(D, inc)) return;
-  const santander = !!inc.alelo && !inc.reembolso;   // só cartão → formato exclusivo
+  const r = resolveExport(inc);
+  if (r.erro) { toast(r.erro); return; }
+  if (!validateBeforeExport(base, inc)) return;
   try {
     toast('Gerando PDF…');
-    const blob = await generatePdfBlob(D, inc, santander, includeAttachments !== false);
-    const fname = (santander ? santanderFileBase(D) : reportFileBase(D)) + '.pdf';
-    await shareOrDownload(blob, fname, santander ? 'Prestação de Contas - Cartão Santander' : 'Relatório de Despesas (PDF)');
+    const D = docParaExport(base, inc, r.mod);
+    const blob = await generatePdfBlob(D, inc, r.mod, includeAttachments !== false);
+    await shareOrDownload(blob, fileBaseOf(D, r.mod) + '.pdf', r.mod.shareTitle + ' (PDF)');
   } catch (e) {
     console.error(e);
     toast('Erro ao gerar PDF: ' + e.message);
@@ -174,17 +208,19 @@ async function exportPDF(src, sections, includeAttachments) {
 }
 
 /* Gera um PDF de verdade (arquivo) a partir do mesmo layout do relatório,
-   capturado com html2canvas e montado com jsPDF (A4 retrato, multipágina). */
-async function generatePdfBlob(src, sections, santander, includeAttachments) {
+   capturado com html2canvas e montado com jsPDF (A4, multipágina). */
+async function generatePdfBlob(src, sections, mod, includeAttachments) {
   if (includeAttachments === undefined) includeAttachments = true;
-  if (santander) buildSantanderPrint(src || state);
-  else buildPrint(src || state, sections);
+  mod = mod || MOD[TABELA_PADRAO];
+  const prestacao = mod.layout === 'prestacao';
+  if (prestacao) buildPrestacaoPrint(src || state, mod);
+  else buildPrint(src || state, sections, mod);
   const root = $('print-root');
   const prevStyle = root.getAttribute('style') || '';
-  // torna o layout capturável fora da tela (cartão Santander = fundo branco + mais largo p/ paisagem)
-  const bg = santander ? '#ffffff' : '#f8f4f2';
-  const w = santander ? 1120 : 800;
-  root.style.cssText = 'display:block;position:fixed;left:-10000px;top:0;width:' + w + 'px;background:' + bg + ';padding:24px;';
+  // torna o layout capturável fora da tela (prestação de contas = fundo branco + mais largo p/ paisagem)
+  const bg = (mod.pdf && mod.pdf.bg) || '#f8f4f2';
+  const w = prestacao ? 1120 : 800;
+  root.style.cssText = prevStyle + ';display:block;position:fixed;left:-10000px;top:0;width:' + w + 'px;background:' + bg + ';padding:24px;';
 
   // espera o logo carregar para não sair em branco
   const img = root.querySelector('img');
@@ -203,7 +239,7 @@ async function generatePdfBlob(src, sections, santander, includeAttachments) {
     breaks.sort((a, b) => a - b);
 
     const jsPDF = window.jspdf.jsPDF;
-    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: santander ? 'landscape' : 'portrait' });
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: prestacao ? 'landscape' : 'portrait' });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
     const margin = 8;
@@ -236,12 +272,11 @@ async function generatePdfBlob(src, sections, santander, includeAttachments) {
     }
 
     // anexa comprovantes (Drive ou fila local) como páginas finais
-    const inc = sections || { reembolso: true, alelo: true };
+    const inc = sections || mapPorTabela(() => true);
     const D = src || state;
     const fotos = [];
     if (includeAttachments) {
-      if (inc.reembolso) fotos.push(...(D.reembolso || []));
-      if (inc.alelo) fotos.push(...(D.alelo || []));
+      for (const t of TABELAS) if (inc[t]) fotos.push(...(D[t] || []));
     }
     for (const e of fotos) {
       if (!e.foto) continue;
@@ -268,4 +303,3 @@ async function generatePdfBlob(src, sections, santander, includeAttachments) {
     root.style.display = 'none';
   }
 }
-

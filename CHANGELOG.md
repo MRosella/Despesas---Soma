@@ -3,6 +3,50 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v56 — Terceiro relatório (SA Ambiental) + generalização para N módulos
+- **Registry de módulos (`js/modules.js`, novo)**: um array `MODULOS` descreve cada relatório
+  (rótulo, empresa, logo, cores do app/PDF/Excel, pasta raiz no Drive, template + layout, campos do
+  lançamento, campos obrigatórios, grupo de exportação). `MOD`/`TABELAS`/`TABELA_PADRAO` derivam
+  dele. **Todo** `['reembolso','alelo']` e `tabela === 'alelo'` espalhado pelo app (eram ~45 pontos)
+  virou loop/consulta ao registry. Carrega **antes** de `core.js`.
+- **Novo módulo `sagestao` — SA Gestão de Serviços Especializados S/A** (rótulo *SA Ambiental*):
+  terceira aba na tela de Lançamentos e no histórico, pasta própria no Drive
+  (`Comprovantes - SA Ambiental`), prefixo próprio de arquivo (`Relatorio_Despesas_SA_…`) e
+  identidade visual verde (`#2E7D32`/`#1B5E20`) tirada do logo. Mesmos campos do relatório da Soma.
+- **Cabeçalho e Dados Bancários agora são POR MÓDULO** (`state.perfis[key]`): cada empresa tem seu
+  Funcionário/Data da Solicitação/Referente/conta bancária, e o cartão guarda ali o Período de
+  Prestação. `docForModule(D, key)` achata o perfil na raiz do documento, o que mantém
+  `buildXlsx`/`buildPrint`/`fileBaseOf` inalterados e faz os **snapshots antigos do histórico
+  continuarem funcionando**. Migração automática do estado antigo (raiz → `perfis.reembolso`, e o
+  período → `perfis.alelo`); `currentDoc`/`mergeDocs` ainda escrevem os campos legados na raiz para
+  não quebrar um aparelho em versão anterior.
+- **Excel com uma tabela só**: a SA usa o **mesmo `template.xlsx`** com o 2º bloco (Cartão
+  Santander) removido em tempo de geração por `removeRows(18, 11)` — apaga linhas, merges,
+  validações e formas contidas no intervalo e sobe o resto. O logo do cabeçalho
+  (`xl/media/image3.png`) é redesenhado com o logo da empresa **na dimensão original** (letterbox,
+  sem distorcer) e as cores da marca são trocadas em `styles.xml`/`theme1.xml`/`drawing1.xml`.
+- **`resolveExport(sections)`** substitui a heurística binária "só alelo → Santander", que não
+  escalava para três módulos: escolhe o módulo cujos `blocos` cobrem a seleção, preferindo o de
+  menos blocos, e **recusa misturar empresas diferentes** no mesmo arquivo. O seletor de exportação
+  passou a ser gerado de `MODULOS`, marca o grupo da aba ativa e mostra qual formato vai sair.
+- **PDF por módulo**: `buildPrint`/`buildPrestacaoPrint`/`generatePdfBlob` recebem o módulo em vez
+  do booleano `santander`; a paleta do `#print-root` virou variáveis CSS (`--p-accent`, `--p-ink`,
+  `--p-paper`, …) definidas por `applyPrintTheme(mod)`. O rótulo do subtotal passou a ser um
+  parâmetro — antes era decidido comparando a **string do título**, o que jogaria a SA no rótulo do
+  Santander.
+- **Qualidade de vida**: a aba ativa troca a cor de destaque, o logo e o subtítulo do cabeçalho;
+  cada aba mostra um badge `n · total`; a barra de abas rola na horizontal; o diálogo de fechar mês
+  tem um botão por módulo na cor dele; duplicar/repetir lançamento agora **copia os campos próprios
+  do módulo** (antes `estabelecimento`/`justificativa` se perdiam).
+- **Robustez**: `gdEnsureFolder` com chave desconhecida agora lança erro em vez de gravar
+  silenciosamente na pasta do reembolso; `isGeneratedArtifact` deriva os prefixos de `MODULOS`
+  (módulo novo não precisa de regex nova); a instalação do Service Worker deixou de ser "tudo ou
+  nada" — um asset ausente não derruba mais o precache inteiro.
+- **Testes**: `tests/xlsx.html` (novo) gera os `.xlsx` de verdade e confere linhas, fórmulas,
+  merges e validações das quatro variantes — é o que pega um arquivo que abriria com aviso de
+  "reparo" no Excel. `tests/logic.html` ganhou casos de registry, `docForModule`, `resolveExport`,
+  `fileBaseOf`/`isGeneratedArtifact`, validação por módulo e migração de estado legado.
+
 ## v55 — Relatórios divididos por tipo + remoção do módulo Finanças
 - **Relatórios mensais divididos por tipo**: a tela de Relatórios mensais agora tem abas
   **Reembolso × Cartão Santander** (classes próprias `.htab`/`.hist-panel`, aba lembrada em

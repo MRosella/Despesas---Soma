@@ -116,61 +116,80 @@ async function ghCheckRepo(cfg) {
   return j;
 }
 
-/* ---- documento sincronizado (snapshot + merge) ---- */
+/* ---- documento sincronizado (snapshot + merge) ----
+   Perfis (cabeçalho/banco/período) são POR MÓDULO em `perfis`. Documentos
+   antigos traziam esses campos na raiz — perfisFromDoc migra na leitura, e
+   currentDoc ainda ESCREVE os campos legados para que um aparelho em versão
+   anterior continue enxergando o relatório de reembolso. */
+function perfisFromDoc(d) {
+  const out = mapPorTabela(() => perfilVazio());
+  const src = d && d.perfis;
+  for (const t of TABELAS) out[t] = normalizePerfil(src ? src[t] : null);
+  if (!src && d) {
+    const p = out[TABELA_PADRAO];
+    p.funcionario = d.funcionario || '';
+    p.dataSolicitacao = d.dataSolicitacao || '';
+    p.referente = d.referente || '';
+    p.bank = Object.assign(p.bank, d.bank || {});
+    if (out.alelo) {
+      out.alelo.funcionario = d.funcionario || '';
+      out.alelo.santPeriodo = Object.assign(out.alelo.santPeriodo, d.santPeriodo || {});
+    }
+  }
+  return out;
+}
+
 function currentDoc() {
-  return {
-    funcionario: state.funcionario,
-    dataSolicitacao: state.dataSolicitacao,
-    referente: state.referente,
-    reportMonths: Object.assign({ reembolso: '', alelo: '' }, state.reportMonths || {}),
-    santPeriodo: Object.assign({ start: '', end: '' }, state.santPeriodo || {}),
-    bank: Object.assign({}, state.bank),
-    reembolso: state.reembolso.map((e) => Object.assign({}, e)),
-    alelo: state.alelo.map((e) => Object.assign({}, e)),
+  const perfis = {};
+  for (const t of TABELAS) perfis[t] = JSON.parse(JSON.stringify(perfilDe(t)));
+  const legado = perfis[TABELA_PADRAO];
+  const doc = {
+    perfis: perfis,
+    funcionario: legado.funcionario,          // campos legados (compatibilidade com versões antigas)
+    dataSolicitacao: legado.dataSolicitacao,
+    referente: legado.referente,
+    bank: Object.assign({}, legado.bank),
+    santPeriodo: Object.assign({}, (perfis.alelo || legado).santPeriodo || {}),
+    reportMonths: Object.assign(mapPorTabela(() => ''), state.reportMonths || {}),
     history: state.history.map((h) => JSON.parse(JSON.stringify(h))),
     histTomb: Object.assign({}, state.histTomb),
     driveFolderId: state.driveFolderId || '',
-    driveFolders: Object.assign({ reembolso: '', alelo: '' }, state.driveFolders || {}),
+    driveFolders: Object.assign(mapPorTabela(() => ''), state.driveFolders || {}),
     pending: (state.pending || []).map((p) => Object.assign({}, p)),
     driveKnown: Object.assign({}, state.driveKnown || {}),
     driveDismissed: Object.assign({}, state.driveDismissed || {}),
     config: { categorias: getCatConfig().map((c) => Object.assign({}, c)) },
-    tomb: {
-      reembolso: Object.assign({}, state.tomb.reembolso),
-      alelo: Object.assign({}, state.tomb.alelo)
-    },
+    tomb: {},
     meta: Object.assign({ updatedAt: 0, profileUpdatedAt: 0 }, state.meta)
   };
+  for (const t of TABELAS) {
+    doc[t] = (state[t] || []).map((e) => Object.assign({}, e));
+    doc.tomb[t] = Object.assign({}, (state.tomb || {})[t] || {});
+  }
+  return doc;
 }
 
 function applyDoc(doc) {
   applyingRemote = true;
-  const base = emptyState();
-  state.funcionario = doc.funcionario || '';
-  state.dataSolicitacao = doc.dataSolicitacao || '';
-  state.referente = doc.referente || '';
-  state.reportMonths = Object.assign({ reembolso: '', alelo: '' }, doc.reportMonths || {});
+  state.perfis = perfisFromDoc(doc);
+  state.reportMonths = Object.assign(mapPorTabela(() => ''), doc.reportMonths || {});
   if (typeof doc.reportMonth === 'string' && doc.reportMonth) {   // doc legado com mês único
-    if (!state.reportMonths.reembolso) state.reportMonths.reembolso = doc.reportMonth;
-    if (!state.reportMonths.alelo) state.reportMonths.alelo = doc.reportMonth;
+    for (const t of ['reembolso', 'alelo']) if (!state.reportMonths[t]) state.reportMonths[t] = doc.reportMonth;
   }
-  state.santPeriodo = Object.assign({ start: '', end: '' }, doc.santPeriodo || {});
-  state.bank = Object.assign(base.bank, doc.bank || {});
-  state.reembolso = doc.reembolso || [];
-  state.alelo = doc.alelo || [];
   state.history = Array.isArray(doc.history) ? doc.history : [];
   state.histTomb = doc.histTomb || {};
   state.driveFolderId = doc.driveFolderId || '';
-  state.driveFolders = Object.assign({ reembolso: '', alelo: '' }, doc.driveFolders || {});
-  if (!state.driveFolders.reembolso && state.driveFolderId) state.driveFolders.reembolso = state.driveFolderId;
+  state.driveFolders = Object.assign(mapPorTabela(() => ''), doc.driveFolders || {});
+  if (!state.driveFolders[TABELA_PADRAO] && state.driveFolderId) state.driveFolders[TABELA_PADRAO] = state.driveFolderId;
   state.pending = Array.isArray(doc.pending) ? doc.pending : [];
   state.driveKnown = doc.driveKnown || {};
   state.driveDismissed = doc.driveDismissed || {};
   state.config = normalizeCatConfig(doc.config);
-  state.tomb = {
-    reembolso: (doc.tomb && doc.tomb.reembolso) || {},
-    alelo: (doc.tomb && doc.tomb.alelo) || {}
-  };
+  state.tomb = {};
+  for (const t of TABELAS) {
+    state[t] = Array.isArray(doc[t]) ? doc[t] : [];
+    state.tomb[t] = (doc.tomb && doc.tomb[t]) || {};
+  }
   state.meta = Object.assign({ updatedAt: 0, profileUpdatedAt: 0 }, doc.meta || {});
   saveState();
   render();
@@ -223,36 +242,36 @@ function mergeHistory(a, b) {
 function mergeDocs(a, b) {
   const pa = (a.meta && a.meta.profileUpdatedAt) || 0;
   const pb = (b.meta && b.meta.profileUpdatedAt) || 0;
-  const p = pb > pa ? b : a;   // perfil/banco: o mais recente vence
+  const p = pb > pa ? b : a;   // perfil/banco/config: o mais recente vence (por documento inteiro)
+  const perfis = perfisFromDoc(p);
+  const legado = perfis[TABELA_PADRAO];
   const out = {
-    funcionario: p.funcionario || '',
-    dataSolicitacao: p.dataSolicitacao || '',
-    referente: p.referente || '',
-    reportMonths: Object.assign({ reembolso: '', alelo: '' }, p.reportMonths || (p.reportMonth ? { reembolso: p.reportMonth, alelo: p.reportMonth } : {})),
-    santPeriodo: Object.assign({ start: '', end: '' }, p.santPeriodo || {}),
-    bank: Object.assign({}, p.bank || {}),
+    perfis: perfis,
+    funcionario: legado.funcionario,          // campos legados (aparelhos em versão antiga)
+    dataSolicitacao: legado.dataSolicitacao,
+    referente: legado.referente,
+    bank: Object.assign({}, legado.bank),
+    santPeriodo: Object.assign({}, (perfis.alelo || legado).santPeriodo || {}),
+    reportMonths: Object.assign(mapPorTabela(() => ''), p.reportMonths || (p.reportMonth ? { reembolso: p.reportMonth, alelo: p.reportMonth } : {})),
     config: normalizeCatConfig(p.config),
-    tomb: { reembolso: {}, alelo: {} }
+    tomb: {}
   };
-  out.reembolso = mergeTable('reembolso', a, b, out.tomb);
-  out.alelo = mergeTable('alelo', a, b, out.tomb);
+  for (const t of TABELAS) out[t] = mergeTable(t, a, b, out.tomb);
   const mh = mergeHistory(a, b);
   out.history = mh.list;
   out.histTomb = mh.tomb;
   out.driveFolderId = a.driveFolderId || b.driveFolderId || '';   // id da pasta do Drive (estável)
   const fa = a.driveFolders || {}, fb = b.driveFolders || {};      // raízes separadas: prefere id não-vazio
-  out.driveFolders = {
-    reembolso: fa.reembolso || fb.reembolso || a.driveFolderId || b.driveFolderId || '',
-    alelo: fa.alelo || fb.alelo || ''
-  };
+  out.driveFolders = mapPorTabela((t) => fa[t] || fb[t] || '');
+  if (!out.driveFolders[TABELA_PADRAO]) out.driveFolders[TABELA_PADRAO] = a.driveFolderId || b.driveFolderId || '';
   // varredura do Drive: união de vistos/descartados; pendentes = união por fileId,
   // exceto os que já viraram lançamento (foto.id) ou foram descartados (evita "ressuscitar")
   out.driveKnown = Object.assign({}, a.driveKnown || {}, b.driveKnown || {});
   out.driveDismissed = Object.assign({}, a.driveDismissed || {}, b.driveDismissed || {});
   const linked = new Set();
   const collectFoto = (arr) => { for (const e of (arr || [])) if (e.foto && e.foto.id) linked.add(e.foto.id); };
-  collectFoto(out.reembolso); collectFoto(out.alelo);
-  for (const h of out.history) { collectFoto(h.reembolso); collectFoto(h.alelo); }
+  for (const t of TABELAS) collectFoto(out[t]);
+  for (const h of out.history) for (const t of TABELAS) collectFoto(h[t]);
   const pmap = {};
   for (const p of (a.pending || []).concat(b.pending || [])) {
     if (!p || !p.fileId) continue;

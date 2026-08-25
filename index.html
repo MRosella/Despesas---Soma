@@ -71,29 +71,36 @@
         </div>
       </section>
 
-      <!-- Seletor de relatório (abas) -->
+      <!-- Seletor de relatório (abas) — uma por módulo (js/modules.js) -->
       <div class="report-tabs" role="tablist" aria-label="Relatório">
-        <button class="rtab active" id="rtab-reembolso" data-tab="reembolso" role="tab" aria-selected="true">Reembolso</button>
-        <button class="rtab" id="rtab-alelo" data-tab="alelo" role="tab" aria-selected="false">Cartão Santander</button>
+        <button class="rtab active" id="rtab-reembolso" data-tab="reembolso" role="tab" aria-selected="true">
+          <span class="rtab-lbl">Reembolso</span><span class="rtab-badge" id="rtab-badge-reembolso"></span>
+        </button>
+        <button class="rtab" id="rtab-alelo" data-tab="alelo" role="tab" aria-selected="false">
+          <span class="rtab-lbl">Cartão Santander</span><span class="rtab-badge" id="rtab-badge-alelo"></span>
+        </button>
+        <button class="rtab" id="rtab-sagestao" data-tab="sagestao" role="tab" aria-selected="false">
+          <span class="rtab-lbl">SA Ambiental</span><span class="rtab-badge" id="rtab-badge-sagestao"></span>
+        </button>
       </div>
 
-      <!-- ===== Painel: REEMBOLSO ===== -->
+      <!-- ===== Painel: REEMBOLSO (Soma Urbanismo S/A) ===== -->
       <div class="report-panel active" id="tab-reembolso" data-panel="reembolso" role="tabpanel">
-        <section class="card">
+        <section class="card mod-card">
           <div class="card-head"><h2>Dados do Reembolso</h2></div>
           <div class="card-body">
             <div class="field">
-              <label for="funcionario">Funcionário</label>
-              <input type="text" id="funcionario" placeholder="Seu nome completo" autocomplete="name" />
+              <label for="funcionario-reembolso">Funcionário</label>
+              <input type="text" id="funcionario-reembolso" placeholder="Seu nome completo" autocomplete="name" />
             </div>
             <div class="row2">
               <div class="field">
-                <label for="dataSolicitacao">Data da Solicitação</label>
-                <input type="date" id="dataSolicitacao" />
+                <label for="dataSolicitacao-reembolso">Data da Solicitação</label>
+                <input type="date" id="dataSolicitacao-reembolso" />
               </div>
               <div class="field">
-                <label for="referente">Reembolso Referente à</label>
-                <select id="referente">
+                <label for="referente-reembolso">Reembolso Referente à</label>
+                <select id="referente-reembolso">
                   <option value="">—</option>
                   <option>Cursos e Treinamentos</option>
                   <option>Demandas operacionais</option>
@@ -128,38 +135,38 @@
           </div>
         </section>
 
-        <details class="card" id="bank-card">
+        <details class="card" id="bank-card-reembolso">
           <summary>Dados Bancários (Se Aplicável) <span class="chev">▾</span></summary>
           <div class="card-body">
             <div class="field">
-              <label for="bk-nome">Nome</label>
-              <input type="text" id="bk-nome" autocomplete="name" />
+              <label for="bk-nome-reembolso">Nome</label>
+              <input type="text" id="bk-nome-reembolso" autocomplete="name" />
             </div>
             <div class="row2">
               <div class="field">
-                <label for="bk-cpf">CPF</label>
-                <input type="text" id="bk-cpf" inputmode="numeric" />
+                <label for="bk-cpf-reembolso">CPF</label>
+                <input type="text" id="bk-cpf-reembolso" inputmode="numeric" />
               </div>
               <div class="field">
-                <label for="bk-banco">Banco</label>
-                <input type="text" id="bk-banco" />
+                <label for="bk-banco-reembolso">Banco</label>
+                <input type="text" id="bk-banco-reembolso" />
               </div>
             </div>
             <div class="row2">
               <div class="field">
-                <label for="bk-agencia">Agência</label>
-                <input type="text" id="bk-agencia" inputmode="numeric" />
+                <label for="bk-agencia-reembolso">Agência</label>
+                <input type="text" id="bk-agencia-reembolso" inputmode="numeric" />
               </div>
               <div class="field">
-                <label for="bk-conta">Conta</label>
-                <input type="text" id="bk-conta" inputmode="numeric" />
+                <label for="bk-conta-reembolso">Conta</label>
+                <input type="text" id="bk-conta-reembolso" inputmode="numeric" />
               </div>
             </div>
             <div class="field">
-              <label for="bk-pix">Chave Pix</label>
-              <input type="text" id="bk-pix" />
+              <label for="bk-pix-reembolso">Chave Pix</label>
+              <input type="text" id="bk-pix-reembolso" />
             </div>
-            <button class="btn btn-excel" id="bk-copy" type="button">Copiar dados bancários</button>
+            <button class="btn btn-excel" id="bk-copy-reembolso" type="button">Copiar dados bancários</button>
             <p class="hint">Preencha caso haja despesas reembolsáveis (recebimento via conta/Pix).</p>
           </div>
         </details>
@@ -167,22 +174,22 @@
 
       <!-- ===== Painel: CARTÃO SANTANDER ===== -->
       <div class="report-panel" id="tab-alelo" data-panel="alelo" role="tabpanel">
-        <section class="card santander">
+        <section class="card mod-card">
           <div class="card-head"><h2>Prestação de Contas — Cartão Santander</h2></div>
           <div class="card-body">
             <div class="ro-grid">
-              <div class="ro-field"><span class="ro-label">Nome</span><span class="ro-val" id="sant-nome">—</span></div>
-              <div class="ro-field"><span class="ro-label">Cargo</span><span class="ro-val" id="sant-cargo">—</span></div>
-              <div class="ro-field"><span class="ro-label">Data de Entrega</span><span class="ro-val" id="sant-entrega">—</span></div>
+              <div class="ro-field"><span class="ro-label">Nome</span><span class="ro-val" id="sant-nome-alelo">—</span></div>
+              <div class="ro-field"><span class="ro-label">Cargo</span><span class="ro-val" id="sant-cargo-alelo">—</span></div>
+              <div class="ro-field"><span class="ro-label">Data de Entrega</span><span class="ro-val" id="sant-entrega-alelo">—</span></div>
             </div>
             <div class="row2" style="margin-top:10px">
               <div class="field">
-                <label for="sant-periodo-inicio">Período Prestação — início</label>
-                <input type="date" id="sant-periodo-inicio" />
+                <label for="sant-periodo-inicio-alelo">Período Prestação — início</label>
+                <input type="date" id="sant-periodo-inicio-alelo" />
               </div>
               <div class="field">
-                <label for="sant-periodo-fim">Período Prestação — fim</label>
-                <input type="date" id="sant-periodo-fim" />
+                <label for="sant-periodo-fim-alelo">Período Prestação — fim</label>
+                <input type="date" id="sant-periodo-fim-alelo" />
               </div>
             </div>
             <p class="hint" style="margin:10px 2px 0">Nome e Cargo são fixos; Data de Entrega é preenchida automaticamente. Escolha o início e o fim do Período de Prestação.</p>
@@ -213,6 +220,94 @@
           </div>
         </section>
       </div>
+
+      <!-- ===== Painel: SA AMBIENTAL (SA Gestão de Serviços Especializados S/A) ===== -->
+      <div class="report-panel" id="tab-sagestao" data-panel="sagestao" role="tabpanel">
+        <section class="card mod-card">
+          <div class="card-head"><h2>Dados do Reembolso — SA Ambiental</h2></div>
+          <div class="card-body">
+            <div class="field">
+              <label for="funcionario-sagestao">Funcionário</label>
+              <input type="text" id="funcionario-sagestao" placeholder="Seu nome completo" autocomplete="name" />
+            </div>
+            <div class="row2">
+              <div class="field">
+                <label for="dataSolicitacao-sagestao">Data da Solicitação</label>
+                <input type="date" id="dataSolicitacao-sagestao" />
+              </div>
+              <div class="field">
+                <label for="referente-sagestao">Reembolso Referente à</label>
+                <select id="referente-sagestao">
+                  <option value="">—</option>
+                  <option>Cursos e Treinamentos</option>
+                  <option>Demandas operacionais</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="reportMonth-sagestao">Mês de referência</label>
+              <input type="month" id="reportMonth-sagestao" />
+              <p class="hint" style="margin:6px 2px 0">Pasta no Google Drive onde <b>todos</b> os comprovantes da SA Ambiental são guardados (pasta separada das outras). Em branco, organiza pela data de cada lançamento.</p>
+            </div>
+            <p class="hint">Empresa: <b>SA Gestão de Serviços Especializados S/A</b> (fixo).</p>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <h2>Despesas SA Ambiental</h2>
+            <span class="sum" id="sum-sagestao">R$ 0,00</span>
+          </div>
+          <ul class="entries" id="list-sagestao"></ul>
+          <div class="add-row">
+            <button class="add-btn" data-add="sagestao"><span class="bic" data-icon="plus" data-size="18"></span> Adicionar</button>
+            <button class="add-btn repeat" data-repeat="sagestao"><span class="bic" data-icon="repeat" data-size="18"></span> Repetir último</button>
+          </div>
+        </section>
+
+        <section class="card report-summary">
+          <div class="card-body">
+            <div class="rs-head"><span class="rs-title">Resumo por categoria</span><span class="rs-total">Total <b id="tot-sagestao">R$ 0,00</b></span></div>
+            <div class="cat-summary" id="cat-summary-sagestao"></div>
+          </div>
+        </section>
+
+        <details class="card" id="bank-card-sagestao">
+          <summary>Dados Bancários (Se Aplicável) <span class="chev">▾</span></summary>
+          <div class="card-body">
+            <div class="field">
+              <label for="bk-nome-sagestao">Nome</label>
+              <input type="text" id="bk-nome-sagestao" autocomplete="name" />
+            </div>
+            <div class="row2">
+              <div class="field">
+                <label for="bk-cpf-sagestao">CPF</label>
+                <input type="text" id="bk-cpf-sagestao" inputmode="numeric" />
+              </div>
+              <div class="field">
+                <label for="bk-banco-sagestao">Banco</label>
+                <input type="text" id="bk-banco-sagestao" />
+              </div>
+            </div>
+            <div class="row2">
+              <div class="field">
+                <label for="bk-agencia-sagestao">Agência</label>
+                <input type="text" id="bk-agencia-sagestao" inputmode="numeric" />
+              </div>
+              <div class="field">
+                <label for="bk-conta-sagestao">Conta</label>
+                <input type="text" id="bk-conta-sagestao" inputmode="numeric" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="bk-pix-sagestao">Chave Pix</label>
+              <input type="text" id="bk-pix-sagestao" />
+            </div>
+            <button class="btn btn-excel" id="bk-copy-sagestao" type="button">Copiar dados bancários</button>
+            <p class="hint">Preencha caso haja despesas reembolsáveis (recebimento via conta/Pix).</p>
+          </div>
+        </details>
+      </div>
     </section>
 
     <!-- ===================== TELA: RELATÓRIOS MENSAIS ===================== -->
@@ -225,6 +320,7 @@
       <div class="report-tabs" role="tablist" aria-label="Tipo de relatório">
         <button class="htab active" data-htab="reembolso" role="tab" aria-selected="true">Reembolso</button>
         <button class="htab" data-htab="alelo" role="tab" aria-selected="false">Cartão Santander</button>
+        <button class="htab" data-htab="sagestao" role="tab" aria-selected="false">SA Ambiental</button>
       </div>
 
       <div class="hist-panel active" id="hist-tab-reembolso" data-hpanel="reembolso" role="tabpanel">
@@ -234,6 +330,10 @@
       <div class="hist-panel" id="hist-tab-alelo" data-hpanel="alelo" role="tabpanel">
         <p class="empty-list" id="reports-empty-alelo">Nenhum relatório do Cartão Santander arquivado ainda.</p>
         <div id="reports-tree-alelo"></div>
+      </div>
+      <div class="hist-panel" id="hist-tab-sagestao" data-hpanel="sagestao" role="tabpanel">
+        <p class="empty-list" id="reports-empty-sagestao">Nenhum relatório da SA Ambiental arquivado ainda.</p>
+        <div id="reports-tree-sagestao"></div>
       </div>
     </section>
 
@@ -291,8 +391,10 @@
         <div class="card-head"><h2>Comprovantes (Google Drive)</h2></div>
         <div class="card-body">
           <p class="hint" style="margin-top:0">Anexe a foto do cupom em cada lançamento. As imagens são
-            guardadas no <b>seu</b> Google Drive (pasta “Comprovantes - Despesas Soma”, que você pode mover
-            para onde quiser) e entram como páginas finais do PDF.</p>
+            guardadas no <b>seu</b> Google Drive, em uma pasta <b>separada por relatório</b>
+            (“Comprovantes - Despesas Soma”, “Comprovantes Cartao Santander - Despesas Soma” e
+            “Comprovantes - SA Ambiental”), que você pode mover para onde quiser. Elas entram como
+            páginas finais do PDF.</p>
           <div class="field">
             <label for="gd-client">Client ID do Google (OAuth)</label>
             <input type="text" id="gd-client" placeholder="...apps.googleusercontent.com" autocapitalize="off" autocomplete="off" spellcheck="false" />
@@ -451,15 +553,8 @@
     <div class="modal" role="dialog" aria-modal="true">
       <h3 id="export-title">Exportar</h3>
       <p class="hint" style="margin-top:0">Selecione o que incluir no arquivo:</p>
-      <label class="exp-opt">
-        <input type="checkbox" id="exp-reembolso" checked />
-        <span>Despesas para Reembolso<span class="exp-count" id="exp-c-reembolso"></span></span>
-      </label>
-      <label class="exp-opt">
-        <input type="checkbox" id="exp-alelo" checked />
-        <span>Despesas Cartão Santander - Soma<span class="exp-count" id="exp-c-alelo"></span></span>
-      </label>
-      <p class="hint" id="exp-hint-santander" style="margin:6px 2px 0; display:none">Selecionando <b>só</b> o Cartão Santander, o arquivo sai no formato exclusivo <b>Prestação de Contas</b>.</p>
+      <div id="exp-options"></div>
+      <p class="hint" id="exp-hint" style="margin:6px 2px 0"></p>
       <p class="hint" id="exp-periodo" style="margin:6px 2px 0; display:none"></p>
       <label class="exp-opt" id="exp-anexos-row" style="display:none">
         <input type="checkbox" id="exp-anexos" checked />
@@ -480,6 +575,7 @@
   <script src="lib/jspdf.umd.min.js"></script>
   <!-- app.js foi dividido em módulos por área (ver CLAUDE.md). Scripts clássicos: compartilham
        o escopo global, então a ordem importa só para core.js (executa loadState no topo). -->
+  <script src="js/modules.js"></script>
   <script src="js/core.js"></script>
   <script src="js/render.js"></script>
   <script src="js/modal.js"></script>

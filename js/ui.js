@@ -24,41 +24,67 @@ function setupNav() {
   showView('lancamentos');
 }
 
-/* ---------------- Abas dos relatórios (Reembolso | Cartão Santander) ---------------- */
+/* ---------------- Identidade visual do módulo ativo ----------------
+   Troca a cor de destaque, o logo e o subtítulo do cabeçalho conforme
+   o relatório selecionado — confirmação imediata de onde se está lançando. */
+let activeReportTab = TABELA_PADRAO;
+function applyModuleAccent(key) {
+  const mod = modOf(key);
+  const r = document.documentElement.style;
+  r.setProperty('--mod-accent', mod.accent);
+  r.setProperty('--mod-accent-dark', mod.accentDark);
+  const logo = document.querySelector('.app-header img');
+  if (logo && logo.getAttribute('src') !== mod.logo) {
+    // se o arquivo do logo ainda não existe, volta para o da Soma em vez de mostrar imagem quebrada
+    logo.onerror = () => { logo.onerror = null; logo.src = MOD[TABELA_PADRAO].logo; };
+    logo.src = mod.logo;
+    logo.alt = mod.empresa;
+  }
+  const sub = document.querySelector('.app-header .sub');
+  if (sub) sub.textContent = mod.empresa;
+}
+
+/* ---------------- Abas dos relatórios (um painel por módulo) ---------------- */
 const REPORT_TAB_KEY = 'despesas-soma-tab-v1';
 function showReportTab(tab) {
-  if (tab !== 'reembolso' && tab !== 'alelo') tab = 'reembolso';
+  if (!MOD[tab]) tab = TABELA_PADRAO;
+  activeReportTab = tab;
   document.querySelectorAll('.report-panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === tab));
   document.querySelectorAll('.rtab').forEach((b) => {
     const on = b.dataset.tab === tab;
     b.classList.toggle('active', on);
     b.setAttribute('aria-selected', on ? 'true' : 'false');
+    if (on) { try { b.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (e) {} }
   });
+  applyModuleAccent(tab);
   try { localStorage.setItem(REPORT_TAB_KEY, tab); } catch (e) { console.warn('salvar aba ativa falhou', e); }
 }
 function setupReportTabs() {
   document.querySelectorAll('.rtab').forEach((b) => b.addEventListener('click', () => showReportTab(b.dataset.tab)));
-  let saved = 'reembolso';
-  try { saved = localStorage.getItem(REPORT_TAB_KEY) || 'reembolso'; } catch (e) {}
+  let saved = TABELA_PADRAO;
+  try { saved = localStorage.getItem(REPORT_TAB_KEY) || TABELA_PADRAO; } catch (e) {}
   showReportTab(saved);
 }
 
-/* ---------------- Abas dos Relatórios mensais arquivados (Reembolso | Cartão Santander) ---------------- */
+/* ---------------- Abas dos Relatórios mensais arquivados ---------------- */
 const HIST_TAB_KEY = 'despesas-soma-histtab-v1';
 function showHistTab(tab) {
-  if (tab !== 'reembolso' && tab !== 'alelo') tab = 'reembolso';
+  if (!MOD[tab]) tab = TABELA_PADRAO;
   document.querySelectorAll('.hist-panel').forEach((p) => p.classList.toggle('active', p.dataset.hpanel === tab));
   document.querySelectorAll('.htab').forEach((b) => {
     const on = b.dataset.htab === tab;
     b.classList.toggle('active', on);
     b.setAttribute('aria-selected', on ? 'true' : 'false');
+    // cada aba do histórico usa a cor da própria empresa quando ativa
+    const m = modOf(b.dataset.htab);
+    b.style.background = on ? ('linear-gradient(135deg, ' + m.accent + ', ' + m.accentDark + ')') : '';
   });
   try { localStorage.setItem(HIST_TAB_KEY, tab); } catch (e) { console.warn('salvar aba do histórico falhou', e); }
 }
 function setupHistTabs() {
   document.querySelectorAll('.htab').forEach((b) => b.addEventListener('click', () => showHistTab(b.dataset.htab)));
-  let saved = 'reembolso';
-  try { saved = localStorage.getItem(HIST_TAB_KEY) || 'reembolso'; } catch (e) {}
+  let saved = TABELA_PADRAO;
+  try { saved = localStorage.getItem(HIST_TAB_KEY) || TABELA_PADRAO; } catch (e) {}
   showHistTab(saved);
 }
 
