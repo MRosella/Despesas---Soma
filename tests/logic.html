@@ -142,6 +142,22 @@ try {
   saveGdAccess();
   chk('gdtoken_expira', loadGdAccess().token, '');
   try { localStorage.removeItem(GDTOK_KEY); } catch(e){}
+
+  // paleta por módulo: applyModuleAccent depende destes campos (hex) em TODOS os módulos
+  var hex = /^#[0-9a-fA-F]{6}$/;
+  var faltando = [];
+  MODULOS.forEach(function(m){
+    ['accent','accentDark','tint','tintInk','soft'].forEach(function(k){
+      if (!hex.test(m[k] || '')) faltando.push(m.key + '.' + k);
+    });
+  });
+  chk('paleta_modulos_completa', faltando.join(',') || 'ok', 'ok');
+  // SA Ambiental: verde do logo (canal G maior que R e B), nada de vermelho da Soma
+  var sa = MOD.sagestao.accent.toLowerCase();
+  var rr = parseInt(sa.slice(1,3),16), gg = parseInt(sa.slice(3,5),16), bb = parseInt(sa.slice(5,7),16);
+  chk('sa_accent_verde', (gg > rr && gg > bb) ? 'verde' : 'nao-verde', 'verde');
+  chk('sa_pdf_verde', MOD.sagestao.pdf.accent.toLowerCase(), sa);
+  chk('sa_excel_troca_vermelho', MOD.sagestao.excelColors['B3262D'].toLowerCase(), sa.slice(1));
 } catch(e){ fail++; out.push('THREW '+e.message); }
 
 out.push(fail ? 'RESULT: FAIL ('+fail+')' : 'RESULT: PASS');

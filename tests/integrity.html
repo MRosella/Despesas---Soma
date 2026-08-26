@@ -30,7 +30,7 @@ var checks = {
   'sync':       ['syncNow','mergeDocs','mergeTable','mergeHistory','setupSyncUI','perfisFromDoc','currentDoc','applyDoc'],
   'lock':       ['showLock','enableBio','setPin','setupBackupUI'],
   'ui':         ['setupNav','setupCatUI','populateCategorySelects','renderCatEditor','setupReportTabs','showReportTab','setupHistTabs','showHistTab','applyModuleAccent'],
-  'ocr':        ['ocrReceipt','ocrReceiptRaw','blobSha256','fillFromOcr','setupAiUI'],
+  'ocr':        ['ocrReceipt','ocrReceiptRaw','geminiCall','blobSha256','fillFromOcr','runReceiptOcr','ocrStatus','setupAiUI'],
   'idb':        ['idbGet','idbPut','getPhotoBlob','compressImage','saveThumb'],
   'drive-core': ['gdUpload','gdEnsureFolder','gdRootName','purgeEntryPhoto','flushPendingPhotos','setupGDriveUI','loadGdAccess','saveGdAccess','scheduleGdRefresh','renderDriveFolders','ensureAllDriveFolders','driveFolderUrl','gdLoadPicker','gdPickFolder','chooseDriveFolder','gdPickerReady'],
   'drive-scan': ['scanDriveForReceipts','gdListReceipts','renderPending','retryPendingOcr','openPendingEntry'],
@@ -42,6 +42,15 @@ for (var file in checks) {
   if (miss.length) fail++;
   out.push((miss.length ? 'FAIL ' : 'OK   ') + file + (miss.length ? ' missing: ' + miss.join(',') : ''));
 }
+/* const/let de topo NÃO vão para window (escopo léxico do script) — checados por nome.
+   eval direto enxerga esse escopo; try/catch cobre o caso de o arquivo ter sido pulado. */
+var lex = [['ocrProgress', 'object'], ['OCR_FASES', 'object'], ['MODULOS', 'object'], ['scanProgress', 'object']];
+lex.forEach(function (p) {
+  var ok = false;
+  try { ok = eval('typeof ' + p[0]) === p[1]; } catch (e) { ok = false; }
+  if (!ok) fail++;
+  out.push((ok ? 'OK   ' : 'FAIL ') + 'lex ' + p[0]);
+});
 out.push('ERRORS: ' + (window.__errs.length ? window.__errs.join(' | ') : 'none'));
 out.push(fail || window.__errs.length ? 'RESULT: FAIL' : 'RESULT: PASS');
 document.getElementById('out').textContent = out.join('\n');

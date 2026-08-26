@@ -560,6 +560,15 @@
             </div>
           </div>
         </div>
+        <!-- progresso da leitura pela IA (ocrProgress em js/ocr.js) -->
+        <div class="ocr-prog" id="m-ocr-prog" style="display:none" role="status" aria-live="polite">
+          <div class="ocr-prog-head">
+            <span class="ocr-prog-spin" id="m-ocr-spin"></span>
+            <span class="ocr-prog-msg" id="m-ocr-msg">Lendo comprovante…</span>
+            <button type="button" class="hist-btn ocr-prog-retry" id="m-ocr-retry" style="display:none">Tentar de novo</button>
+          </div>
+          <div class="ocr-bar"><div class="ocr-bar-fill" id="m-ocr-fill"></div></div>
+        </div>
       </div>
       <div class="modal-actions">
         <button class="btn btn-danger-text" id="m-delete" style="display:none">Excluir</button>

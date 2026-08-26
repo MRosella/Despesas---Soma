@@ -33,6 +33,13 @@ function applyModuleAccent(key) {
   const r = document.documentElement.style;
   r.setProperty('--mod-accent', mod.accent);
   r.setProperty('--mod-accent-dark', mod.accentDark);
+  // tons derivados: chips de categoria (--mod-tint/--mod-tint-ink) e realce de toque (--mod-soft)
+  r.setProperty('--mod-tint', mod.tint || '#f5e9dc');
+  r.setProperty('--mod-tint-ink', mod.tintInk || '#a35a10');
+  r.setProperty('--mod-soft', mod.soft || '#fdf3f3');
+  // barra do sistema (Android/PWA) na cor da empresa
+  const tc = document.querySelector('meta[name="theme-color"]');
+  if (tc) tc.setAttribute('content', mod.accent);
   const logo = document.querySelector('.app-header img');
   if (logo && logo.getAttribute('src') !== mod.logo) {
     // se o arquivo do logo ainda não existe, volta para o da Soma em vez de mostrar imagem quebrada

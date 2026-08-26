@@ -130,9 +130,9 @@ function refsForaDoLimite(w, maxRow){
     // ---------- marca do módulo dentro do .xlsx (cores + troca do logo) ----------
     var antes = fflate.unzipSync(new Uint8Array(await (await fetch('../template.xlsx')).arrayBuffer()));
     chk('marca_original_vermelha', new TextDecoder().decode(antes['xl/styles.xml']).indexOf('FFB3262D') >= 0, true);
-    chk('marca_sa_recolorida_styles', new TextDecoder().decode(w.files['xl/styles.xml']).indexOf('FF2E7D32') >= 0, true);
+    chk('marca_sa_recolorida_styles', new TextDecoder().decode(w.files['xl/styles.xml']).indexOf('FF' + MOD.sagestao.excelColors['B3262D']) >= 0, true);
     chk('marca_sa_sem_vermelho_styles', new TextDecoder().decode(w.files['xl/styles.xml']).indexOf('FFB3262D') >= 0, false);
-    chk('marca_sa_recolorida_desenho', new TextDecoder().decode(w.files['xl/drawings/drawing1.xml']).indexOf('2E7D32') >= 0, true);
+    chk('marca_sa_recolorida_desenho', new TextDecoder().decode(w.files['xl/drawings/drawing1.xml']).indexOf(MOD.sagestao.excelColors['B3262D']) >= 0, true);
     chk('marca_soma_intacta', new TextDecoder().decode(v.files['xl/styles.xml']).indexOf('FFB3262D') >= 0, true);
 
     // troca do logo pelo da SA: o resultado tem de ser um PNG válido, na MESMA dimensão

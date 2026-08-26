@@ -3,6 +3,46 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v60 — Barra de progresso da leitura pela IA + paleta da SA Ambiental em toda a interface
+- **Barra de progresso no modal enquanto a IA lê o comprovante** (`ocrProgress` + `OCR_FASES` +
+  `ocrStatus`, em `js/ocr.js`; markup `#m-ocr-prog` no `index.html`). Antes só havia um toast
+  "Lendo comprovante…" que sumia em segundos: não dava para distinguir **"ainda processando"** de
+  **"falhou calado"** — que é exatamente a dúvida relatada.
+- **Por que uma barra "falsa"**: o Gemini não devolve progresso incremental. A barra mostra as
+  ETAPAS reais (`prep` → `send` → `read` → `parse`, mais `cache` quando o arquivo já foi lido antes)
+  e, dentro de cada etapa, escorrega **assintoticamente** em direção a um alvo — nunca chega a 100%
+  sozinha, então não promete um progresso que não existe, só prova que ainda está vivo.
+- **Retentativas ficam visíveis**: `geminiCall` ganhou um 3º parâmetro opcional `onStatus`, e a
+  cada nova tentativa a barra escreve "A IA está instável — tentativa N de 4…". `ocrReceipt` e
+  `ocrReceiptRaw` repassam o callback; como é **opcional**, a varredura do Drive continua usando o
+  overlay `scanProgress` sem mudança.
+- **Estado de erro persistente**: falha (ou leitura sem data nem valor) pinta a barra de vermelho,
+  mostra a mensagem real do Gemini e um botão **"Tentar de novo"** (`#m-ocr-retry` → `runReceiptOcr`)
+  que fica na tela até o usuário agir — em vez de um toast que evapora. O vermelho do erro é
+  proposital e **não** segue a cor do módulo: erro é erro em qualquer empresa.
+- A barra já aparece na **compressão da imagem**, antes da chamada da IA, porque a espera começa ali.
+- **Paleta do módulo aplicada à interface inteira.** `applyModuleAccent` agora também define
+  `--mod-tint` / `--mod-tint-ink` / `--mod-soft` e atualiza a `<meta name="theme-color">`. No
+  `styles.css`, os pontos que eram **vermelho da marca** passaram a `var(--mod-accent, var(--red))`:
+  `.card-head`, `.add-btn` (borda/texto/toque), `.nav-item.active`, `.empty-ic`, `.btn-pdf`,
+  `.gd-folder-row a`, `accent-color` das caixas de exportação, `.scan-spinner`, e os chips de
+  categoria (`.cat-tag` / `.cat-chip`).
+- **O que continua vermelho de propósito**: tudo que é **semântico**, não marca — `.qbtn.danger`,
+  `.hist-btn.danger`, `.btn-danger-text`, `.entry.over-limit`, `.sync-status.err`, `.scan-log li.err`,
+  o aviso de offline e a tela de bloqueio (que é anterior à escolha do módulo).
+- **Verdes agora amostrados do `assets/sa-logo.png`** em vez do verde genérico do Material:
+  folha `#407830` (accent), escuro `#2c5a21`, oliva `#789838`. Vale para o app, o PDF
+  (`mod.pdf`) e as cores dentro do `.xlsx` (`mod.excelColors`). O vinho `#600810` da "mão" do logo
+  ficou de fora da UI para não reintroduzir vermelho.
+- **`.btn-pdf` virou gradiente** para não se confundir com o `.btn-excel` (verde fixo do Excel)
+  quando o módulo ativo também é verde.
+- Registry: cada módulo declara `tint` / `tintInk` / `soft`. Os testes cobrem isso —
+  `tests/logic.html` exige os 5 hex de paleta em **todos** os módulos e confere que a SA é verde;
+  `tests/xlsx.html` deixou de fixar o hex e passou a derivá-lo de `MOD.sagestao.excelColors`;
+  `tests/integrity.html` ganhou checagem de `const` de topo (`ocrProgress`, `OCR_FASES`, …), que
+  não vão para `window` e por isso escapavam do harness.
+
+
 ## v58 — Escolher a pasta de cada relatório no Drive (Google Picker)
 - **Botão "Escolher pasta" por relatório** (`chooseDriveFolder`): abre o **Google Picker** e o
   relatório passa a gravar os comprovantes dentro da pasta escolhida (subpastas `Ano/Mês` são

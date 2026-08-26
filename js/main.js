@@ -257,6 +257,7 @@ function init() {
   if ($('m-foto-importbtn')) $('m-foto-importbtn').addEventListener('click', () => $('m-foto-import').click());
   $('m-foto-file').addEventListener('change', (ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; onPhotoSelected(f); });
   if ($('m-foto-import')) $('m-foto-import').addEventListener('change', (ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; onPhotoSelected(f); });
+  if ($('m-ocr-retry')) $('m-ocr-retry').addEventListener('click', () => runReceiptOcr());
   $('m-foto-view').addEventListener('click', () => viewPhoto(modalPhoto.existing));
   $('m-foto-remove').addEventListener('click', () => { modalPhoto = { mode: 'remove', existing: modalPhoto.existing, blob: null, dataUrl: null, w: 0, h: 0 }; renderModalPhoto(); });
   $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeModal(); });

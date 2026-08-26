@@ -13,7 +13,7 @@ https://mrosella.github.io/Despesas---Soma/
 ## Arquivos
 | Arquivo | Conteúdo |
 |---|---|
-| `js/modules.js` | **REGISTRY dos módulos** (`MODULOS`/`MOD`/`TABELAS`/`TABELA_PADRAO`): rótulo, empresa, logo, cores (app + PDF + Excel), pasta raiz no Drive, template/layout, campos e obrigatórios de cada relatório. Helpers `modOf`/`mapPorTabela`/`perfilVazio`/`normalizePerfil`/`perfilDe`/**`docForModule`**/`modulosSelecionados`. **Carrega ANTES de core.js.** |
+| `js/modules.js` | **REGISTRY dos módulos** (`MODULOS`/`MOD`/`TABELAS`/`TABELA_PADRAO`): rótulo, empresa, logo, cores (app: `accent`/`accentDark`/`tint`/`tintInk`/`soft` + PDF + Excel), pasta raiz no Drive, template/layout, campos e obrigatórios de cada relatório. Helpers `modOf`/`mapPorTabela`/`perfilVazio`/`normalizePerfil`/`perfilDe`/**`docForModule`**/`modulosSelecionados`. **Carrega ANTES de core.js.** |
 | `js/core.js` | chaves localStorage + `APP_VERSION` (bump!), categorias/config (`getCatConfig`…), estado (`emptyState`/`loadState`/`saveState`/`touchDoc`/`touchProfile`, `let state`), utils (`parseMoney`/`formatMoney`/`todayISO`/`fmtDateBR`/`dateToSerial`/`uid`/`toast`/`sumOf`), ícones |
 | `js/render.js` | `render`, `renderList` (mais recente no topo), histórico dividido por tipo (`renderReports`/`renderReportsPanel(tab,treeId,emptyId)`/`histBelongsTo`/`reopenHistory`/`deleteHistory`/`monthLabelFor`/`santanderPeriodoText`/`computeSantanderPeriodo`/`yearOf`), `renderCatSummary(tabela,boxId)` (resumo POR relatório), `limitExcedido`, `quickDelete`/`quickDuplicate`, `escapeHtml`, `hydrateThumbs` |
 | `js/modal.js` | modal (`openModal`/`saveEntry`/`deleteEntry`/`repeatLast`), `toggleCartaoFields`, foto+OCR hook (`renderModalPhoto`/`onPhotoSelected`/`applyModalPhoto`), máscaras, `updateCatHint` |
@@ -22,7 +22,7 @@ https://mrosella.github.io/Despesas---Soma/
 | `js/sync.js` | sync GitHub privado (`ghGetFile`/`ghPutFile`, `currentDoc`/`applyDoc`/`mergeDocs`, `syncNow`, `setupSyncUI`) |
 | `js/lock.js` | bloqueio bio/PIN (`enableBio`/`unlockBio`/`setPin`/`showLock`) + backup (`exportBackup`/`importBackupFile`/`setupBackupUI`) |
 | `js/ui.js` | navegação (`showView`/`setupNav`), **abas dos relatórios** da Home (`setupReportTabs`/`showReportTab`, lembra em `-tab-v1`), **abas do histórico** por tipo (`setupHistTabs`/`showHistTab`, lembra em `-histtab-v1`), `populateCategorySelects`, editor de categorias (`renderCatEditor`/`saveCatEditor`/`setupCatUI`) |
-| `js/ocr.js` | Gemini (`AI_KEY`, `GEMINI_MODEL`, **`geminiCall(parts,generationConfig)`** = chamada genérica com retry/backoff, `ocrReceipt` = wrapper com **cache por hash**, `ocrReceiptRaw`, `blobSha256`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI`) |
+| `js/ocr.js` | Gemini (`AI_KEY`, `GEMINI_MODEL`, **`geminiCall(parts,generationConfig,onStatus?)`** = chamada genérica com retry/backoff, `ocrReceipt(blob,mime,onStatus?)` = wrapper com **cache por hash**, `ocrReceiptRaw`, `blobSha256`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI`) + **barra de progresso do OCR** (`ocrProgress`, `OCR_FASES`, `ocrStatus`) |
 | `js/idb.js` | IndexedDB (`idb`/`idbPut`/`idbGet`/`idbDel`), `compressImage`, `blobToDataUrl`, `saveThumb`, `getPhotoBlob` (camada de storage local) |
 | `js/drive-core.js` | Drive: auth/token (`gdGetToken`, `GD_SCOPE`), pastas/upload (`gdEnsureFolder`/`gdEnsureMonthFolder`/`gdUpload`), exclusão+fila (`gdDeleteFile`/`flushGdDeletions`/`purgeEntryPhoto`), flush de pendentes, `setupGDriveUI`, conexão (`gdConnectFlow`/`maybePromptDrive`) |
 | `js/drive-scan.js` | Varredura (`scanDriveForReceipts`/`gdListReceipts`/`knownDriveIds`), overlay `scanProgress` (`open(title,icon)`/`status`/`log`/`done`/`close`), pendentes (`renderPending`/`openPendingEntry`/`dismissPending`/`retryPendingOcr`) |
@@ -119,7 +119,8 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
 - **Home em ABAS por relatório** (`setupReportTabs`): painéis `#tab-{key}` (`.report-panel.active`),
   seletor `.rtab` (rolável na horizontal, com **badge** `n · total` em `#rtab-badge-{key}`).
   `showReportTab` guarda a aba em `activeReportTab` e chama **`applyModuleAccent`**: troca
-  `--mod-accent`/`--mod-accent-dark` no `<html>` + o **logo e o subtítulo do cabeçalho** para os da
+  `--mod-accent`/`--mod-accent-dark`/`--mod-tint`/`--mod-tint-ink`/`--mod-soft` no `<html>`, a
+  `<meta name="theme-color">` + o **logo e o subtítulo do cabeçalho** para os da
   empresa (com fallback p/ o logo da Soma se o arquivo faltar). Itens **globais** ficam acima das
   abas: card de pendentes do Drive e o botão `#gd-scan-main` (varre **todas** as raízes). Cada aba
   tem cabeçalho próprio, sua tabela, seu resumo (`#cat-summary-{key}`) e seu total
@@ -255,6 +256,25 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
   até 4x com backoff em erros transitórios (429, 500/502/503, rede), respeitando `retryDelay`. Erro
   definitivo propaga a **mensagem real** do Gemini (log da varredura + toast). `ocr.dateISO` vem
   string vazia (use `!ocr.dateISO`). `GEMINI_MODEL` (`gemini-2.5-flash`) é fácil de trocar.
+- **Barra de progresso do OCR no modal** (`ocrProgress`, `#m-ocr-prog`): o Gemini não devolve
+  progresso incremental, então a barra mostra as **etapas** (`OCR_FASES`: `prep`→`send`→`read`→
+  `parse`, e `cache` quando o hash já foi lido) e escorrega **assintoticamente** rumo a um alvo
+  dentro de cada etapa — nunca fecha sozinha. O caminho é `runReceiptOcr` → `ocrReceipt(blob,mime,
+  ocrStatus)` → `ocrReceiptRaw` → `geminiCall(...,onStatus)`; **`onStatus` é opcional em todos**,
+  por isso a varredura do Drive segue usando só o `scanProgress`. Retentativa vira
+  "tentativa N de 4" na barra. Falha (ou leitura sem data **e** sem valor) → `ocrProgress.fail`:
+  barra vermelha **fixa**, mensagem real do Gemini e botão **"Tentar de novo"** (`#m-ocr-retry`,
+  bindado em `init`). `closeModal`/`resetModalPhoto` chamam `ocrProgress.hide()`.
+  `ocrProgress`/`OCR_FASES` são `const` de topo → **não vão para `window`** (o
+  `tests/integrity.html` os checa por `eval`, não por `window[...]`).
+- **Marca × semântica nas cores**: o que é **marca** usa `var(--mod-accent, var(--red))` e segue o
+  módulo ativo (`.card-head`, `.add-btn`, `.nav-item.active`, `.empty-ic`, `.btn-pdf`,
+  `.gd-folder-row a`, `accent-color` do chooser, `.scan-spinner`, chips `.cat-tag`/`.cat-chip` via
+  `--mod-tint`/`--mod-tint-ink`). O que é **erro/perigo** fica em `var(--red)` fixo em qualquer
+  empresa (`.qbtn.danger`, `.hist-btn.danger`, `.btn-danger-text`, `.entry.over-limit`,
+  `.sync-status.err`, `.scan-log li.err`, `.offline-notice`, `.lock-screen`). Ao acrescentar CSS,
+  decida a qual dos dois grupos o elemento pertence. `.btn-pdf` é **gradiente** de propósito: em
+  módulo verde ele empataria com o `.btn-excel` (verde fixo do Excel) se fosse chapado.
 - Categoria nova fora da validação do `template.xlsx` é gravada mesmo assim (Excel pode avisar
   "valor fora da lista"). Renomear categoria **não** reescreve lançamentos antigos.
 
@@ -272,8 +292,9 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
   > financeiro sobrar no repo privado de sync, é ignorado no próximo merge.
 
 ## Como adicionar um 4º relatório/empresa
-1. Uma entrada em `MODULOS` (`js/modules.js`) com `key` nova, rótulos, empresa, logo, cores,
-   `driveRoot` **único**, `fileBase` **único**, `layout`+`template`+`blocos`, `campos`,
+1. Uma entrada em `MODULOS` (`js/modules.js`) com `key` nova, rótulos, empresa, logo, cores
+   (**os cinco hex**: `accent`, `accentDark`, `tint`, `tintInk`, `soft` — `tests/logic.html` exige
+   todos), `driveRoot` **único**, `fileBase` **único**, `layout`+`template`+`blocos`, `campos`,
    `obrigatorios`, `bank`/`periodo` e `grupoExport`.
 2. `index.html`: copiar um bloco `.report-panel` (ids no padrão `-{key}`), o botão `.rtab` e a
    aba/painel do histórico (`.htab` + `#hist-tab-{key}`).

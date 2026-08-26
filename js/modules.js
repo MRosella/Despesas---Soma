@@ -19,6 +19,7 @@ const MODULOS = [
     empresa: 'Soma Urbanismo S/A',
     logo: 'assets/soma-logo.png',
     accent: '#b3262d', accentDark: '#8f1e24',
+    tint: '#f5e9dc', tintInk: '#a35a10', soft: '#fdf3f3',   // chips de categoria + realce de toque
     driveRoot: 'Comprovantes - Despesas Soma',          // nome LEGADO — não mudar (pastas já existentes)
     fileBase: 'Relatorio_Despesas',
     shareTitle: 'Relatório de Despesas',
@@ -49,6 +50,7 @@ const MODULOS = [
     empresa: 'Soma Urbanismo S/A',
     logo: 'assets/soma-logo.png',
     accent: '#C00000', accentDark: '#8f0000',
+    tint: '#f5e9dc', tintInk: '#a35a10', soft: '#fdf2f2',
     driveRoot: 'Comprovantes Cartao Santander - Despesas Soma',
     fileBase: 'Prestacao_Contas_Cartao',
     shareTitle: 'Prestação de Contas - Cartão Santander',
@@ -78,7 +80,10 @@ const MODULOS = [
     label: 'Despesas SA Ambiental',
     empresa: 'SA Gestão de Serviços Especializados S/A',
     logo: 'assets/sa-logo.png',
-    accent: '#2E7D32', accentDark: '#1B5E20',
+    /* verdes AMOSTRADOS do assets/sa-logo.png: folha #407830, folha clara #488840,
+       folha oliva #789838 (o vinho #600810 da "mão" fica de fora da UI de propósito) */
+    accent: '#407830', accentDark: '#2c5a21',
+    tint: '#e4efdb', tintInk: '#3f6b23', soft: '#f1f7ec',
     driveRoot: 'Comprovantes - SA Ambiental',
     fileBase: 'Relatorio_Despesas_SA',
     shareTitle: 'Relatório de Despesas - SA Ambiental',
@@ -99,19 +104,19 @@ const MODULOS = [
        (xl/media/image3.png) e as cores da marca dentro do arquivo */
     excelLogo: true,
     excelColors: {
-      'B3262D': '2E7D32',   // vermelho Soma  -> verde SA
-      'DE646A': '7CB342',   // vermelho claro -> verde claro
-      '4E3F39': '33463A',   // marrom (texto/bordas) -> verde escuro acinzentado
-      '382D28': '22301F',
-      'A58D83': '8AA890',
-      'B5A199': 'A6C0AC',
-      'F8F4F2': 'F4F8F4',   // papel
-      'FFFF00': 'CFE8C8'    // realce do subtotal
+      'B3262D': '407830',   // vermelho Soma  -> verde da folha do logo
+      'DE646A': '789838',   // vermelho claro -> verde oliva do logo
+      '4E3F39': '35402F',   // marrom (texto/bordas) -> verde escuro acinzentado
+      '382D28': '232B1E',
+      'A58D83': '8F9E85',
+      'B5A199': 'AFBCA4',
+      'F8F4F2': 'F5F8F2',   // papel
+      'FFFF00': 'D8E8C4'    // realce do subtotal
     },
     pdf: {
-      bg: '#f4f8f4', paper: '#f4f8f4',
-      accent: '#2E7D32', accentDark: '#1B5E20', accentMid: '#1f5f2a', accentDeep: '#123d1c',
-      ink: '#33463a', inkSoft: '#5c7565', subtotal: '#cfe8c8'
+      bg: '#f5f8f2', paper: '#f5f8f2',
+      accent: '#407830', accentDark: '#2c5a21', accentMid: '#33632a', accentDeep: '#1e4416',
+      ink: '#35402f', inkSoft: '#5f6b56', subtotal: '#d8e8c4'
     }
   }
 ];

@@ -100,7 +100,7 @@ body { padding-bottom: 96px; }
   padding: 13px 14px; border-radius: 12px; cursor: pointer; text-align: left;
 }
 .nav-item:active { background: var(--bg); }
-.nav-item.active { background: linear-gradient(135deg, var(--red), var(--red-dark)); color: #fff; }
+.nav-item.active { background: linear-gradient(135deg, var(--mod-accent, var(--red)), var(--mod-accent-dark, var(--red-dark))); color: #fff; }
 .nav-ic { font-size: 1.2rem; width: 26px; text-align: center; }
 .drawer-foot { padding: 14px 18px; font-size: .72rem; color: var(--muted); border-top: 1px solid var(--line); line-height: 1.5; }
 
@@ -145,7 +145,7 @@ svg { display: inline-block; vertical-align: middle; }
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   padding: 30px 16px; text-align: center; color: var(--muted);
 }
-.empty-ic { color: var(--red); opacity: .55; }
+.empty-ic { color: var(--mod-accent, var(--red)); opacity: .55; }
 .empty-title { font-weight: 700; color: var(--brown); font-size: .96rem; }
 .empty-sub { font-size: .82rem; }
 
@@ -177,7 +177,7 @@ main { padding: 14px; max-width: 720px; margin: 0 auto; }
 .card-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 16px;
-  background: linear-gradient(135deg, var(--red), var(--red-dark));
+  background: linear-gradient(135deg, var(--mod-accent, var(--red)), var(--mod-accent-dark, var(--red-dark)));
   color: #fff;
 }
 .card-head h2 { margin: 0; font-size: 0.98rem; font-weight: 700; letter-spacing: .2px; }
@@ -218,7 +218,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--orange); bo
 .entry .e-val { font-weight: 700; color: var(--brown); white-space: nowrap; }
 .entry .cat-tag {
   display: inline-flex; align-items: center; gap: 5px; font-size: .68rem; padding: 1px 8px 1px 2px; border-radius: 11px;
-  background: #f5e9dc; color: #a35a10; margin-right: 6px;
+  background: var(--mod-tint, #f5e9dc); color: var(--mod-tint-ink, #a35a10); margin-right: 6px;
 }
 .entry .cat-tag .ct-ic {
   display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
@@ -229,11 +229,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--orange); bo
 .add-btn {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; padding: 13px;
-  border: 1px dashed var(--red); color: var(--red);
+  border: 1px dashed var(--mod-accent, var(--red)); color: var(--mod-accent, var(--red));
   background: var(--card); border-radius: 0; font-weight: 700; font-size: .92rem;
   cursor: pointer; border-left: none; border-right: none; border-bottom: none;
 }
-.add-btn:active { background: #fdf3f3; }
+.add-btn:active { background: var(--mod-soft, #fdf3f3); }
 .add-row { display: flex; }
 .add-row .add-btn { flex: 1; }
 .add-row .add-btn.repeat { border-left: 1px solid var(--line); color: var(--brown); }
@@ -294,7 +294,7 @@ body.locked { overflow: hidden; }
 .cat-summary { display: flex; flex-wrap: wrap; gap: 8px; }
 .cat-chip {
   display: inline-flex; align-items: center; gap: 6px;
-  background: #f5e9dc; color: #a35a10; border-radius: 20px;
+  background: var(--mod-tint, #f5e9dc); color: var(--mod-tint-ink, #a35a10); border-radius: 20px;
   padding: 4px 11px; font-size: .78rem;
 }
 .cat-chip .cc-val { font-weight: 700; }
@@ -360,7 +360,7 @@ body.locked { overflow: hidden; }
 .gd-folder-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
 .gd-folder-name { flex: 1; min-width: 0; color: var(--text); word-break: break-word; line-height: 1.35; }
 .gd-folder-path { color: var(--muted); font-size: .76rem; }
-.gd-folder-row a { color: var(--red); font-weight: 700; white-space: nowrap; }
+.gd-folder-row a { color: var(--mod-accent, var(--red)); font-weight: 700; white-space: nowrap; }
 .gd-folder-pend { color: var(--muted); white-space: nowrap; font-size: .76rem; }
 .gd-folder-pick { white-space: nowrap; flex: 0 0 auto; }
 
@@ -387,7 +387,7 @@ body.locked { overflow: hidden; }
 }
 .btn:active { transform: translateY(1px); }
 .btn-excel { background: var(--ok); color: #fff; }
-.btn-pdf { background: var(--red); color: #fff; }
+.btn-pdf { background: linear-gradient(135deg, var(--mod-accent, var(--red)), var(--mod-accent-dark, var(--red-dark))); color: #fff; }
 .btn-ghost { background: var(--bg); color: var(--brown); }
 
 /* ---------- Modal ---------- */
@@ -424,6 +424,40 @@ body.locked { overflow: hidden; }
 .e-clip { display: inline-flex; vertical-align: middle; color: var(--orange); margin-left: 4px; cursor: pointer; }
 .e-thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; margin-left: 6px; vertical-align: middle; cursor: pointer; border: 1px solid var(--line); }
 
+/* ---------- Progresso da leitura do comprovante pela IA ----------
+   O Gemini não devolve progresso real: a barra mostra as ETAPAS (preparar /
+   enviar / ler / organizar) e avança sozinha durante a espera, para diferenciar
+   "ainda processando" de "falhou". Estado de erro fica visível até o usuário agir. */
+.ocr-prog {
+  margin-top: 10px; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--bg);
+}
+.ocr-prog-head { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+.ocr-prog-msg { flex: 1; min-width: 0; font-size: .82rem; color: var(--brown); line-height: 1.3; word-break: break-word; }
+.ocr-prog-spin {
+  width: 16px; height: 16px; flex: none; border-radius: 50%; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2.5px solid var(--line); border-top-color: var(--mod-accent, var(--red));
+  animation: scanspin .7s linear infinite;
+}
+.ocr-prog-retry { flex: 0 0 auto; }
+.ocr-bar { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.ocr-bar-fill {
+  height: 100%; width: 0%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--mod-accent, var(--red)), var(--mod-accent-dark, var(--red-dark)));
+  transition: width .35s ease;
+}
+/* concluído: barra cheia, sem spinner */
+.ocr-prog.ok .ocr-prog-spin { border: 2.5px solid transparent; animation: none; }
+.ocr-prog.ok .ocr-prog-spin::before { content: '✓'; color: var(--ok); font-weight: 800; font-size: .95rem; line-height: 1; }
+.ocr-prog.ok .ocr-bar-fill { background: var(--ok); }
+/* falhou: vermelho SEMPRE (é erro, não marca da empresa) */
+.ocr-prog.err { border-color: #e7c3c3; }
+.ocr-prog.err .ocr-prog-spin { border: 2.5px solid transparent; animation: none; }
+.ocr-prog.err .ocr-prog-spin::before { content: '!'; color: var(--red); font-weight: 800; font-size: .95rem; line-height: 1; }
+.ocr-prog.err .ocr-prog-msg { color: var(--red); }
+.ocr-prog.err .ocr-bar-fill { background: var(--red); }
+
 /* ---------- Opções de exportação ---------- */
 .exp-opt {
   display: flex; align-items: center; gap: 12px;
@@ -431,7 +465,7 @@ body.locked { overflow: hidden; }
   margin-bottom: 10px; cursor: pointer; font-weight: 600; color: var(--text);
 }
 .exp-opt input[type="checkbox"] {
-  width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--red); margin: 0;
+  width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--mod-accent, var(--red)); margin: 0;
 }
 .exp-opt .exp-count { display: block; font-weight: 400; font-size: .76rem; color: var(--muted); margin-top: 2px; }
 
@@ -546,7 +580,7 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 }
 .scan-spinner {
   width: 18px; height: 18px; flex: none; border-radius: 50%;
-  border: 2.5px solid var(--line); border-top-color: var(--red);
+  border: 2.5px solid var(--line); border-top-color: var(--mod-accent, var(--red));
   animation: scanspin .7s linear infinite;
 }
 @keyframes scanspin { to { transform: rotate(360deg); } }

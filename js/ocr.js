@@ -16,6 +16,86 @@ function buildDescricao(category, city, uf) {
   return local ? `${head} durante viagem a ${local}` : `${head} durante viagem`;
 }
 
+/* ============================================================
+   Progresso da leitura (barra no modal)
+   ------------------------------------------------------------
+   O Gemini não devolve progresso real, então a barra mostra as ETAPAS
+   (preparar → enviar → ler → organizar) e "escorrega" sozinha em direção
+   a um alvo enquanto a resposta não chega. Serve para responder à única
+   pergunta que importa: ainda está processando ou já falhou?
+   Só existe no modal de lançamento; a varredura do Drive tem o overlay
+   `scanProgress` próprio (por isso `onStatus` é opcional em todo o caminho).
+   ============================================================ */
+const ocrProgress = {
+  timer: null, hideTimer: null, pct: 0, target: 0,
+  els() { return { box: $('m-ocr-prog'), msg: $('m-ocr-msg'), fill: $('m-ocr-fill'), retry: $('m-ocr-retry') }; },
+  paint() { const f = $('m-ocr-fill'); if (f) f.style.width = this.pct.toFixed(1) + '%'; },
+  stopCreep() { if (this.timer) { clearInterval(this.timer); this.timer = null; } },
+  /* msg: texto da etapa · pct: salto imediato · target: até onde escorregar sozinha */
+  step(msg, pct, target) {
+    const e = this.els();
+    if (!e.box) return;
+    if (this.hideTimer) { clearTimeout(this.hideTimer); this.hideTimer = null; }
+    e.box.style.display = '';
+    e.box.className = 'ocr-prog';
+    if (e.retry) e.retry.style.display = 'none';
+    if (msg && e.msg) e.msg.textContent = msg;
+    if (pct != null && pct > this.pct) this.pct = pct;
+    this.paint();
+    this.stopCreep();
+    if (target == null) return;
+    this.target = target;
+    this.timer = setInterval(() => {
+      if (this.pct >= this.target - 0.4) return;
+      this.pct += (this.target - this.pct) * 0.09;   // assintótica: nunca finge que terminou
+      this.paint();
+    }, 260);
+  },
+  done(msg) {
+    const e = this.els();
+    if (!e.box) return;
+    this.stopCreep();
+    this.pct = 100; this.paint();
+    e.box.className = 'ocr-prog ok';
+    if (e.msg) e.msg.textContent = msg || 'Comprovante lido ✓';
+    if (e.retry) e.retry.style.display = 'none';
+    this.hideTimer = setTimeout(() => this.hide(), 2600);
+  },
+  fail(msg) {
+    const e = this.els();
+    if (!e.box) return;
+    this.stopCreep();
+    this.pct = 100; this.paint();
+    e.box.className = 'ocr-prog err';
+    if (e.msg) e.msg.textContent = msg || 'Não consegui ler o comprovante.';
+    if (e.retry) e.retry.style.display = '';   // erro fica na tela até o usuário decidir
+  },
+  hide() {
+    const e = this.els();
+    this.stopCreep();
+    if (this.hideTimer) { clearTimeout(this.hideTimer); this.hideTimer = null; }
+    this.pct = 0;
+    if (e.box) { e.box.style.display = 'none'; e.box.className = 'ocr-prog'; }
+    if (e.fill) e.fill.style.width = '0%';
+    if (e.retry) e.retry.style.display = 'none';
+  }
+};
+
+/* Etapas nomeadas: [texto, salto imediato, alvo do escorregamento] */
+const OCR_FASES = {
+  prep:  ['Preparando o comprovante…', 6, 22],
+  cache: ['Comprovante já lido antes — reaproveitando.', 96, null],
+  send:  ['Enviando o comprovante para a IA…', 26, 46],
+  read:  ['A IA está lendo o comprovante…', 50, 90],
+  parse: ['Organizando os dados lidos…', 93, 97]
+};
+/* callback passado a ocrReceipt() pelo modal — traduz a fase em movimento da barra */
+function ocrStatus(fase, extra) {
+  if (fase === 'retry') { ocrProgress.step('A IA está instável — tentativa ' + extra + ' de 4…', null, 88); return; }
+  const f = OCR_FASES[fase];
+  if (f) ocrProgress.step(f[0], f[1], f[2]);
+}
+
 /* SHA-256 (hex) dos bytes do arquivo — chave do cache de OCR. */
 async function blobSha256(blob) {
   const buf = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
@@ -25,14 +105,17 @@ async function blobSha256(blob) {
 /* OCR com cache local (IndexedDB) por hash do arquivo: o MESMO comprovante não regasta a API
    Gemini (varredura repetida / "Analisar de novo" ficam grátis e instantâneos). Só cacheia
    resultados úteis (com data ou total); erros transitórios/ilegíveis não entram no cache. */
-async function ocrReceipt(blob, mime) {
+async function ocrReceipt(blob, mime, onStatus) {
+  if (onStatus) onStatus('prep');
   let hash = '';
   try { hash = await blobSha256(blob); } catch (e) { console.warn('hash do comprovante falhou', e); }
   if (hash) {
-    try { const hit = await idbGet('ocrcache_' + hash); if (hit && hit.ocr) return hit.ocr; }
-    catch (e) { console.warn('leitura do cache de OCR falhou', e); }
+    try {
+      const hit = await idbGet('ocrcache_' + hash);
+      if (hit && hit.ocr) { if (onStatus) onStatus('cache'); return hit.ocr; }
+    } catch (e) { console.warn('leitura do cache de OCR falhou', e); }
   }
-  const ocr = await ocrReceiptRaw(blob, mime);
+  const ocr = await ocrReceiptRaw(blob, mime, onStatus);
   if (hash && ocr && (ocr.dateISO || ocr.total != null)) {
     try { await idbPut('ocrcache_' + hash, { ocr, at: Date.now() }); }
     catch (e) { console.warn('gravacao do cache de OCR falhou', e); }
@@ -42,8 +125,8 @@ async function ocrReceipt(blob, mime) {
 
 /* Chamada genérica ao Gemini (JSON estruturado) com retentativa/backoff — usada pelo OCR de
    comprovante (abaixo). Recebe as `parts` do conteúdo e o generationConfig; devolve o JSON já
-   parseado. */
-async function geminiCall(parts, generationConfig) {
+   parseado. `onStatus(fase[, extra])` é opcional e serve para alimentar a barra de progresso. */
+async function geminiCall(parts, generationConfig, onStatus) {
   const a = loadAi();
   if (!a.key) throw new Error('Chave do Gemini não configurada.');
   const body = { contents: [{ parts }], generationConfig };
@@ -56,6 +139,7 @@ async function geminiCall(parts, generationConfig) {
   const MAX_TRIES = 4;
   let r = null;
   for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
+    if (onStatus) onStatus(attempt === 0 ? 'read' : 'retry', attempt + 1);
     try {
       r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     } catch (netErr) {   // sem resposta (rede caiu / timeout)
@@ -77,6 +161,7 @@ async function geminiCall(parts, generationConfig) {
     if (r.status === 429) throw new Error('Limite da IA atingido (cota/requisições). ' + m);
     throw new Error(m);
   }
+  if (onStatus) onStatus('parse');
   const j = await r.json();
   const c = j && j.candidates && j.candidates[0];
   const txt = c && c.content && c.content.parts && c.content.parts[0] && c.content.parts[0].text;
@@ -84,9 +169,10 @@ async function geminiCall(parts, generationConfig) {
   return JSON.parse(txt);
 }
 
-async function ocrReceiptRaw(blob, mime) {
+async function ocrReceiptRaw(blob, mime, onStatus) {
   const b64 = String(await blobToDataUrl(blob)).split(',')[1];
   const mimeType = mime || blob.type || 'image/jpeg';   // Gemini lê imagem ou PDF
+  if (onStatus) onStatus('send');
   const cats = getCategorias();
   const prompt = [
     'Você é um leitor de cupons fiscais e notas fiscais brasileiras (NF/NFC-e/cupom).',
@@ -117,7 +203,8 @@ async function ocrReceiptRaw(blob, mime) {
           category: { type: 'STRING', enum: cats, nullable: true }
         }
       }
-    }
+    },
+    onStatus
   );
   return {
     nfNumber: data.nfNumber ? String(data.nfNumber).replace(/\D/g, '') : '',
@@ -144,13 +231,19 @@ function fillFromOcr(ocr) {
   if (ocr.total != null && !vEl.value.trim()) vEl.value = formatMoneyInput(ocr.total);
 }
 async function runReceiptOcr() {
+  if (!modalPhoto || !modalPhoto.blob) { ocrProgress.hide(); return; }
   try {
-    toast('Lendo comprovante…');
-    const ocr = await ocrReceipt(modalPhoto.blob, modalPhoto.blob && modalPhoto.blob.type);
+    ocrProgress.step(OCR_FASES.prep[0], OCR_FASES.prep[1], OCR_FASES.prep[2]);
+    const ocr = await ocrReceipt(modalPhoto.blob, modalPhoto.blob.type, ocrStatus);
     modalPhoto.ocr = { nfNumber: ocr.nfNumber, dateISO: ocr.dateISO, city: ocr.city, uf: ocr.uf, establishment: ocr.establishment };
     fillFromOcr(ocr);
-    toast('Comprovante lido — confira os campos.');
-  } catch (e) { console.error(e); toast('Não consegui ler o comprovante: ' + e.message); }
+    const vazio = !ocr.dateISO && ocr.total == null;
+    if (vazio) ocrProgress.fail('A IA não achou data nem valor neste arquivo. Preencha à mão ou tente outra foto.');
+    else ocrProgress.done('Comprovante lido — confira os campos.');
+  } catch (e) {
+    console.error(e);
+    ocrProgress.fail('Não consegui ler o comprovante: ' + e.message);
+  }
 }
 
 /* nome do arquivo no Drive: "NF {nº} {DD.MM}" com os dados que houver */

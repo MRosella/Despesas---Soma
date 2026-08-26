@@ -28,7 +28,7 @@ function openModal(tabela, id, prefill) {
   setTimeout(() => $('m-descricao').focus(), 150);
 }
 
-function closeModal() { $('modal').classList.remove('open'); linkedPendingId = null; }
+function closeModal() { $('modal').classList.remove('open'); ocrProgress.hide(); linkedPendingId = null; }
 
 /* Campos extras (estabelecimento / justificativa) aparecem conforme MOD[tabela].campos */
 const CAMPOS_EXTRA = ['estabelecimento', 'justificativa'];
@@ -42,7 +42,7 @@ function toggleCamposModulo(tabela) {
 
 /* ---- comprovante no modal ---- */
 let modalPhoto = { mode: 'keep', existing: null, blob: null, dataUrl: null, w: 0, h: 0 };
-function resetModalPhoto(existing) { modalPhoto = { mode: 'keep', existing: existing || null, blob: null, dataUrl: null, w: 0, h: 0 }; }
+function resetModalPhoto(existing) { modalPhoto = { mode: 'keep', existing: existing || null, blob: null, dataUrl: null, w: 0, h: 0 }; ocrProgress.hide(); }
 function renderModalPhoto() {
   const attach = $('m-foto-attach'), prev = $('m-foto-preview');
   if (!attach || !prev) return;
@@ -67,20 +67,27 @@ function renderModalPhoto() {
 }
 async function onPhotoSelected(file) {
   if (!file) return;
+  const comIa = aiConfigured();
   try {
     const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
     if (isPdf) {
       modalPhoto = { mode: 'new', kind: 'pdf', existing: modalPhoto.existing, blob: file, dataUrl: null, w: 0, h: 0 };
       renderModalPhoto();
-      if (aiConfigured()) await runReceiptOcr();
+      if (comIa) await runReceiptOcr();
       return;
     }
-    toast('Processando imagem…');
+    // a barra já aparece na compressão: a espera começa aqui, não só na chamada da IA
+    if (comIa) ocrProgress.step('Preparando a imagem…', 4, 14);
+    else toast('Processando imagem…');
     const { blob, w, h } = await compressImage(file);
     modalPhoto = { mode: 'new', kind: 'img', existing: modalPhoto.existing, blob, dataUrl: await blobToDataUrl(blob), w, h };
     renderModalPhoto();
-    if (aiConfigured()) await runReceiptOcr();
-  } catch (e) { console.error(e); toast('Erro no arquivo: ' + e.message); }
+    if (comIa) await runReceiptOcr();
+  } catch (e) {
+    console.error(e);
+    if (comIa) ocrProgress.fail('Erro no arquivo: ' + e.message);
+    else toast('Erro no arquivo: ' + e.message);
+  }
 }
 async function applyModalPhoto(entry) {
   if (modalPhoto.mode === 'keep') {
