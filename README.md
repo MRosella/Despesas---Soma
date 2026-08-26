@@ -169,10 +169,11 @@ aparelho**; use **Desconectar** para removê-lo de um dispositivo.
 
 ## 7. Comprovantes no Google Drive (opcional)
 
-Permite anexar a foto do cupom a cada lançamento. As imagens ficam no **seu** Google Drive
-(pasta `Comprovantes - Despesas Soma`, que você pode mover para onde quiser) e entram como
-**páginas finais do PDF**. O app usa o escopo `drive.file` — ele só acessa os arquivos que
-ele mesmo cria, nunca o resto do seu Drive.
+Permite anexar a foto do cupom a cada lançamento. As imagens ficam no **seu** Google Drive, em uma
+pasta **por relatório** (`Comprovantes - Despesas Soma`, `Comprovantes Cartao Santander - Despesas
+Soma` e `Comprovantes - SA Ambiental`), que você pode mover para onde quiser — e entram como
+**páginas finais do PDF**. O app usa o escopo `drive.file`: ele só acessa os arquivos que ele mesmo
+cria e as pastas que **você** escolher no seletor do Google (ver 7.3), nunca o resto do seu Drive.
 
 ### 7.1 Criar o Client ID (uma vez)
 
@@ -193,6 +194,38 @@ ele mesmo cria, nunca o resto do seu Drive.
 > Observações: o login vale por ~1h (reconectar é um toque). Fotos tiradas **offline** ficam numa
 > fila local e são enviadas ao Drive assim que você reconectar. Para abrir os comprovantes no
 > computador, conecte o mesmo Google lá também.
+
+### 7.3 Escolher a pasta de cada relatório (opcional)
+
+Sem isso, o app cria a pasta de cada relatório **na raiz do seu Drive** (você pode arrastá‑la para
+onde quiser depois — o app guarda o identificador, não o caminho). Se você prefere apontar cada
+relatório para uma pasta **que já existe**, o app usa o **seletor de pastas do Google (Picker)**.
+
+Por que o Picker: o escopo `drive.file` só dá acesso ao que o app cria. Escolher uma pasta no
+seletor "abre" **aquela pasta** para o app — que passa a poder gravar nela — sem precisar ampliar a
+permissão para o seu Drive inteiro.
+
+No **mesmo projeto** do Client ID (<https://console.cloud.google.com>):
+
+1. **APIs e serviços → Biblioteca** → procure **Google Picker API** → **Ativar**.
+2. **APIs e serviços → Credenciais → Criar credenciais → Chave de API**. Copie a chave.
+3. Ainda na chave criada, clique em **Editar** e restrinja (ela fica visível no navegador — não é
+   segredo, mas restringir impede uso por terceiros):
+   - **Restrições de aplicativo → Sites**: adicione `https://mrosella.github.io/*`
+   - **Restrições de API → Restringir chave**: marque **Google Picker API** e **Google Drive API**
+4. **Número do projeto**: no **painel inicial** do projeto, card *Informações do projeto*. São ~12
+   dígitos — é o **número**, não o *ID do projeto* (que é texto, tipo `despesas-soma-123456`).
+5. No app: **Configurações → Comprovantes (Google Drive)** → cole em **Chave de API do Google** e
+   **Número do projeto**.
+6. No card **Pastas dos relatórios**, toque em **Escolher pasta** na linha do relatório e escolha a
+   pasta destino. Os comprovantes passam a ir para lá, em subpastas `Ano/Mês`.
+
+A escolha é sincronizada entre seus aparelhos (vai junto no `dados.json`), então só precisa ser
+feita uma vez por relatório. As credenciais, não: ficam **só no aparelho**, como o Client ID.
+
+> Se der erro: *"developer key is invalid"* = chave errada, Picker API não ativada, ou a restrição
+> de site não bate com a URL. *Seletor abre vazio ou reclama do app* = número do projeto errado
+> (conferir se não colou o ID no lugar do número).
 
 ---
 
