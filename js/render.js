@@ -1,7 +1,9 @@
 'use strict';
 /* ---------------- Renderização ---------------- */
 function render() {
-  const setVal = (id, v) => { const el = $(id); if (el) el.value = v || ''; };
+  // nao sobrescreve o campo que o usuario esta editando agora (um render disparado
+  // pelo sync no meio da digitacao apagaria o que foi digitado)
+  const setVal = (id, v) => { const el = $(id); if (el && el !== document.activeElement) el.value = v || ''; };
   const setTxt = (id, v) => { const el = $(id); if (el) el.textContent = v || ''; };
   const setMoney = (id, v) => { const el = $(id); if (el) el.textContent = formatMoney(v); };
   const rm = state.reportMonths || {};

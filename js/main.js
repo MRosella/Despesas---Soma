@@ -219,21 +219,23 @@ function init() {
   // cabeçalho, período e dados bancários: um conjunto de campos POR módulo
   for (const mod of MODULOS) {
     const t = mod.key;
-    const p = perfilDe(t);
+    // NAO capturar o perfil aqui: applyDoc (sync) troca state.perfis por objetos
+    // novos, e um `p` capturado viraria um objeto orfao (o que o usuario digita
+    // no cabecalho some no proximo render). Resolver o perfil a CADA evento.
     bindField('reportMonth-' + t, null, (v) => state.reportMonths[t] = v);
     if (mod.header === 'reembolso') {
-      bindField('funcionario-' + t, null, (v) => p.funcionario = v);
-      bindField('dataSolicitacao-' + t, null, (v) => p.dataSolicitacao = v);
-      bindField('referente-' + t, null, (v) => p.referente = v);
+      bindField('funcionario-' + t, null, (v) => perfilDe(t).funcionario = v);
+      bindField('dataSolicitacao-' + t, null, (v) => perfilDe(t).dataSolicitacao = v);
+      bindField('referente-' + t, null, (v) => perfilDe(t).referente = v);
     }
     if (mod.periodo) {
-      bindField('sant-periodo-inicio-' + t, null, (v) => p.santPeriodo.start = v);
-      bindField('sant-periodo-fim-' + t, null, (v) => p.santPeriodo.end = v);
+      bindField('sant-periodo-inicio-' + t, null, (v) => perfilDe(t).santPeriodo.start = v);
+      bindField('sant-periodo-fim-' + t, null, (v) => perfilDe(t).santPeriodo.end = v);
     }
     if (mod.bank) {
       maskCpfEl($('bk-cpf-' + t));
       for (const k of ['nome', 'cpf', 'banco', 'agencia', 'conta', 'pix']) {
-        bindField('bk-' + k + '-' + t, null, (v) => p.bank[k] = v);
+        bindField('bk-' + k + '-' + t, null, (v) => perfilDe(t).bank[k] = v);
       }
       const cp = $('bk-copy-' + t);
       if (cp) cp.addEventListener('click', () => copyBankData(t));
