@@ -20,8 +20,11 @@ function applyPrintTheme(mod) {
   set('--p-subtotal', p.subtotal);
 }
 
+/* Bloco de assinaturas do rodape. Modulos com `assinaturas: false` (SA Ambiental)
+   nao imprimem assinaturas nem a data — o relatorio termina nas observacoes. */
 function buildSignatureBlock(mod) {
   const m = mod || MOD[TABELA_PADRAO];
+  if (m.assinaturas === false) return '';
   return `
     <div class="p-sign">
       <div class="p-sign-box">
@@ -94,7 +97,7 @@ function buildPrint(src, sections, mod) {
     <table class="p-info">
       <tr><td class="lab">Empresa:</td><td class="val">${escapeHtml(mod.empresa)}</td>
           <td class="lab">Data da Solicitação:</td><td class="val">${fmtDateBR(D.dataSolicitacao)}</td></tr>
-      <tr><td class="lab">Funcionário:</td><td class="val">${escapeHtml(D.funcionario)}</td>
+      <tr><td class="lab">${escapeHtml(mod.rotuloFuncionario || 'Funcionário')}:</td><td class="val">${escapeHtml(D.funcionario)}</td>
           <td class="lab">Reembolso Referente à:</td><td class="val">${escapeHtml(D.referente)}</td></tr>
     </table>
     ${tabelas}

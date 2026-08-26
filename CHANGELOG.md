@@ -3,6 +3,28 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v61 — SA Ambiental: sem bloco de assinaturas e campo "Prestador"
+
+- **Duas propriedades novas no registry** (`js/modules.js`, só na `sagestao`), em vez de `if`s
+  espalhados por módulo: `assinaturas: false` e `rotuloFuncionario: 'Prestador'`. Qualquer módulo
+  futuro herda o padrão (assina, e o rótulo é "Funcionário") sem tocar em `js/pdf.js`/`js/excel.js`.
+- **Rodapé de assinaturas removido do relatório da SA.** `buildSignatureBlock` (js/pdf.js) devolve
+  string vazia quando `mod.assinaturas === false`; o PDF termina nas Observações. Some o par de
+  linhas de assinatura (Murilo Rosella / Gustavo Barbeitos da Gama) **e** a linha "Data:" que vinha
+  logo abaixo, porque ela só fazia sentido como data da assinatura. Soma e cartão seguem iguais.
+- **No Excel não havia o que remover**: o bloco de assinaturas nunca existiu no `template.xlsx` —
+  conferido descompactando o modelo (nem célula, nem forma no `xl/drawings/drawing1.xml`). As
+  assinaturas eram só do PDF. As linhas em branco do fim da planilha continuam lá (fazem parte do
+  rodapé do modelo).
+- **"Funcionário" → "Prestador" na SA**, nos três lugares: rótulo do campo na Home
+  (`index.html`, `#funcionario-sagestao`), célula **B5** do Excel (`T.setText('B5', …)` em
+  `buildXlsx`, escrita só quando o módulo define o rótulo — o modelo fica intacto para a Soma) e a
+  linha do cabeçalho do PDF em `buildPrint`. A **chave de dados continua `funcionario`**: é só o
+  rótulo visível que muda, então nada no estado/sync precisou migrar.
+- Testes: `tests/logic.html` cobre `buildSignatureBlock` nos dois sentidos e os rótulos;
+  `tests/xlsx.html` confere `B5 = "Prestador"` na SA e que a string 18 do modelo ("Funcionário")
+  segue intacta no relatório da Soma.
+
 ## v60 — Barra de progresso da leitura pela IA + paleta da SA Ambiental em toda a interface
 - **Barra de progresso no modal enquanto a IA lê o comprovante** (`ocrProgress` + `OCR_FASES` +
   `ocrStatus`, em `js/ocr.js`; markup `#m-ocr-prog` no `index.html`). Antes só havia um toast

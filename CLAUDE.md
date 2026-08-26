@@ -205,6 +205,13 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
   modal mostra (`toggleCamposModulo`), o que `saveEntry` grava, o que `quickDuplicate`/`repeatLast`/
   `duplicateInModal` **copiam** e o que a varredura do Drive preenche. Hoje só o cartão os usa
   (alimentam C e K do Excel). `ocrReceipt` retorna `establishment`; `fillFromOcr` preenche se visível.
+- **Rodapé de assinaturas e rótulo do nome vêm do módulo**: `mod.assinaturas === false` faz
+  `buildSignatureBlock` devolver `''` (a SA Ambiental não imprime assinaturas nem a linha "Data:";
+  o PDF termina nas Observações). `mod.rotuloFuncionario` troca o rótulo do campo do nome —
+  "Prestador" na SA — no PDF (`buildPrint`), na célula **B5** do Excel (`buildXlsx` só escreve B5
+  quando o módulo define o rótulo) e no `<label>` do painel no `index.html`. A **chave de dados
+  continua `funcionario`** em todo lugar; muda só o rótulo visível. O `template.xlsx` **não tem**
+  bloco de assinaturas — as assinaturas sempre foram só do PDF.
 - **Validação antes de exportar/arquivar** (`validateBeforeExport`): regras vêm de
   `mod.obrigatorios` (cartão: data/valor/estabelecimento/justificativa; reembolso e SA:
   data/valor/categoria) e a mensagem usa `mod.tabLabel`. `confirm` para prosseguir mesmo assim.

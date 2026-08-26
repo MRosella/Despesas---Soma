@@ -282,6 +282,7 @@ async function buildXlsx(src, mod) {
   // ---- cabeçalho ----
   T.setText('C4', mod.empresa);
   if (D.dataSolicitacao) T.setNum('E4', dateToSerial(D.dataSolicitacao));
+  if (mod.rotuloFuncionario) T.setText('B5', mod.rotuloFuncionario);   // 'Funcionario' -> 'Prestador' (SA)
   T.setText('C5', D.funcionario);
   T.setText('E5', D.referente);
   T.setText('B7', mod.tituloTabela);

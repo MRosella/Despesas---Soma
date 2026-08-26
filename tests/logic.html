@@ -88,6 +88,13 @@ try {
   chk('registry_pastas_distintas', new Set(MODULOS.map(function(m){return m.driveRoot;})).size, 3);
   chk('registry_prefixos_distintos', new Set(MODULOS.map(function(m){return m.fileBase;})).size, 3);
 
+  // assinaturas do rodape do PDF: a SA nao imprime; Soma e cartao seguem imprimindo
+  chk('assinatura_sa_removida', buildSignatureBlock(MOD.sagestao), '');
+  chk('assinatura_soma_presente', buildSignatureBlock(MOD.reembolso).indexOf(MOD.reembolso.aprovador) >= 0, 'true');
+  // rotulo do campo do nome: SA usa 'Prestador', os demais o padrao 'Funcionario'
+  chk('rotulo_sa_prestador', MOD.sagestao.rotuloFuncionario, 'Prestador');
+  chk('rotulo_soma_padrao', MOD.reembolso.rotuloFuncionario || 'padrao', 'padrao');
+
   // docForModule: achata o perfil do módulo na raiz (e deixa snapshot legado intacto)
   var comPerfis = { perfis:{ reembolso:{funcionario:'R', dataSolicitacao:'2026-06-01', referente:'', bank:{nome:'BR'}, santPeriodo:{start:'',end:''}},
                              sagestao:{funcionario:'S', dataSolicitacao:'2026-07-02', referente:'', bank:{nome:'BS'}, santPeriodo:{start:'',end:''}} } };

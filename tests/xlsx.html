@@ -79,6 +79,7 @@ function refsForaDoLimite(w, maxRow){
 
     chk('sa_empresa', w.txt('C4'), 'SA Gestão de Serviços Especializados S/A');
     chk('sa_funcionario', w.txt('C5'), 'Murilo Rosella');
+    chk('sa_rotulo_prestador', w.txt('B5'), 'Prestador');
     chk('sa_titulo_tabela', w.txt('B7'), 'DESPESAS PARA REEMBOLSO');
     chk('sa_primeiro_lancamento', w.txt('C9'), 'SA 0');
     chk('sa_subtotal_label', w.txt('B16'), 'SUBTOTAL DESPESAS PARA REEMBOLSO:');
@@ -108,6 +109,7 @@ function refsForaDoLimite(w, maxRow){
                   dataSolicitacao:'2026-07-31', bank:{nome:'N',cpf:'C',banco:'B',agencia:'A',conta:'CT',pix:'P'} };
     var v = abrir(await buildXlsx(dSoma, MOD.reembolso));
     chk('soma_empresa', v.txt('C4'), 'Soma Urbanismo S/A');
+    chk('soma_rotulo_funcionario', v.val('B5'), '18');   // string 18 do modelo = "Funcionário" (intacta)
     chk('soma_bloco1', v.txt('C9'), 'R 0');
     chk('soma_bloco2', v.txt('C20'), 'A 0');
     chk('soma_subtotal1', v.form('E16'), 'SUM(E9:E15)');
