@@ -240,7 +240,12 @@
                 <input type="text" id="referente-sagestao" placeholder="Ex.: Voo 12/03 - Fazenda Boa Vista" autocomplete="off" />
               </div>
             </div>
-            <p class="hint" style="margin:2px 2px 8px">É também o <b>nome da pasta no Google Drive</b> deste fechamento: os comprovantes da SA Ambiental são guardados em <b>uma pasta por voo</b> (não por mês). Preencha antes de lançar as despesas.</p>
+            <p class="hint" style="margin:2px 2px 8px">É também o <b>nome da pasta deste fechamento no Google Drive</b>: os comprovantes da SA Ambiental ficam em <code>{Ano}/{Mês}/{Referente à}</code> — <b>uma pasta por voo</b> dentro do mês. Preencha antes de lançar as despesas.</p>
+            <div class="field">
+              <label for="reportMonth-sagestao">Mês de referência</label>
+              <input type="month" id="reportMonth-sagestao" />
+              <p class="hint" style="margin:6px 2px 0">Mês (pasta <code>{Ano}/{Mês}</code>) em que este fechamento é guardado no Drive. Em branco, cada comprovante vai para o mês da <b>data do lançamento</b>.</p>
+            </div>
             <p class="hint">Empresa: <b>SA Gestão de Serviços Especializados Ltda</b> (fixo).</p>
           </div>
         </section>

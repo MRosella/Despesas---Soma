@@ -333,13 +333,15 @@ function referenteFolderName(tabela, referente) {
   return sanitizeFolderName(txt);
 }
 
-/* Pasta de destino dos arquivos de um relatorio: por referente (SA) ou Ano/Mes (Soma). */
+/* Pasta de destino dos arquivos de um relatorio: SEMPRE {Ano}/{Mes} dentro da raiz da
+   tabela; nos modulos com `pastaPorReferente` ainda desce mais um nivel, numa pasta com o
+   texto de "Reembolso Referente a" (um fechamento por voo dentro do mes da despesa). */
 async function gdEnsureReportFolder(dateISO, tabela, referente) {
+  const base = dateISO ? await gdEnsureMonthFolder(dateISO, tabela) : await gdEnsureFolder(tabela);
   const nome = referenteFolderName(tabela, referente);
-  if (!nome) return dateISO ? await gdEnsureMonthFolder(dateISO, tabela) : await gdEnsureFolder(tabela);
-  const root = await gdEnsureFolder(tabela);
+  if (!nome) return base;
   const t = await gdGetToken(false);
-  return await gdFindOrCreateChild(root, nome, t);
+  return await gdFindOrCreateChild(base, nome, t);
 }
 
 async function gdUpload(blob, name, dateISO, tabela, referente) {

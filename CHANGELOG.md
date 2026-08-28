@@ -3,6 +3,15 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v66 — SA Ambiental: {Ano}/{Mês}/{Referente à}
+
+- A pasta do "Referente à" (v65) passa a ser **subpasta do mês**, não da raiz: os arquivos ficam em
+  `Comprovantes - SA Ambiental/{Ano}/{Mês}/{Referente à}/`. `gdEnsureReportFolder` resolve primeiro
+  `gdEnsureMonthFolder` e só então cria/acha a pasta do referente dentro dela.
+- **"Mês de referência" de volta ao painel da SA** (`index.html`): é ele que fixa o `{Ano}/{Mês}`
+  do fechamento inteiro (sem ele, cada comprovante cairia no mês da própria data e um voo entre
+  dois meses se dividiria em duas pastas). Em branco, o fallback por data do lançamento continua.
+
 ## v65 — SA Ambiental: pasta do Drive pelo "Referente à" (fechamento por voo)
 
 - **`pastaPorReferente: true` no módulo `sagestao`** (`js/modules.js`). Os fechamentos da SA não são
