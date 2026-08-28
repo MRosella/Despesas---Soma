@@ -317,9 +317,34 @@ async function gdEnsureMonthFolder(dateISO, tabela) {
   return await gdFindOrCreateChild(anoId, mesNome, t);
 }
 
-async function gdUpload(blob, name, dateISO, tabela) {
+/* Nome de pasta seguro para o Drive (a query da API delimita o nome com aspas simples). */
+function sanitizeFolderName(s) {
+  return String(s == null ? '' : s).replace(/[\\/'"]/g, ' ').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+}
+
+/* Modulos com `pastaPorReferente` (SA Ambiental: fecha por voo, nao por mes) guardam os
+   comprovantes numa subpasta com o texto de "Reembolso Referente a". Sem texto (ou nos
+   demais modulos) devolve '' e o fluxo cai no esquema Ano/Mes de sempre. */
+function referenteFolderName(tabela, referente) {
+  if (!modOf(tabela).pastaPorReferente) return '';
+  const txt = (referente === undefined || referente === null || referente === '')
+    ? (((state.perfis || {})[tabela] || {}).referente || '')
+    : referente;
+  return sanitizeFolderName(txt);
+}
+
+/* Pasta de destino dos arquivos de um relatorio: por referente (SA) ou Ano/Mes (Soma). */
+async function gdEnsureReportFolder(dateISO, tabela, referente) {
+  const nome = referenteFolderName(tabela, referente);
+  if (!nome) return dateISO ? await gdEnsureMonthFolder(dateISO, tabela) : await gdEnsureFolder(tabela);
+  const root = await gdEnsureFolder(tabela);
   const t = await gdGetToken(false);
-  const folderId = dateISO ? await gdEnsureMonthFolder(dateISO, tabela) : await gdEnsureFolder(tabela);
+  return await gdFindOrCreateChild(root, nome, t);
+}
+
+async function gdUpload(blob, name, dateISO, tabela, referente) {
+  const t = await gdGetToken(false);
+  const folderId = await gdEnsureReportFolder(dateISO, tabela, referente);
   const form = new FormData();
   form.append('metadata', new Blob([JSON.stringify({ name, parents: [folderId] })], { type: 'application/json' }));
   form.append('file', blob);

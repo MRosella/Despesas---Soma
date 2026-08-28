@@ -24,7 +24,7 @@ https://mrosella.github.io/Despesas---Soma/
 | `js/ui.js` | navegação (`showView`/`setupNav`), **abas dos relatórios** da Home (`setupReportTabs`/`showReportTab`, lembra em `-tab-v1`), **abas do histórico** por tipo (`setupHistTabs`/`showHistTab`, lembra em `-histtab-v1`), `populateCategorySelects`, editor de categorias (`renderCatEditor`/`saveCatEditor`/`setupCatUI`) |
 | `js/ocr.js` | Gemini (`AI_KEY`, `GEMINI_MODEL`, **`geminiCall(parts,generationConfig,onStatus?)`** = chamada genérica com retry/backoff, `ocrReceipt(blob,mime,onStatus?)` = wrapper com **cache por hash**, `ocrReceiptRaw`, `blobSha256`, `fillFromOcr`, `runReceiptOcr`, `receiptFileName`, `setupAiUI`) + **barra de progresso do OCR** (`ocrProgress`, `OCR_FASES`, `ocrStatus`) |
 | `js/idb.js` | IndexedDB (`idb`/`idbPut`/`idbGet`/`idbDel`), `compressImage`, `blobToDataUrl`, `saveThumb`, `getPhotoBlob` (camada de storage local) |
-| `js/drive-core.js` | Drive: auth/token (`gdGetToken`, `GD_SCOPE`), pastas/upload (`gdEnsureFolder`/`gdEnsureMonthFolder`/`gdUpload`), exclusão+fila (`gdDeleteFile`/`flushGdDeletions`/`purgeEntryPhoto`), flush de pendentes, `setupGDriveUI`, conexão (`gdConnectFlow`/`maybePromptDrive`) |
+| `js/drive-core.js` | Drive: auth/token (`gdGetToken`, `GD_SCOPE`), pastas/upload (`gdEnsureFolder`/`gdEnsureMonthFolder`/**`gdEnsureReportFolder`**/`gdUpload`, `referenteFolderName`/`sanitizeFolderName`), exclusão+fila (`gdDeleteFile`/`flushGdDeletions`/`purgeEntryPhoto`), flush de pendentes, `setupGDriveUI`, conexão (`gdConnectFlow`/`maybePromptDrive`) |
 | `js/drive-scan.js` | Varredura (`scanDriveForReceipts`/`gdListReceipts`/`knownDriveIds`), overlay `scanProgress` (`open(title,icon)`/`status`/`log`/`done`/`close`), pendentes (`renderPending`/`openPendingEntry`/`dismissPending`/`retryPendingOcr`) |
 | `js/main.js` | tema, `bindField`, **fechamento por tabela** (`closeMonthFlow`/`closeTable`/`archiveMonthToDrive`/`chooseCloseTable`), `copyBankData`, `init` (registra todos os `setup*`), SW, conectividade — **carregado por último** |
 | `index.html` | 3 telas (`#view-lancamentos/-relatorios/-config`); a de Lançamentos tem **uma aba por módulo** (`#tab-{key}`, `.report-panel`) + seletor `.rtab`; a de Relatórios mensais tem **abas por tipo** (`#hist-tab-{key}`, `.hist-panel`) + seletor `.htab`; carrega `lib/*` e depois `js/*` na ordem (**`js/modules.js` primeiro**). |
@@ -99,7 +99,7 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
 - **`tests/logic.html`** — funções puras com fixtures: `computeSantanderPeriodo`,
   `validateBeforeExport` (regras por módulo), `mergeDocs`/`mergeTable` last-write-wins + lápides,
   `histBelongsTo`, **`docForModule`**, **`resolveExport`**, `fileBaseOf`/`isGeneratedArtifact`,
-  `filteredDoc` e a **migração de estado legado** (raiz → `perfis`). `RESULT: PASS/FAIL`.
+  `filteredDoc`, **`referenteFolderName`**/`sanitizeFolderName` e a **migração de estado legado** (raiz → `perfis`). `RESULT: PASS/FAIL`.
 - **`tests/xlsx.html`** — gera os `.xlsx` DE VERDADE (2 blocos, 1 bloco com `removeRows`, os dois
   com expansão de linhas, e a Prestação de Contas), descompacta e confere linhas, fórmulas,
   `mergeCells` (contagem + refs válidas) e `dataValidation`. É o teste que pega um arquivo que
@@ -162,6 +162,17 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
 - **Comprovantes vão p/ subpastas `{Ano}/{Mês}`** dentro da raiz **da tabela** (resolvidas por
   nome, idempotente). O mês é o **`reportMonth`** (campo "Mês de referência", `reportFolderDateISO`)
   — todo o relatório cai na MESMA pasta; vazio → pasta da **data do lançamento**.
+- **Exceção: módulos com `pastaPorReferente: true`** (hoje só a **SA Ambiental**, que fecha **por
+  voo**, não por mês) usam **UMA subpasta com o texto de "Reembolso Referente à"** dentro da raiz,
+  em vez de `{Ano}/{Mês}`. Quem decide é **`gdEnsureReportFolder(dateISO, tabela, referente)`**
+  (chamada por `gdUpload`, 5º parâmetro opcional = referente explícito; sem ele lê
+  `state.perfis[tabela].referente`). `referenteFolderName` devolve `''` fora desses módulos ou
+  quando o campo está vazio → cai no `{Ano}/{Mês}` de sempre. `sanitizeFolderName` troca barra
+  invertida, barra, aspas simples/duplas e quebras de linha por espaço (o nome entra entre aspas
+  simples na query da API do Drive) e corta em 120 chars.
+  O painel da SA no `index.html` **não tem** "Mês de referência" (o campo Referente à faz o
+  papel); `closeTable` **exige** o campo preenchido nesses módulos e `archiveMonthToDrive` nomeia
+  o zip com ele (`NFs - {Referente}.zip`) em vez de `Mês Ano`.
 - **Excluir lançamento apaga o comprovante no Drive** — em `deleteEntry` (modal) **e**
   `quickDelete` (lista), via `purgeEntryPhoto`. Conectado → `gdDeleteFile`; senão fila `-gddel-v1`
   → `flushGdDeletions` ao reconectar. Limpa `thumb_<id>` e o pendente `p_<id>`.

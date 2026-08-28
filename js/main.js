@@ -76,7 +76,12 @@ async function closeMonthFlow() {
 async function closeTable(tabela) {
   const mod = modOf(tabela);
   if (!(state[tabela] || []).length) { toast('O relatório de ' + mod.tabLabel + ' está vazio.'); return; }
-  if (!confirm('Fechar e arquivar o relatório de ' + mod.tabLabel + '?\nOs lançamentos vão para o Histórico e os arquivos do mês são gravados no Drive.')) return;
+  if (mod.pastaPorReferente && !(perfilDe(tabela).referente || '').trim()) {
+    alert('Preencha "Reembolso Referente à" antes de fechar: é o nome da pasta deste fechamento no Drive.');
+    const el = $('referente-' + tabela); if (el) el.focus();
+    return;
+  }
+  if (!confirm('Fechar e arquivar o relatório de ' + mod.tabLabel + '?\nOs lançamentos vão para o Histórico e os arquivos ' + (mod.pastaPorReferente ? 'deste fechamento' : 'do mês') + ' são gravados no Drive.')) return;
   const sections = mapPorTabela((t) => t === tabela);
   if (!validateBeforeExport(state, sections)) return;
 
@@ -114,7 +119,7 @@ async function closeTable(tabela) {
   touchProfile(); touchDoc();
   saveState();
   render();
-  toast(mod.tabLabel + ': mês arquivado.');
+  toast(mod.tabLabel + ': ' + (mod.pastaPorReferente ? 'fechamento' : 'mês') + ' arquivado.');
 }
 
 /* Compacta os comprovantes da tabela num único .zip e grava .zip + Excel + PDF do mês
@@ -135,10 +140,11 @@ async function archiveMonthToDrive(tabela, snapshot, incluirAnexos) {
   const m = /^(\d{4})-(\d{2})/.exec(dateISO);
   const mesNome = m ? MESES[parseInt(m[2], 10) - 1] : '';
   const ano = m ? m[1] : '';
-  const baseNome = (mesNome && ano) ? mesNome + ' ' + ano : monthLabelFor(snapshot);
-
   const mod = modOf(tabela);
   const LBL = mod.tabLabel;
+  // SA Ambiental: pasta e nome dos arquivos saem do "Referente à"; nos demais, Mês Ano
+  const refPasta = referenteFolderName(tabela, (snapshot || {}).referente);
+  const baseNome = refPasta || ((mesNome && ano) ? mesNome + ' ' + ano : monthLabelFor(snapshot));
   const D = docForModule(snapshot, tabela);   // perfil do módulo achatado p/ os builders
   scanProgress.open('Arquivando ' + LBL, '📦');
   try {
@@ -160,7 +166,7 @@ async function archiveMonthToDrive(tabela, snapshot, incluirAnexos) {
     if (nZip) {
       scanProgress.log('Compactando ' + nZip + ' comprovante(s)…', 'info');
       const zipBytes = fflate.zipSync(files);
-      await gdUpload(new Blob([zipBytes], { type: 'application/zip' }), 'NFs - ' + baseNome + '.zip', dateISO, tabela);
+      await gdUpload(new Blob([zipBytes], { type: 'application/zip' }), 'NFs - ' + baseNome + '.zip', dateISO, tabela, D.referente);
       scanProgress.log('✓ NFs - ' + escapeHtml(baseNome) + '.zip enviado', 'ok');
     } else {
       scanProgress.log('Sem comprovantes para compactar.', 'info');
@@ -173,17 +179,17 @@ async function archiveMonthToDrive(tabela, snapshot, incluirAnexos) {
     const xlsxBytes = await buildXlsxFor(D, mod);
     const xlsxBlob = new Blob([xlsxBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const xlsxName = fileBaseOf(D, mod) + '.xlsx';
-    await gdUpload(xlsxBlob, xlsxName, dateISO, tabela);
+    await gdUpload(xlsxBlob, xlsxName, dateISO, tabela, D.referente);
     scanProgress.log('✓ Excel enviado', 'ok');
 
     // 3) PDF do mês (com comprovantes anexados)
     scanProgress.status('Gerando PDF…');
     const pdfBlob = await generatePdfBlob(D, sections, mod, incluirAnexos);
     const pdfName = fileBaseOf(D, mod) + '.pdf';
-    await gdUpload(pdfBlob, pdfName, dateISO, tabela);
+    await gdUpload(pdfBlob, pdfName, dateISO, tabela, D.referente);
     scanProgress.log('✓ PDF enviado', 'ok');
 
-    scanProgress.done('Arquivo do mês gravado no Drive.');
+    scanProgress.done('Arquivos do fechamento gravados no Drive.');
   } catch (e) {
     if (e && e.message === 'cancelado') { scanProgress.close(); throw e; }
     console.error('Falha ao arquivar no Drive', e);

@@ -3,6 +3,26 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v65 — SA Ambiental: pasta do Drive pelo "Referente à" (fechamento por voo)
+
+- **`pastaPorReferente: true` no módulo `sagestao`** (`js/modules.js`). Os fechamentos da SA não são
+  mensais e sim **por voo**, então a subpasta dos comprovantes no Drive passa a levar o texto do
+  campo **"Reembolso Referente à"** em vez de `{Ano}/{Mês}`. Reembolso e Cartão Santander (Soma)
+  continuam exatamente como estavam.
+- **`gdEnsureReportFolder(dateISO, tabela, referente)`** (js/drive-core.js) decide a pasta e passou a
+  ser o caminho único de `gdUpload` (que ganhou um 5º parâmetro opcional com o referente explícito —
+  usado no fechamento, para o snapshot mandar o valor congelado). `referenteFolderName` devolve `''`
+  fora dos módulos marcados ou com o campo vazio, caindo no `{Ano}/{Mês}` de sempre;
+  `sanitizeFolderName` limpa `\ / ' "` e quebras de linha (o nome vai entre aspas simples na query da
+  API do Drive) e corta em 120 chars.
+- **`closeTable` exige o "Referente à"** nesses módulos (é o nome da pasta) e
+  **`archiveMonthToDrive` nomeia o zip com ele** (`NFs - {Referente}.zip`); os textos de confirmação
+  e o toast final falam "fechamento" em vez de "mês".
+- **Painel da SA sem "Mês de referência"** (`index.html`): o campo virava ruído, já que a pasta sai do
+  Referente à. Placeholder e nota do campo explicam que ele nomeia a pasta do Drive.
+- `tests/logic.html`: casos novos p/ `sanitizeFolderName`/`referenteFolderName` (SA por referente,
+  Soma/Cartão sem efeito, campo vazio → fallback). Os 3 harnesses passam.
+
 ## v63 — Razao social da SA corrigida
 
 - **"SA Gestão de Serviços Especializados S/A" → "SA Gestão de Serviços Especializados Ltda"**

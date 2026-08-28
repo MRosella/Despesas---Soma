@@ -85,6 +85,9 @@ const MODULOS = [
     accent: '#407830', accentDark: '#2c5a21',
     tint: '#e4efdb', tintInk: '#3f6b23', soft: '#f1f7ec',
     driveRoot: 'Comprovantes - SA Ambiental',
+    /* fechamento por VOO, nao por mes: a subpasta dos comprovantes no Drive leva o
+       texto de "Reembolso Referente a" em vez de Ano/Mes (ver gdEnsureReportFolder) */
+    pastaPorReferente: true,
     fileBase: 'Relatorio_Despesas_SA',
     shareTitle: 'Relatório de Despesas - SA Ambiental',
     layout: 'reembolso',

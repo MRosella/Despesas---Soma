@@ -165,6 +165,19 @@ try {
   chk('sa_accent_verde', (gg > rr && gg > bb) ? 'verde' : 'nao-verde', 'verde');
   chk('sa_pdf_verde', MOD.sagestao.pdf.accent.toLowerCase(), sa);
   chk('sa_excel_troca_vermelho', MOD.sagestao.excelColors['B3262D'].toLowerCase(), sa.slice(1));
+
+  // pasta do Drive por "Referente à" (SA Ambiental fecha por voo, não por mês)
+  chk('sanitize_pasta', sanitizeFolderName("  Voo 'A'/B" + String.fromCharCode(92) + 'C  "x"  '), 'Voo A B C x');
+  chk('sanitize_vazio', sanitizeFolderName(null), '');
+  state.perfis.sagestao.referente = 'Voo Fazenda Boa Vista';
+  state.perfis.reembolso.referente = 'Viagem SP';
+  chk('pasta_referente_sa', referenteFolderName('sagestao'), 'Voo Fazenda Boa Vista');
+  chk('pasta_referente_arg', referenteFolderName('sagestao', 'Voo 02/09'), 'Voo 02 09');
+  chk('pasta_referente_soma', referenteFolderName('reembolso'), '');   // Soma continua por Ano/Mês
+  chk('pasta_referente_cartao', referenteFolderName('alelo'), '');
+  state.perfis.sagestao.referente = '';
+  chk('pasta_referente_sa_vazio', referenteFolderName('sagestao'), '');   // sem texto -> cai no Ano/Mês
+  chk('flag_por_referente', String(!!MOD.sagestao.pastaPorReferente) + String(!!MOD.reembolso.pastaPorReferente), 'truefalse');
 } catch(e){ fail++; out.push('THREW '+e.message); }
 
 out.push(fail ? 'RESULT: FAIL ('+fail+')' : 'RESULT: PASS');
