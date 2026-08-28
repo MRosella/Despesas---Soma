@@ -114,7 +114,7 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
 ## Pontos de atenção (fatos de arquitetura)
 - **TRÊS módulos** (`js/modules.js`): `reembolso` (Soma Urbanismo S/A), `alelo` (Cartão Santander
   da Soma — chave estrutural histórica, **não renomear**) e `sagestao` (SA Gestão de Serviços
-  Especializados S/A, rótulo **SA Ambiental**). Um 4º = **uma entrada no registry** + copiar um
+  Especializados Ltda, rótulo **SA Ambiental**). Um 4º = **uma entrada no registry** + copiar um
   bloco de painel no `index.html` (os ids seguem `-{key}`) + a aba do histórico + `sw.js`.
 - **Home em ABAS por relatório** (`setupReportTabs`): painéis `#tab-{key}` (`.report-panel.active`),
   seletor `.rtab` (rolável na horizontal, com **badge** `n · total` em `#rtab-badge-{key}`).

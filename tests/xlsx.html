@@ -77,7 +77,7 @@ function refsForaDoLimite(w, maxRow){
                 referente:'Demandas operacionais', bank:{nome:'N',cpf:'C',banco:'B',agencia:'A',conta:'CT',pix:'P'} };
     var w = abrir(await buildXlsx(dSA, MOD.sagestao));
 
-    chk('sa_empresa', w.txt('C4'), 'SA Gestão de Serviços Especializados S/A');
+    chk('sa_empresa', w.txt('C4'), 'SA Gestão de Serviços Especializados Ltda');
     chk('sa_funcionario', w.txt('C5'), 'Murilo Rosella');
     chk('sa_rotulo_prestador', w.txt('B5'), 'Prestador');
     chk('sa_titulo_tabela', w.txt('B7'), 'DESPESAS PARA REEMBOLSO');

@@ -3,6 +3,15 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v63 — Razao social da SA corrigida
+
+- **"SA Gestão de Serviços Especializados S/A" → "SA Gestão de Serviços Especializados Ltda"**
+  (`MODULOS.sagestao.empresa` em `js/modules.js`). O nome sai na célula **C4** do Excel e no
+  cabeçalho do PDF, então a correção alcança os dois pelo registry, sem tocar em `excel.js`/`pdf.js`.
+- Também atualizados o texto fixo "Empresa: …" do painel da SA (`index.html`) e a asserção
+  `sa_empresa` de `tests/xlsx.html`. A chave do módulo segue `sagestao` e o rótulo visível segue
+  **SA Ambiental** — mudou só a razão social.
+
 ## v61 — SA Ambiental: sem bloco de assinaturas e campo "Prestador"
 
 - **Duas propriedades novas no registry** (`js/modules.js`, só na `sagestao`), em vez de `if`s

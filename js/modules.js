@@ -78,7 +78,7 @@ const MODULOS = [
     key: 'sagestao',
     tabLabel: 'SA Ambiental',
     label: 'Despesas SA Ambiental',
-    empresa: 'SA Gestão de Serviços Especializados S/A',
+    empresa: 'SA Gestão de Serviços Especializados Ltda',
     logo: 'assets/sa-logo.png',
     /* verdes AMOSTRADOS do assets/sa-logo.png: folha #407830, folha clara #488840,
        folha oliva #789838 (o vinho #600810 da "mão" fica de fora da UI de propósito) */
