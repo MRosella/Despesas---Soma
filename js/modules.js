@@ -102,6 +102,8 @@ const MODULOS = [
     rotuloFuncionario: 'Prestador',
     /* sem bloco de assinaturas no rodape do relatorio (Excel e PDF) */
     assinaturas: false,
+    /* sem o bloco "Observacoes" (limites por categoria + cupons) no rodape do PDF */
+    observacoes: false,
     assinante: 'Murilo Rosella', assinanteCargo: 'Piloto de Aeronaves',
     aprovador: 'Gustavo Barbeitos da Gama', aprovadorCargo: 'Presidente',
     /* o modelo .xlsx é o mesmo da Soma: trocamos o logo do cabeçalho

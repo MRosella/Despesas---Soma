@@ -108,11 +108,12 @@ function buildPrint(src, sections, mod) {
       <tr><td class="lab">CPF:</td><td>${escapeHtml(b.cpf)}</td><td class="lab">Agência:</td><td>${escapeHtml(b.agencia)}</td></tr>
       <tr><td class="lab">Conta:</td><td>${escapeHtml(b.conta)}</td><td class="lab">Chave Pix:</td><td>${escapeHtml(b.pix)}</td></tr>
     </table>
+    ${mod.observacoes === false ? '' : `
     <div class="p-obs">
       <b>Observações:</b> ${limitsObsText()}
       Enviar junto a este relatório os cupons das despesas. Em caso de gasto reembolsável,
       informar os dados da conta bancária para o recebimento.
-    </div>
+    </div>`}
     ${buildSignatureBlock(mod)}`;
 }
 
