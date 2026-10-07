@@ -538,6 +538,17 @@
         <label for="m-valor">Valor (R$)</label>
         <input type="text" id="m-valor" inputmode="decimal" placeholder="0,00" />
       </div>
+      <div class="field-row" id="m-dolar-field" style="display:none">
+        <div class="field">
+          <label for="m-valorusd">Valor em dólar (US$)</label>
+          <input type="text" id="m-valorusd" inputmode="decimal" placeholder="0,00" />
+        </div>
+        <div class="field">
+          <label for="m-cotacao">Cotação do dia (R$)</label>
+          <input type="text" id="m-cotacao" inputmode="decimal" placeholder="0,0000" />
+        </div>
+      </div>
+      <p class="hint" id="m-dolar-hint" style="display:none; margin-top:-6px">Gasto em dólar? Preencha os dois campos e o valor em R$ é calculado sozinho.</p>
       <div class="field">
         <label>Comprovante (Google Drive)</label>
         <input type="file" id="m-foto-file" accept="image/*" capture="environment" style="display:none" />

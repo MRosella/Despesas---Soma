@@ -152,6 +152,67 @@ function refsForaDoLimite(w, maxRow){
     chk('logo_ausente_nao_quebra', w4.txt('C9'), 'SA 0');
     chk('logo_ausente_mantem_original', dimPng(w4.files['xl/media/image3.png']), dimPng(antes['xl/media/image3.png']));
 
+    // ---------- Reembolso com gasto em DÓLAR (colunas E=US$, F=Cotação, valor vai p/ G) ----------
+    var rUsd = lanc(3,'R'); rUsd[1].valorUSD = 100; rUsd[1].cotacao = 5.4321; rUsd[1].valor = 543.21;
+    var dUsd = { reembolso: rUsd, alelo: lanc(2,'A'), funcionario:'Murilo Rosella', dataSolicitacao:'2026-07-31',
+                 referente:'Viagem EUA', bank:{nome:'N',cpf:'C',banco:'B',agencia:'A',conta:'CT',pix:'P'} };
+    var u = abrir(await buildXlsx(dUsd, MOD.reembolso));
+    chk('usd_cab_us', u.txt('E8'), 'VALOR (US$)');
+    chk('usd_cab_cot', u.txt('F8'), 'COTAÇÃO');
+    chk('usd_cab_brl', u.txt('G8'), 'VALOR (R$)');
+    chk('usd_valor_us', u.val('E10'), '100');
+    chk('usd_cotacao', u.val('F10'), '5.4321');
+    chk('usd_valor_brl', u.val('G10'), '543.21');
+    chk('usd_linha_sem_dolar_vazia', u.val('E9'), '');
+    chk('usd_subtotal1', u.form('G16'), 'SUM(G9:G15)');
+    chk('usd_subtotal2', u.form('G27'), 'SUM(G20:G26)');
+    chk('usd_total', u.form('G29'), 'G16+G27');
+    chk('usd_data_solicitacao_em_g4', !!u.val('G4'), true);
+    chk('usd_referente_em_g5', u.txt('G5'), 'Viagem EUA');
+    chk('usd_banco', u.txt('C33') + '|' + u.txt('G33') + '|' + u.txt('G35'), 'N|B|P');
+    chk('usd_merge_titulo', u.merges().indexOf('B7:G7') >= 0, true);
+    chk('usd_merge_subtotal', u.merges().indexOf('B16:F16') >= 0 && u.merges().indexOf('B27:F27') >= 0, true);
+    chk('usd_merge_total', u.merges().indexOf('B29:F29') >= 0, true);
+    chk('usd_merge_count_bate', u.mergeCount(), String(u.merges().length));
+    chk('usd_dv_valor_deslocada', u.sqrefs().some(function(s){ return /G9:G17/.test(s); }), true);
+    chk('usd_dimensao', u.dim(), 'A1:T41');
+    chk('usd_refs_validas', refsForaDoLimite(u, 41).join(','), '');
+    // merges não podem se sobrepor (Excel pede "reparo")
+    (function(){
+      var cel = {}, dup = '';
+      u.merges().forEach(function(ref){
+        var p = ref.split(':'), c1 = colIdx(p[0].match(/[A-Z]+/)[0]), c2 = colIdx(p[1].match(/[A-Z]+/)[0]);
+        var r1 = parseInt(p[0].match(/\d+/)[0],10), r2 = parseInt(p[1].match(/\d+/)[0],10);
+        for (var r=r1;r<=r2;r++) for (var c=c1;c<=c2;c++){ var k=c+':'+r; if (cel[k]) dup += ref+' '; cel[k]=1; }
+      });
+      chk('usd_merges_sem_sobreposicao', dup, '');
+    })();
+    // células de cada linha em ordem crescente de coluna (exigência do formato)
+    (function(){
+      var NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+      var d = new DOMParser().parseFromString(u.xml, 'application/xml'), ruim = '';
+      Array.from(d.getElementsByTagNameNS(NS,'row')).forEach(function(r){
+        var last = 0;
+        Array.from(r.getElementsByTagNameNS(NS,'c')).forEach(function(c){
+          var ci = colIdx(c.getAttribute('r').match(/[A-Z]+/)[0]); if (ci <= last) ruim += c.getAttribute('r') + ' '; last = ci;
+        });
+      });
+      chk('usd_celulas_em_ordem', ruim, '');
+      var cols = Array.from(d.getElementsByTagNameNS(NS,'col')).map(function(c){ return c.getAttribute('min')+'-'+c.getAttribute('max'); }).join(',');
+      chk('usd_colunas', cols, '1-1,2-2,3-3,4-4,5-6,7-7,8-16384');
+    })();
+    var stylesUsd = new TextDecoder().decode(u.files['xl/styles.xml']);
+    chk('usd_styles_xml_valido', new DOMParser().parseFromString(stylesUsd, 'application/xml').getElementsByTagName('parsererror').length, 0);
+    chk('usd_styles_count_bate', (function(){
+      var sd = new DOMParser().parseFromString(stylesUsd, 'application/xml');
+      var cx = sd.getElementsByTagName('cellXfs')[0], nf = sd.getElementsByTagName('numFmts')[0];
+      return cx.getAttribute('count') === String(cx.getElementsByTagName('xf').length) &&
+             nf.getAttribute('count') === String(nf.getElementsByTagName('numFmt').length);
+    })(), true);
+    chk('usd_desenhos_deslocados', /<xdr:col>13<\/xdr:col>/.test(new TextDecoder().decode(u.files['xl/drawings/drawing1.xml'])), true);
+    // sem nenhum dólar o layout fica idêntico ao de antes
+    chk('sem_usd_layout_original', v.txt('E8') === null || v.val('E8') === '5', true);
+
     // ---------- Prestação de Contas (cartão) ----------
     var p = abrir(await buildPrestacaoXlsx({ alelo:[{data:'2026-07-05',estabelecimento:'Posto X',descricao:'Combustível',valor:150,justificativa:'Viagem'}], history:[] }, MOD.alelo));
     chk('cartao_nome', p.txt('E4'), MOD.alelo.assinante);

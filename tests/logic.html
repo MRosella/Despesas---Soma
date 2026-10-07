@@ -178,6 +178,19 @@ try {
   state.perfis.sagestao.referente = '';
   chk('pasta_referente_sa_vazio', referenteFolderName('sagestao'), '');   // sem texto -> cai no Ano/Mês
   chk('flag_por_referente', String(!!MOD.sagestao.pastaPorReferente) + String(!!MOD.reembolso.pastaPorReferente), 'truefalse');
+
+  // ---- dólar (só o reembolso da Soma tem o campo) ----
+  chk('dolar_so_reembolso', TABELAS.filter(function(t){ return !!(MOD[t].campos || {}).dolar; }).join(','), 'reembolso');
+  chk('parse_cotacao', parseDecimal('5,4321', 4), 5.4321);
+  chk('parse_cotacao_milhar', parseDecimal('1.234,5', 4), 1234.5);
+  chk('parse_cotacao_vazia', parseDecimal('', 4), 0);
+  chk('tem_dolar', String(temDolar({ valorUSD: 10 })) + String(temDolar({ valorUSD: 0 })) + String(temDolar(null)), 'truefalsefalse');
+  chk('listas_tem_dolar', String(listasTemDolar([[{ valor: 1 }], [{ valorUSD: 2 }]])) + String(listasTemDolar([[{ valor: 1 }], []])), 'truefalse');
+  chk('format_usd', formatUSD(1234.5), 'US$ 1.234,50');
+  var cp = copiaCamposModulo('reembolso', { valorUSD: 50, cotacao: 5.1 }, {});
+  chk('copia_dolar_reembolso', cp.valorUSD + '|' + cp.cotacao, '50|5.1');
+  chk('nao_copia_dolar_sa', copiaCamposModulo('sagestao', { valorUSD: 50, cotacao: 5.1 }, {}).valorUSD, 'undefined');
+  chk('copia_extras_cartao', copiaCamposModulo('alelo', { estabelecimento: 'X', justificativa: 'Y' }, {}).estabelecimento, 'X');
 } catch(e){ fail++; out.push('THREW '+e.message); }
 
 out.push(fail ? 'RESULT: FAIL ('+fail+')' : 'RESULT: PASS');

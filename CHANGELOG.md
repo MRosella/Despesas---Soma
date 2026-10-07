@@ -3,6 +3,18 @@
 Histórico versão-a-versão (o número é o `CACHE`/`APP_VERSION`). Mantido fora do `CLAUDE.md` para
 não gastar tokens de contexto toda sessão — consulte aqui quando precisar do "porquê" histórico.
 
+## v67 — Reembolso Soma: gasto em dólar (US$ + cotação)
+
+- Modal do **Reembolso** ganha "Valor em dólar (US$)" e "Cotação do dia (R$)" (`mod.campos.dolar`,
+  só no módulo `reembolso`). Com os dois preenchidos, o Valor (R$) é calculado (`recalcValorDolar`).
+  Gravados em `entry.valorUSD`/`entry.cotacao` (0 = lançamento em reais). Cotação com 4 casas
+  (`maskDecimalEl`/`parseDecimal`). Lista mostra "US$ … × cotação" sob o valor.
+- **Excel**: se algum lançamento exportado tem dólar, `aplicaColunasDolar` abre as colunas
+  E = VALOR (US$) e F = COTAÇÃO (`sheetTools.insertCols`, que desloca células, fórmulas, merges,
+  validações e desenhos); o valor em R$ vai para G. Formatos novos em `styles.xml`
+  (`addDolarStyles`). Sem dólar, a planilha sai idêntica à de antes.
+- **PDF**: `buildPrintTable(..., dolar)` acrescenta as colunas US$ e Cotação (`.p-tbl.dolar`).
+
 ## v66 — SA Ambiental: {Ano}/{Mês}/{Referente à}
 
 - A pasta do "Referente à" (v65) passa a ser **subpasta do mês**, não da raiz: os arquivos ficam em

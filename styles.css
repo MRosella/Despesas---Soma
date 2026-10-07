@@ -189,6 +189,8 @@ main { padding: 14px; max-width: 720px; margin: 0 auto; }
 /* ---------- Form fields ---------- */
 .field { margin-bottom: 12px; }
 .field:last-child { margin-bottom: 0; }
+.field-row { display: flex; gap: 10px; margin-bottom: 12px; }
+.field-row .field { flex: 1; min-width: 0; margin-bottom: 0; }
 label { display: block; font-size: .78rem; color: var(--brown); font-weight: 600; margin-bottom: 5px; }
 input, select, textarea {
   width: 100%;
@@ -216,6 +218,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--orange); bo
 .entry .e-desc { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .entry .e-meta { font-size: .76rem; color: var(--muted); margin-top: 2px; }
 .entry .e-val { font-weight: 700; color: var(--brown); white-space: nowrap; }
+.entry .e-usd { font-weight: 500; font-size: .72rem; color: var(--muted, #8a7a72); text-align: right; margin-top: 2px; }
 .entry .cat-tag {
   display: inline-flex; align-items: center; gap: 5px; font-size: .68rem; padding: 1px 8px 1px 2px; border-radius: 11px;
   background: var(--mod-tint, #f5e9dc); color: var(--mod-tint-ink, #a35a10); margin-right: 6px;
@@ -660,6 +663,13 @@ details.card[open] summary .chev { transform: rotate(180deg); }
 #print-root table.p-tbl .c-data { text-align: center; white-space: nowrap; width: 14%; }
 #print-root table.p-tbl .c-cat { text-align: center; width: 26%; }
 #print-root table.p-tbl .c-val { text-align: right; white-space: nowrap; width: 19%; }
+/* com gasto em dólar: mais 2 colunas (US$ e Cotação) — as demais encolhem p/ caber no A4 */
+#print-root table.p-tbl.dolar { font-size: 12px; }
+#print-root table.p-tbl.dolar .c-data { width: 12%; }
+#print-root table.p-tbl.dolar .c-cat { width: 16%; }
+#print-root table.p-tbl.dolar .c-usd { text-align: right; white-space: nowrap; width: 13%; }
+#print-root table.p-tbl.dolar .c-cot { text-align: right; white-space: nowrap; width: 11%; }
+#print-root table.p-tbl.dolar .c-val { width: 15%; }
 #print-root tr.p-subtotal td { font-weight: 700; color: var(--p-ink); background: var(--p-subtotal); }
 #print-root tr.p-subtotal td.sub-lbl { text-align: right; }
 #print-root tr.p-subtotal td.sub-val { text-align: right; }

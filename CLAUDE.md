@@ -215,6 +215,12 @@ recrie a cada sessão; scripts **clássicos** carregam de `file://` — por isso
   modal mostra (`toggleCamposModulo`), o que `saveEntry` grava, o que `quickDuplicate`/`repeatLast`/
   `duplicateInModal` **copiam** e o que a varredura do Drive preenche. Hoje só o cartão os usa
   (alimentam C e K do Excel). `ocrReceipt` retorna `establishment`; `fillFromOcr` preenche se visível.
+- **Gasto em dólar** (`mod.campos.dolar`, hoje só o `reembolso`): `entry.valorUSD` + `entry.cotacao`
+  (4 casas); o `valor` (R$) continua sendo a fonte de verdade de somas/limites — o modal só o
+  preenche com US$ × cotação (`recalcValorDolar`). `copiaCamposModulo` copia extras + dólar
+  (duplicar/repetir). Export: se **algum** lançamento das seções tem dólar (`listasTemDolar`),
+  `aplicaColunasDolar` (fim do `buildXlsx`) insere E=US$/F=Cotação com `sheetTools.insertCols`
+  (o R$ vai p/ G, cabeçalho/banco ganham merge D:F) e o PDF usa `.p-tbl.dolar`. Sem dólar, nada muda.
 - **Rodapé de assinaturas e rótulo do nome vêm do módulo**: `mod.assinaturas === false` faz
   `buildSignatureBlock` devolver `''` (a SA Ambiental não imprime assinaturas nem a linha "Data:";
   o PDF termina nas Observações). `mod.rotuloFuncionario` troca o rótulo do campo do nome —

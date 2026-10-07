@@ -18,6 +18,8 @@ function openModal(tabela, id, prefill) {
   $('m-valor').value = entry.valor ? formatMoneyInput(entry.valor) : '';
   if ($('m-estabelecimento')) $('m-estabelecimento').value = entry.estabelecimento || '';
   if ($('m-justificativa')) $('m-justificativa').value = entry.justificativa || '';
+  $('m-valorusd').value = entry.valorUSD ? formatMoneyInput(entry.valorUSD) : '';
+  $('m-cotacao').value = entry.cotacao ? formatDecimalInput(entry.cotacao, 4) : '';
   toggleCamposModulo(tabela);
   updateCatHint();
 
@@ -38,6 +40,29 @@ function toggleCamposModulo(tabela) {
     const f = $('m-' + k + '-field');
     if (f) f.style.display = campos[k] ? '' : 'none';
   }
+  $('m-dolar-field').style.display = campos.dolar ? '' : 'none';
+  $('m-dolar-hint').style.display = campos.dolar ? '' : 'none';
+}
+
+/* Copia os campos próprios do módulo (extras + dólar) de um lançamento para outro */
+function copiaCamposModulo(tabela, de, para) {
+  const campos = (MOD[tabela] || {}).campos || {};
+  for (const k of CAMPOS_EXTRA) if (campos[k]) para[k] = de[k] || '';
+  if (campos.dolar && temDolar(de)) { para.valorUSD = de.valorUSD; para.cotacao = de.cotacao || 0; }
+  return para;
+}
+
+/* US$ × cotação → preenche o Valor (R$). Só calcula com os dois campos preenchidos. */
+function recalcValorDolar() {
+  const usd = parseMoney($('m-valorusd').value);
+  const cot = parseDecimal($('m-cotacao').value, 4);
+  if (usd > 0 && cot > 0) $('m-valor').value = formatMoneyInput(Math.round(usd * cot * 100) / 100);
+}
+function setupDolarFields() {
+  maskCurrencyEl($('m-valorusd'));
+  maskDecimalEl($('m-cotacao'), 4);
+  $('m-valorusd').addEventListener('input', recalcValorDolar);
+  $('m-cotacao').addEventListener('input', recalcValorDolar);
 }
 
 /* ---- comprovante no modal ---- */
@@ -122,8 +147,7 @@ function repeatLast(tabela) {
   if (!list.length) { toast('Nenhum lançamento para repetir nesta seção.'); return; }
   const last = list[list.length - 1];
   const prefill = { data: todayISO(), descricao: last.descricao, categoria: last.categoria, valor: last.valor };
-  const campos = (MOD[tabela] || {}).campos || {};
-  for (const k of CAMPOS_EXTRA) if (campos[k]) prefill[k] = last[k] || '';
+  copiaCamposModulo(tabela, last, prefill);
   openModal(tabela, null, prefill);
 }
 
@@ -138,6 +162,10 @@ function duplicateInModal() {
   };
   const campos = (MOD[tabela] || {}).campos || {};
   for (const k of CAMPOS_EXTRA) if (campos[k]) prefill[k] = (($('m-' + k) || {}).value || '').trim();
+  if (campos.dolar) {
+    prefill.valorUSD = parseMoney($('m-valorusd').value);
+    prefill.cotacao = parseDecimal($('m-cotacao').value, 4);
+  }
   openModal(tabela, null, prefill);
 }
 
@@ -152,6 +180,19 @@ function maskCurrencyEl(el) {
     const digits = el.value.replace(/\D/g, '');
     if (!digits) { el.value = ''; return; }
     el.value = (parseInt(digits, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  });
+}
+function formatDecimalInput(n, casas) {
+  return (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+}
+/* como maskCurrencyEl, mas com `casas` decimais (cotação do dólar: 5,4321) */
+function maskDecimalEl(el, casas) {
+  if (!el) return;
+  el.setAttribute('inputmode', 'numeric');
+  el.addEventListener('input', () => {
+    const digits = el.value.replace(/\D/g, '');
+    if (!digits) { el.value = ''; return; }
+    el.value = formatDecimalInput(parseInt(digits, 10) / Math.pow(10, casas), casas);
   });
 }
 function maskCpfEl(el) {
@@ -194,6 +235,14 @@ async function saveEntry() {
   const campos = (MOD[tabela] || {}).campos || {};
   const extras = {};
   for (const k of CAMPOS_EXTRA) if (campos[k]) extras[k] = (($('m-' + k) || {}).value || '').trim();
+  if (campos.dolar) {
+    const usd = parseMoney($('m-valorusd').value);
+    const cot = parseDecimal($('m-cotacao').value, 4);
+    if (usd > 0 && !cot) { toast('Informe a cotação do dólar do dia.'); return; }
+    if (!usd && cot > 0) { toast('Informe o valor em dólar (ou apague a cotação).'); return; }
+    extras.valorUSD = usd || 0;     // 0 = lançamento em reais (limpa um dólar antigo ao editar)
+    extras.cotacao = usd ? cot : 0;
+  }
 
   const now = Date.now();
   let entry;

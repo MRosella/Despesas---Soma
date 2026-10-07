@@ -30,7 +30,9 @@ const MODULOS = [
     tituloPdf: 'RELATÓRIO DE DESPESAS PARA REEMBOLSO',
     tituloTabela: 'DESPESAS PARA REEMBOLSO',
     subtotalLabel: 'SUBTOTAL DESPESAS PARA REEMBOLSO:',
-    campos: { estabelecimento: false, justificativa: false },
+    /* dolar: valor em US$ + cotação do dia (o R$ vira US$ × cotação). Quando algum
+       lançamento exportado tem dólar, o Excel/PDF ganham as colunas US$ e Cotação. */
+    campos: { estabelecimento: false, justificativa: false, dolar: true },
     obrigatorios: ['data', 'valor', 'categoria'],
     bank: true, periodo: false,
     grupoExport: 'soma',

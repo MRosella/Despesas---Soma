@@ -41,29 +41,34 @@ function buildSignatureBlock(mod) {
     <div class="p-sign-date">Data: ${fmtDateBR(todayISO())}</div>`;
 }
 
-function buildPrintTable(title, list, minRows, subLabel) {
+/* `dolar` = o relatório tem algum gasto em US$ → entram as colunas US$ e Cotação
+   antes do VALOR (que passa a se chamar VALOR (R$)) */
+function buildPrintTable(title, list, minRows, subLabel, dolar) {
   let rows = '';
   const n = Math.max(list.length, minRows);
   for (let i = 0; i < n; i++) {
     const e = list[i];
+    const usd = dolar ? `
+      <td class="c-usd">${temDolar(e) ? formatUSD(e.valorUSD) : ''}</td>
+      <td class="c-cot">${temDolar(e) ? formatCotacao(e.cotacao) : ''}</td>` : '';
     rows += `<tr>
       <td class="c-data">${e ? fmtDateBR(e.data) : ''}</td>
       <td>${e ? escapeHtml(e.descricao) : ''}</td>
-      <td class="c-cat">${e ? escapeHtml(e.categoria) : ''}</td>
+      <td class="c-cat">${e ? escapeHtml(e.categoria) : ''}</td>${usd}
       <td class="c-val">${e ? formatMoney(e.valor) : ''}</td>
     </tr>`;
   }
   const sub = sumOf(list);
   return `
     <div class="p-section">${escapeHtml(title)}</div>
-    <table class="p-tbl">
+    <table class="p-tbl${dolar ? ' dolar' : ''}">
       <thead><tr>
         <th class="c-data">DATA DA COMPRA</th><th>DESCRIÇÃO</th>
-        <th class="c-cat">CATEGORIA</th><th class="c-val">VALOR</th>
+        <th class="c-cat">CATEGORIA</th>${dolar ? '<th class="c-usd">VALOR (US$)</th><th class="c-cot">COTAÇÃO</th>' : ''}<th class="c-val">VALOR${dolar ? ' (R$)' : ''}</th>
       </tr></thead>
       <tbody>${rows}
         <tr class="p-subtotal">
-          <td colspan="3" class="sub-lbl">${escapeHtml(subLabel)}</td>
+          <td colspan="${dolar ? 5 : 3}" class="sub-lbl">${escapeHtml(subLabel)}</td>
           <td class="sub-val">${formatMoney(sub)}</td>
         </tr>
       </tbody>
@@ -81,12 +86,13 @@ function buildPrint(src, sections, mod) {
 
   let total = 0;
   let tabelas = '';
-  for (const bloco of blocos) {
-    if (!inc[bloco]) continue;
+  const usados = blocos.filter((bl) => inc[bl]);
+  const dolar = listasTemDolar(usados.map((bl) => D[bl]));   // mesmas colunas em todas as tabelas
+  for (const bloco of usados) {
     const bm = modOf(bloco);
     const list = D[bloco] || [];
     total += sumOf(list);
-    tabelas += buildPrintTable(bm.tituloTabela, list, 5, bm.subtotalLabel);
+    tabelas += buildPrintTable(bm.tituloTabela, list, 5, bm.subtotalLabel, dolar);
   }
 
   root.innerHTML = `

@@ -245,7 +245,7 @@ function renderList(tabela, ul) {
         <div class="e-desc">${escapeHtml(e.descricao || '(sem descrição)')}</div>
         <div class="e-meta"><span class="cat-tag">${escapeHtml(e.categoria || '—')}</span>${fmtDateBR(e.data)}${e.foto ? ' <img class="e-thumb" data-eid="' + escapeHtml(e.id) + '" alt="comprovante" hidden> <span class="e-clip" data-icon="paperclip" data-size="14" title="Comprovante anexado"></span>' : ''}</div>
       </div>
-      <div class="e-val">${formatMoney(e.valor)}</div>
+      <div class="e-val">${formatMoney(e.valor)}${temDolar(e) ? '<div class="e-usd">' + formatUSD(e.valorUSD) + ' × ' + formatDecimalInput(e.cotacao, 4) + '</div>' : ''}</div>
       <div class="e-quick">
         <button class="qbtn" data-q="dup" title="Duplicar" aria-label="Duplicar lançamento" data-icon="copy" data-size="18"></button>
         <button class="qbtn danger" data-q="del" title="Excluir" aria-label="Excluir lançamento" data-icon="trash-2" data-size="18"></button>
@@ -282,8 +282,7 @@ function quickDuplicate(tabela, id) {
   const e = state[tabela].find((x) => x.id === id); if (!e) return;
   const now = Date.now();
   const copy = { id: uid(), data: todayISO(), descricao: e.descricao, categoria: e.categoria, valor: e.valor, updatedAt: now };
-  const campos = (MOD[tabela] || {}).campos || {};   // campos próprios do módulo (ex.: cartão) também são copiados
-  for (const k in campos) if (campos[k]) copy[k] = e[k] || '';
+  copiaCamposModulo(tabela, e, copy);   // campos próprios do módulo (cartão, dólar) também são copiados
   state[tabela].push(copy);
   state[tabela].sort((a, b) => (a.data || '').localeCompare(b.data || ''));
   lastAddedId = copy.id;

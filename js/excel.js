@@ -125,7 +125,79 @@ function sheetTools(doc, sheetData, draw) {
     }
     shiftRows(to + 1, -count);
   }
-  return { getCell, setText, setNum, setFormula, getRow, addMerge, shiftRows, removeRows };
+  /* insere `count` colunas vazias ANTES da coluna `fromCol` (1 = A): desloca células,
+     fórmulas, merges, validações, `spans` e os desenhos (âncoras em base 0) */
+  function insertCols(fromCol, count) {
+    if (count <= 0) return;
+    const shiftRef = (ref) => ref.replace(/^(\$?)([A-Z]{1,3})(\$?)(\d+)$/, (m, d1, col, d2, row) =>
+      colIdx(col) >= fromCol ? d1 + colName(colIdx(col) + count) + d2 + row : m);
+    const shiftText = (txt) => txt.replace(/(\$?)([A-Z]{1,3})(\$?)(\d+)/g, (m) => shiftRef(m));
+    for (const r of Array.from(sheetData.getElementsByTagNameNS(MAIN, 'row'))) {
+      const sp = r.getAttribute('spans');
+      if (sp) { const p = sp.split(':').map(Number); if (p[1] >= fromCol) r.setAttribute('spans', p[0] + ':' + (p[1] + count)); }
+      for (const c of Array.from(r.getElementsByTagNameNS(MAIN, 'c'))) c.setAttribute('r', shiftRef(c.getAttribute('r')));
+    }
+    for (const f of Array.from(doc.getElementsByTagNameNS(MAIN, 'f'))) {
+      f.textContent = shiftText(f.textContent);
+      if (f.getAttribute('ref')) f.setAttribute('ref', shiftText(f.getAttribute('ref')));
+    }
+    for (const mc of mergeList()) mc.setAttribute('ref', shiftText(mc.getAttribute('ref')));
+    for (const dv of Array.from(doc.getElementsByTagNameNS(MAIN, 'dataValidation'))) {
+      const sq = dv.getAttribute('sqref'); if (sq) dv.setAttribute('sqref', shiftText(sq));
+    }
+    if (draw) {
+      for (const ce of Array.from(draw.getElementsByTagNameNS(XDR, 'col'))) {
+        const v = parseInt(ce.textContent, 10);
+        if (v >= fromCol - 1) ce.textContent = String(v + count);
+      }
+    }
+  }
+  /* garante a célula `ref` (na ordem certa dentro da linha) com o estilo `s` */
+  function ensureCell(ref, s) {
+    const row = getRow(rowOf(ref)); if (!row) return null;
+    const ci = colIdx(colOf(ref));
+    let c = null, after = null;
+    for (const x of Array.from(row.getElementsByTagNameNS(MAIN, 'c'))) {
+      const xi = colIdx(colOf(x.getAttribute('r')));
+      if (xi === ci) { c = x; break; }
+      if (xi > ci && !after) after = x;
+    }
+    if (!c) {
+      c = doc.createElementNS(MAIN, 'c'); c.setAttribute('r', ref);
+      row.insertBefore(c, after);
+    }
+    if (s != null) c.setAttribute('s', String(s));
+    return c;
+  }
+  /* troca o ref de um merge existente (ex.: B16:D16 -> B16:F16) */
+  function setMerge(oldRef, newRef) {
+    for (const mc of mergeList()) if (mc.getAttribute('ref') === oldRef) { mc.setAttribute('ref', newRef); return true; }
+    return false;
+  }
+  return { getCell, setText, setNum, setFormula, getRow, addMerge, shiftRows, removeRows, insertCols, ensureCell, setMerge };
+}
+
+function colIdx(col) { let n = 0; for (const ch of col) n = n * 26 + (ch.charCodeAt(0) - 64); return n; }
+function colName(n) { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+
+/* acrescenta ao styles.xml os formatos de US$ e cotação; devolve os índices dos estilos
+   novos (baseados no estilo 22 = célula de valor da tabela) */
+function addDolarStyles(files, dec, enc) {
+  let s = dec.decode(files['xl/styles.xml']);
+  const fmts = '<numFmt numFmtId="170" formatCode="&quot;US$&quot;\\ #,##0.00"/>' +
+               '<numFmt numFmtId="171" formatCode="&quot;R$&quot;\\ #,##0.0000"/>';
+  if (/<numFmts count="(\d+)">/.test(s)) {
+    s = s.replace(/<numFmts count="(\d+)">/, (m, n) => '<numFmts count="' + (parseInt(n, 10) + 2) + '">' + fmts);
+  } else {
+    s = s.replace(/<fonts/, '<numFmts count="2">' + fmts + '</numFmts><fonts');
+  }
+  const m = s.match(/<cellXfs count="(\d+)">/);
+  const base = parseInt(m[1], 10);
+  const xf = (id) => '<xf numFmtId="' + id + '" fontId="14" fillId="3" borderId="4" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>';
+  s = s.replace(/<cellXfs count="\d+">([\s\S]*?)<\/cellXfs>/, (all, inner) =>
+    '<cellXfs count="' + (base + 2) + '">' + inner + xf(170) + xf(171) + '</cellXfs>');
+  files['xl/styles.xml'] = enc.encode(s);
+  return { usd: base, cot: base + 1 };
 }
 
 async function loadTemplateFiles(name) {
@@ -320,9 +392,18 @@ async function buildXlsx(src, mod) {
   T.setText('C' + (bk + 2), b.conta);
   T.setText('E' + (bk + 2), b.pix);
 
+  // ---- dólar: colunas E (US$) e F (Cotação) entram antes do valor em R$ (que vai p/ G) ----
+  const dolar = listasTemDolar([list1, list2]);
+  if (dolar) aplicaColunasDolar(doc, T, files, dec, enc, {
+    tabelas: single
+      ? [{ list: list1, first: t1First, last: t1Last, sub: t1Sub }]
+      : [{ list: list1, first: t1First, last: t1Last, sub: t1Sub }, { list: list2, first: t2First, last: t2Last, sub: t2Sub }],
+    totalRow, bk
+  });
+
   // ---- dimensão ----
   const dim = doc.getElementsByTagNameNS(MAIN, 'dimension')[0];
-  if (dim) dim.setAttribute('ref', 'A1:R' + (BASE.dim + shiftAll));
+  if (dim) dim.setAttribute('ref', 'A1:' + (dolar ? 'T' : 'R') + (BASE.dim + shiftAll));
 
   // ---- serializar de volta ----
   const xmlHead = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n';
@@ -332,6 +413,66 @@ async function buildXlsx(src, mod) {
   await applyBrandToXlsx(files, mod, dec, enc);
   dropCalcChain(files, dec, enc);
   return fflate.zipSync(files);
+}
+
+/* Relatório com gasto em dólar: abre 2 colunas (E = VALOR (US$), F = COTAÇÃO) e o
+   valor em R$ passa para G. Chamado no FIM do buildXlsx, com tudo já escrito nas
+   colunas originais — insertCols desloca células, fórmulas, merges e desenhos juntos.
+   pos = { tabelas:[{list,first,last,sub}], totalRow, bk } (linhas finais). */
+function aplicaColunasDolar(doc, T, files, dec, enc, pos) {
+  T.insertCols(5, 2);
+  const st = addDolarStyles(files, dec, enc);
+  const sOf = (ref) => { const c = T.getCell(ref); return c ? c.getAttribute('s') : null; };
+  const both = (r, s) => { T.ensureCell('E' + r, s); T.ensureCell('F' + r, s); };
+
+  // cabeçalho do relatório e dados bancários: o rótulo da coluna D estica até F
+  for (const r of [4, 5, pos.bk, pos.bk + 1, pos.bk + 2]) {
+    both(r, sOf('D' + r));
+    T.addMerge('D' + r + ':F' + r);
+  }
+
+  for (const tb of pos.tabelas) {
+    both(tb.first - 2, 38);                               // título (merge B:E já virou B:G)
+    both(tb.first - 1, sOf('D' + (tb.first - 1)));        // cabeçalho da tabela
+    T.setText('E' + (tb.first - 1), 'VALOR (US$)');
+    T.setText('F' + (tb.first - 1), 'COTAÇÃO');
+    T.setText('G' + (tb.first - 1), 'VALOR (R$)');
+    for (let r = tb.first; r <= tb.last; r++) {
+      T.ensureCell('E' + r, st.usd); T.ensureCell('F' + r, st.cot);
+      const e = tb.list[r - tb.first];
+      if (temDolar(e)) { T.setNum('E' + r, e.valorUSD); T.setNum('F' + r, e.cotacao || 0); }
+    }
+    // subtotal: rótulo mesclado B:D -> B:F (a borda direita da faixa vai p/ F)
+    const fimSub = sOf('D' + tb.sub);
+    T.ensureCell('D' + tb.sub, 41); both(tb.sub, 41); T.ensureCell('F' + tb.sub, fimSub);
+    T.setMerge('B' + tb.sub + ':D' + tb.sub, 'B' + tb.sub + ':F' + tb.sub);
+    // linha de acabamento abaixo do subtotal (borda superior no valor)
+    if (sOf('G' + (tb.sub + 1)) === '23') both(tb.sub + 1, 23);
+  }
+
+  // total geral: mesmo esquema do subtotal
+  const fimTot = sOf('D' + pos.totalRow);
+  T.ensureCell('D' + pos.totalRow, sOf('C' + pos.totalRow));
+  both(pos.totalRow, sOf('C' + pos.totalRow)); T.ensureCell('F' + pos.totalRow, fimTot);
+  T.setMerge('B' + pos.totalRow + ':D' + pos.totalRow, 'B' + pos.totalRow + ':F' + pos.totalRow);
+
+  // larguras: as colunas a partir de E andam 2 casas; E e F novas
+  const cols = doc.getElementsByTagNameNS(MAIN, 'cols')[0];
+  if (cols) {
+    let antesDe = null;
+    for (const c of Array.from(cols.getElementsByTagNameNS(MAIN, 'col'))) {
+      const mn = parseInt(c.getAttribute('min'), 10), mx = parseInt(c.getAttribute('max'), 10);
+      if (mn >= 5) {
+        if (!antesDe) antesDe = c;
+        c.setAttribute('min', String(mn + 2));
+        c.setAttribute('max', String(Math.min(16384, mx + 2)));
+      }
+    }
+    const nc = doc.createElementNS(MAIN, 'col');
+    nc.setAttribute('min', '5'); nc.setAttribute('max', '6'); nc.setAttribute('width', '19.7109375');
+    nc.setAttribute('style', '2'); nc.setAttribute('customWidth', '1');
+    cols.insertBefore(nc, antesDe);
+  }
 }
 
 /* Nome-base dos arquivos gerados (Excel/PDF) — o prefixo vem do módulo e é

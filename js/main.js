@@ -221,6 +221,7 @@ function init() {
   render();
 
   maskCurrencyEl($('m-valor'));
+  setupDolarFields();
 
   // cabeçalho, período e dados bancários: um conjunto de campos POR módulo
   for (const mod of MODULOS) {

@@ -22,10 +22,10 @@
 <script>
 var checks = {
   'modules':    ['modOf','mapPorTabela','perfilVazio','normalizePerfil','perfilDe','docForModule','modulosSelecionados'],
-  'core':       ['formatMoney','loadState','uid','getCatConfig','sumOf'],
+  'core':       ['formatMoney','loadState','uid','getCatConfig','sumOf','formatUSD','formatCotacao','parseDecimal','temDolar','listasTemDolar'],
   'render':     ['render','computeSantanderPeriodo','renderList','reopenHistory','monthLabelFor','allEntriesOf','renderCatSummary','renderReports','renderReportsPanel','histBelongsTo'],
-  'modal':      ['openModal','saveEntry','deleteEntry','onPhotoSelected','toggleCamposModulo'],
-  'excel':      ['buildXlsx','buildPrestacaoXlsx','buildXlsxFor','sheetTools','fileBaseOf','filteredDoc','resolveExport','docParaExport','validateBeforeExport','exportExcel','updateExportHint','recolorHex','pngSize','applyBrandToXlsx'],
+  'modal':      ['openModal','saveEntry','deleteEntry','onPhotoSelected','toggleCamposModulo','copiaCamposModulo','recalcValorDolar','setupDolarFields','maskDecimalEl','formatDecimalInput'],
+  'excel':      ['buildXlsx','buildPrestacaoXlsx','buildXlsxFor','sheetTools','fileBaseOf','filteredDoc','resolveExport','docParaExport','validateBeforeExport','exportExcel','updateExportHint','recolorHex','pngSize','applyBrandToXlsx','aplicaColunasDolar','addDolarStyles','colIdx','colName'],
   'pdf':        ['generatePdfBlob','buildPrestacaoPrint','exportPDF','buildPrint','buildPrintTable','buildSignatureBlock','applyPrintTheme'],
   'sync':       ['syncNow','mergeDocs','mergeTable','mergeHistory','setupSyncUI','perfisFromDoc','currentDoc','applyDoc'],
   'lock':       ['showLock','enableBio','setPin','setupBackupUI'],

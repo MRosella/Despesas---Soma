@@ -9,7 +9,7 @@
 const STORE_KEY = 'despesas-soma-v1';
 const SYNC_KEY = 'despesas-soma-sync-v1';
 const LASTSYNC_KEY = 'despesas-soma-lastsync-v1';
-const APP_VERSION = 'v66';   // manter igual ao CACHE em sw.js
+const APP_VERSION = 'v67';   // manter igual ao CACHE em sw.js
 const LOCK_KEY = 'despesas-soma-lock-v1';
 const THEME_KEY = 'despesas-soma-theme-v1';
 /* Empresa, logo, cores e pastas ficam por MÓDULO em js/modules.js (MODULOS/MOD). */
@@ -146,6 +146,22 @@ function parseMoney(s) {
   const n = parseFloat(s);
   return isNaN(n) ? 0 : Math.round(n * 100) / 100;
 }
+
+/* ---- dólar (campo opcional do reembolso: entry.valorUSD + entry.cotacao) ---- */
+function formatUSD(n) { return 'US$ ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function formatCotacao(n) { return n ? 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : ''; }
+/* número pt-BR com até `casas` decimais ("5,4321" → 5.4321) */
+function parseDecimal(s, casas) {
+  if (typeof s === 'number') return s;
+  s = (s || '').toString().trim().replace(/[^\d,.-]/g, '');
+  if (!s) return 0;
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(s);
+  const k = Math.pow(10, casas == null ? 4 : casas);
+  return isNaN(n) ? 0 : Math.round(n * k) / k;
+}
+function temDolar(e) { return !!(e && e.valorUSD > 0); }
+function listasTemDolar(lists) { return lists.some((l) => (l || []).some(temDolar)); }
 
 function fmtDateBR(iso) {
   if (!iso) return '';
